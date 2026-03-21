@@ -25,13 +25,16 @@ SDE_URL = "https://data.everef.net/reference-data/reference-data-latest.tar.xz"
 UPDATE_INTERVAL_DAYS = 7
 
 FUZZWORK_SYSTEMS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapSolarSystems.sql.bz2"
+FUZZWORK_REGIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapRegions.sql.bz2"
 SYSTEMS_UPDATE_DAYS = 30
 
 # In-memory stores
 _schematics: dict[int, dict] = {}   # schematic_id -> normalized schematic
 _types: dict[int, str] = {}         # type_id -> name (en)
 _build_time: str | None = None
-_systems: dict[str, tuple[int, str, float]] = {}  # name_lower -> (system_id, name, security)
+_systems: dict[str, tuple[int, str, float]] = {}    # name_lower -> (system_id, name, security)
+_systems_by_id: dict[int, dict] = {}                # system_id -> {name, security, region_id}
+_regions: dict[int, str] = {}                       # region_id -> region_name
 
 
 # ─── Version & Update-Check ───────────────────────────────────────────────────
@@ -176,7 +179,7 @@ def _download_systems() -> bool:
 
 
 def _load_systems() -> None:
-    global _systems
+    global _systems, _systems_by_id
     path = _systems_path()
     if not path.exists():
         logger.warning("mapSolarSystems.sql.bz2 nicht gefunden – System-Suche nicht verfügbar.")
@@ -186,20 +189,72 @@ def _load_systems() -> None:
         # INSERT row: (regionID, constellationID, solarSystemID, 'name', x,y,z,xMin,xMax,yMin,yMax,zMin,zMax,
         #               luminosity, border, fringe, corridor, hub, international, regional, constellation,
         #               security, factionID, radius, sunTypeID, securityClass)
-        # Cols 0-2: region/constellation/solarSystemID, col 3: name, cols 4-20: 17 numerics, col 21: security
+        # col 0: regionID, col 2: solarSystemID, col 3: name, cols 4-20: 17 numerics, col 21: security
         pattern = re.compile(
-            r"\(\d+,\d+,(\d+),'([^']+)'(?:,[^,)]+){17},(-?[\d.eE+\-]+)"
+            r"\((\d+),\d+,(\d+),'([^']+)'(?:,[^,)]+){17},(-?[\d.eE+\-]+)"
         )
         result: dict[str, tuple[int, str, float]] = {}
+        by_id: dict[int, dict] = {}
         for m in pattern.finditer(raw_sql):
-            sys_id = int(m.group(1))
-            name = m.group(2)
-            security = float(m.group(3))
+            region_id = int(m.group(1))
+            sys_id = int(m.group(2))
+            name = m.group(3)
+            security = float(m.group(4))
             result[name.lower()] = (sys_id, name, security)
+            by_id[sys_id] = {"name": name, "security": security, "region_id": region_id}
         _systems = result
+        _systems_by_id = by_id
         logger.info(f"SDE: {len(_systems)} Solar-Systeme geladen.")
     except Exception as e:
         logger.error(f"Fehler beim Laden von mapSolarSystems: {e}")
+
+
+# ─── Regionen (Fuzzwork) ──────────────────────────────────────────────────────
+
+def _regions_path() -> Path:
+    return DATA_DIR / "mapRegions.sql.bz2"
+
+
+def _is_regions_update_needed() -> bool:
+    path = _regions_path()
+    if not path.exists():
+        return True
+    return time.time() - path.stat().st_mtime > SYSTEMS_UPDATE_DAYS * 86400
+
+
+def _download_regions() -> bool:
+    logger.info(f"Lade Fuzzwork mapRegions von {FUZZWORK_REGIONS_URL} ...")
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        resp = requests.get(FUZZWORK_REGIONS_URL, timeout=30, stream=True)
+        resp.raise_for_status()
+        tmp = DATA_DIR / "mapRegions.sql.bz2.tmp"
+        tmp.write_bytes(resp.content)
+        tmp.replace(_regions_path())
+        logger.info("mapRegions.sql.bz2 heruntergeladen.")
+        return True
+    except Exception as e:
+        logger.error(f"Fuzzwork Regions Download fehlgeschlagen: {e}")
+        return False
+
+
+def _load_regions() -> None:
+    global _regions
+    path = _regions_path()
+    if not path.exists():
+        logger.warning("mapRegions.sql.bz2 nicht gefunden – Regionen unbekannt.")
+        return
+    try:
+        pattern = re.compile(r"\((\d+),'([^']+)'")
+        result: dict[int, str] = {}
+        with bz2.open(str(path), "rt", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                for m in pattern.finditer(line):
+                    result[int(m.group(1))] = m.group(2)
+        _regions = result
+        logger.info(f"SDE: {len(_regions)} Regionen geladen.")
+    except Exception as e:
+        logger.error(f"Fehler beim Laden von mapRegions: {e}")
 
 
 # ─── Öffentliche API ──────────────────────────────────────────────────────────
@@ -219,6 +274,10 @@ def init():
         _download_systems()
     _load_systems()
 
+    if _is_regions_update_needed():
+        _download_regions()
+    _load_regions()
+
 
 def get_schematic(schematic_id: int) -> dict | None:
     """Gibt normalisiertes Schematic-Dict zurück oder None wenn unbekannt."""
@@ -228,6 +287,19 @@ def get_schematic(schematic_id: int) -> dict | None:
 def get_type_name(type_id: int) -> str | None:
     """Gibt den englischen Typnamen zurück oder None."""
     return _types.get(type_id)
+
+
+def get_system_local(system_id: int) -> dict | None:
+    """Gibt lokale System-Infos zurück: name, security, true_sec, region_name."""
+    data = _systems_by_id.get(system_id)
+    if not data:
+        return None
+    return {
+        "name": data["name"],
+        "security": data["security"],
+        "region_id": data.get("region_id", 0),
+        "region_name": _regions.get(data.get("region_id", 0), None),
+    }
 
 
 def search_systems_local(query: str, limit: int = 10) -> list[dict]:

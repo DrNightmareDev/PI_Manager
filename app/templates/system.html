@@ -51,8 +51,13 @@
                     <h4 class="mb-1 fw-bold" id="systemName">—</h4>
                     <div class="d-flex align-items-center gap-3 flex-wrap">
                         <div>
+                            <span class="text-muted small me-1">Region:</span>
+                            <span id="systemRegion" class="fw-semibold"></span>
+                        </div>
+                        <div>
                             <span class="text-muted small me-1">Security:</span>
                             <span id="systemSecurity" class="fw-semibold"></span>
+                            <span id="systemTrueSec" class="text-muted small ms-1"></span>
                         </div>
                         <div>
                             <span class="text-muted small me-1">Planeten:</span>
@@ -205,14 +210,21 @@ function formatIsk(val) {
 }
 
 function renderAnalysis(data) {
+    // Ergebnisbereich anzeigen
+    analysisResult.classList.remove('d-none');
+
     // System header
     document.getElementById('systemName').textContent = data.system_name || '—';
     document.getElementById('planetCount').textContent = (data.planets || []).length;
+    document.getElementById('systemRegion').textContent = data.region || '—';
 
     const sec = data.security;
     const secColor = sec >= 0.5 ? '#2dc653' : (sec > 0 ? '#f4a300' : '#e63946');
     document.getElementById('systemSecurity').innerHTML =
         `<span style="color:${secColor}">${sec.toFixed(2)}</span>`;
+    if (data.true_sec != null) {
+        document.getElementById('systemTrueSec').textContent = `(${data.true_sec.toFixed(4)})`;
+    }
 
     // Planet type badges with count
     const ptBadges = document.getElementById('planetTypeBadges');

@@ -51,10 +51,26 @@ def search_system(q: str, account=Depends(require_account)):
 @router.get("/analyze/{system_id}")
 def analyze(system_id: int, account=Depends(require_account)):
     try:
+        # Lokale System-Infos (kein ESI-Call nötig)
+        local_info = sde.get_system_local(system_id)
+
+        if local_info:
+            system_name = local_info["name"]
+            system_security = local_info["security"]
+            region_name = local_info["region_name"]
+        else:
+            # Fallback: ESI
+            system_info = get_system_info(system_id)
+            if not system_info:
+                return JSONResponse(content={"error": "System nicht gefunden"}, status_code=404)
+            system_name = system_info.get("name")
+            system_security = system_info.get("security_status", 0.0)
+            region_name = None
+
+        # Planetenliste via ESI (1 Call)
         system_info = get_system_info(system_id)
         if not system_info:
             return JSONResponse(content={"error": "System nicht gefunden"}, status_code=404)
-
         planet_ids = system_info.get("planets", [])
         planet_ids = [p.get("planet_id") if isinstance(p, dict) else p for p in planet_ids]
 
@@ -64,12 +80,11 @@ def analyze(system_id: int, account=Depends(require_account)):
         type_resources: dict = {}
         for pid in planet_ids[:16]:  # Max 16 Planeten
             pinfo = get_planet_info(pid)
-            # ESI returns type_id (int), not type_name. Resolve via SDE types.
+            # ESI returns type_id (int) → resolve via SDE types
             type_id = pinfo.get("type_id")
             raw_type = ""
             if type_id:
                 type_name = sde.get_type_name(type_id) or ""
-                # "Planet (Temperate)" → "temperate"
                 if "(" in type_name and type_name.endswith(")"):
                     raw_type = type_name[type_name.index("(") + 1:-1].lower()
             mapped = PLANET_TYPE_MAP.get(raw_type)
@@ -100,15 +115,15 @@ def analyze(system_id: int, account=Depends(require_account)):
         )
 
         recommendations = analyze_system(planet_types)
-
-        # Preise für Empfehlungen hinzufügen
         prices = get_sell_prices_by_names([r["name"] for r in recommendations])
         for rec in recommendations:
             rec["isk_sell"] = prices.get(rec["name"], 0.0)
 
         return JSONResponse(content={
-            "system_name": system_info.get("name"),
-            "security": round(system_info.get("security_status", 0.0), 2),
+            "system_name": system_name,
+            "security": round(system_security, 2),
+            "true_sec": round(system_security, 4),
+            "region": region_name,
             "planets": planet_details,
             "planet_types": planet_types_summary,
             "recommendations": recommendations[:40],
