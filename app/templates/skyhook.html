@@ -14,57 +14,76 @@
     padding: .5rem .75rem;
     white-space: nowrap;
 }
-.sh-table tbody tr { border-color: rgba(30,45,61,0.4); transition: background .1s; }
-.sh-table tbody tr:hover { background: rgba(0,180,216,.03); }
-.sh-table td { border-color: rgba(30,45,61,0.4); padding: .45rem .75rem; vertical-align: middle; }
+.sh-table tbody tr { border-color: rgba(30,45,61,0.4); }
+.sh-table td { border-color: rgba(30,45,61,0.4); padding: .5rem .75rem; vertical-align: top; }
 
-/* Inline inputs */
 .sh-select {
     background: var(--eve-bg-2);
     border: 1px solid var(--eve-card-border);
     color: var(--eve-text);
     border-radius: 4px;
-    padding: .2rem .4rem;
-    font-size: .8rem;
-    min-width: 180px;
-    max-width: 220px;
+    padding: .18rem .35rem;
+    font-size: .78rem;
+    width: 200px;
 }
-.sh-select:focus { border-color: var(--eve-accent); outline: none; box-shadow: 0 0 0 2px rgba(0,180,216,.15); }
+.sh-select:focus { border-color: var(--eve-accent); outline: none; box-shadow: 0 0 0 2px rgba(0,180,216,.12); }
 .sh-qty {
     background: var(--eve-bg-2);
     border: 1px solid var(--eve-card-border);
     color: var(--eve-text);
     border-radius: 4px;
-    padding: .2rem .5rem;
-    font-size: .8rem;
-    width: 90px;
+    padding: .18rem .4rem;
+    font-size: .78rem;
+    width: 85px;
     text-align: right;
 }
-.sh-qty:focus { border-color: var(--eve-accent); outline: none; box-shadow: 0 0 0 2px rgba(0,180,216,.15); }
+.sh-qty:focus { border-color: var(--eve-accent); outline: none; box-shadow: 0 0 0 2px rgba(0,180,216,.12); }
+
+.sh-item-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.sh-remove-btn {
+    background: transparent; border: none;
+    color: var(--eve-text-muted); font-size: .9rem;
+    line-height: 1; padding: 0 3px; cursor: pointer; transition: color .12s;
+}
+.sh-remove-btn:hover { color: var(--eve-red); }
+.sh-add-btn {
+    background: transparent;
+    border: 1px dashed var(--eve-card-border);
+    color: var(--eve-text-muted);
+    border-radius: 4px;
+    padding: .12rem .5rem;
+    font-size: .72rem;
+    cursor: pointer;
+    transition: all .15s;
+    margin-top: 2px;
+}
+.sh-add-btn:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+
 .sh-save-btn {
     background: transparent;
     border: 1px solid var(--eve-card-border);
     color: var(--eve-text-muted);
     border-radius: 4px;
-    padding: .2rem .6rem;
+    padding: .25rem .7rem;
     font-size: .75rem;
     transition: all .15s;
     white-space: nowrap;
+    cursor: pointer;
+    margin-top: 6px;
 }
 .sh-save-btn:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
-.sh-save-btn.saved { border-color: var(--eve-green); color: var(--eve-green); }
+.sh-save-btn.saved { border-color: var(--eve-green) !important; color: var(--eve-green) !important; }
 
-/* Max-Produkt badge */
-.sh-tier-badge {
-    font-size: .68rem; font-weight: 700; padding: .15rem .45rem;
-    border-radius: 3px; white-space: nowrap;
+.sh-current-item {
+    font-size: .75rem; display: flex; align-items: center; gap: 6px;
+    color: var(--eve-text-muted); margin-bottom: 2px;
 }
+.sh-current-item strong { color: #7a9a6a; }
 
-/* History popup */
 .sh-hist-btn {
     background: transparent; border: none;
     color: var(--eve-text-muted); font-size: .8rem;
-    padding: .2rem .3rem; border-radius: 3px; transition: color .15s;
+    padding: .1rem .3rem; border-radius: 3px; transition: color .15s; cursor: pointer;
 }
 .sh-hist-btn:hover { color: var(--eve-accent); }
 .sh-hist-popup {
@@ -73,22 +92,17 @@
     border: 1px solid var(--eve-card-border);
     border-radius: 6px;
     padding: .75rem;
-    min-width: 220px;
+    min-width: 240px;
     box-shadow: 0 8px 24px rgba(0,0,0,.45);
     display: none;
     right: 0; top: calc(100% + 4px);
 }
 .sh-hist-popup.open { display: block; }
-
-/* Current value chip */
-.sh-current {
-    font-size: .75rem; color: #7a9a6a;
-    white-space: nowrap;
-}
+.sh-tier-badge { font-size:.68rem; font-weight:700; padding:.15rem .45rem; border-radius:3px; }
 
 html[data-theme="light"] .sh-select,
-html[data-theme="light"] .sh-qty { background: #fff; color: var(--eve-text); }
-html[data-theme="light"] .sh-hist-popup { background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+html[data-theme="light"] .sh-qty { background:#fff; color:var(--eve-text); }
+html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.12); }
 </style>
 {% endblock %}
 
@@ -110,7 +124,6 @@ html[data-theme="light"] .sh-hist-popup { background: #fff; box-shadow: 0 8px 24
     </div>
 </div>
 {% else %}
-
 <div class="eve-card card border-0">
     <div class="card-body p-0">
         <div style="overflow-x:auto;">
@@ -123,21 +136,18 @@ html[data-theme="light"] .sh-hist-popup { background: #fff; box-shadow: 0 8px 24
                         <th>System</th>
                         <th>Max. Produkt</th>
                         <th>Aktueller Bestand</th>
-                        <th>Skyhook Produkt</th>
-                        <th>Menge</th>
-                        <th></th>
-                        <th></th>
+                        <th>Neuer Eintrag</th>
+                        <th style="width:80px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                 {% for colony in colonies %}
-                {% set sh = latest.get(colony.planet_id) %}
-                {% set hist = history.get(colony.planet_id, []) %}
+                {% set cur_items = latest.get(colony.planet_id, []) %}
+                {% set hist     = history.get(colony.planet_id, []) %}
                 {% set tier_products = colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') | list if colony.highest_tier else [] %}
-                <tr data-planet-id="{{ colony.planet_id }}"
-                    data-char-name="{{ colony.character_name }}">
-
-                    <!-- Charakter -->
+                {% set tc_map = {'p1':'#586e75','p2':'#00b4d8','p3':'#f4a300','p4':'#e63946'} %}
+                {% set tc_color = tc_map.get(colony.highest_tier | lower, '#586e75') if colony.highest_tier else '#586e75' %}
+                <tr>
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle"
@@ -145,84 +155,56 @@ html[data-theme="light"] .sh-hist-popup { background: #fff; box-shadow: 0 8px 24
                             <span class="text-muted" style="font-size:.78rem;">{{ colony.character_name }}</span>
                         </div>
                     </td>
-
-                    <!-- Planet -->
-                    <td>
-                        <div style="font-size:.82rem;">{{ colony.planet_name }}</div>
-                    </td>
-
-                    <!-- Typ -->
+                    <td style="min-width:130px;">{{ colony.planet_name }}</td>
                     <td>
                         <span class="badge sh-tier-badge"
                               style="background:{{ colony.color }}18;color:{{ colony.color }};border:1px solid {{ colony.color }}35;">
                             {{ colony.planet_type }}
                         </span>
                     </td>
-
-                    <!-- System -->
-                    <td>
+                    <td style="min-width:110px;">
                         <div style="font-size:.82rem;">{{ colony.solar_system_name }}</div>
                         {% if colony.region_name and colony.region_name != '—' %}
                         <div style="color:var(--eve-text-muted);font-size:.68rem;">{{ colony.region_name }}</div>
                         {% endif %}
                     </td>
-
-                    <!-- Max. Produkt -->
                     <td>
                         {% if colony.highest_tier %}
-                        {% set tc = {'p1':'#586e75','p2':'#00b4d8','p3':'#f4a300','p4':'#e63946'} %}
-                        {% set tc_color = tc.get(colony.highest_tier | lower, '#586e75') %}
-                        <div>
-                            <span class="badge sh-tier-badge"
-                                  style="background:{{ tc_color }}18;color:{{ tc_color }};border:1px solid {{ tc_color }}35;">
-                                {{ colony.highest_tier }}
-                            </span>
-                            {% for f in tier_products %}
-                            <div style="color:var(--eve-text-muted);font-size:.72rem;margin-top:2px;">{{ f.name }}</div>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <span class="text-muted">—</span>
-                        {% endif %}
-                    </td>
-
-                    <!-- Aktueller Bestand -->
-                    <td>
-                        {% if sh %}
-                        <span class="sh-current">
-                            <i class="bi bi-box-seam me-1" style="font-size:.65rem;"></i>
-                            <strong>{{ "{:,}".format(sh.quantity) }}</strong>
-                            <span class="text-muted ms-1">{{ sh.product_name }}</span>
+                        <span class="badge sh-tier-badge"
+                              style="background:{{ tc_color }}18;color:{{ tc_color }};border:1px solid {{ tc_color }}35;">
+                            {{ colony.highest_tier }}
                         </span>
-                        {% else %}
-                        <span class="text-muted" style="font-size:.75rem;">kein Eintrag</span>
-                        {% endif %}
+                        {% for f in tier_products %}
+                        <div style="color:var(--eve-text-muted);font-size:.7rem;margin-top:2px;">{{ f.name }}</div>
+                        {% endfor %}
+                        {% else %}<span class="text-muted">—</span>{% endif %}
                     </td>
 
-                    <!-- Produkt Dropdown -->
-                    <td>
-                        <select class="sh-select" id="prod_{{ colony.planet_id }}">
-                            <option value="">— Produkt wählen —</option>
-                            {% for tier, products in pi_products.items() %}
-                            <optgroup label="{{ tier }}">
-                                {% for p in products %}
-                                <option value="{{ p }}" {% if sh and sh.product_name == p %}selected{% endif %}>{{ p }}</option>
+                    <!-- Aktueller Bestand (live-updated via JS) -->
+                    <td style="min-width:160px;">
+                        <div id="current_{{ colony.planet_id }}">
+                            {% if cur_items %}
+                                {% for it in cur_items %}
+                                <div class="sh-current-item">
+                                    <i class="bi bi-dot" style="color:#7a9a6a;font-size:.9rem;"></i>
+                                    <strong>{{ "{:,}".format(it.quantity) }}</strong>
+                                    <span>{{ it.product_name }}</span>
+                                </div>
                                 {% endfor %}
-                            </optgroup>
-                            {% endfor %}
-                        </select>
+                            {% else %}
+                                <span class="text-muted" style="font-size:.75rem;">kein Eintrag</span>
+                            {% endif %}
+                        </div>
                     </td>
 
-                    <!-- Menge -->
-                    <td>
-                        <input type="number" class="sh-qty" id="qty_{{ colony.planet_id }}"
-                               min="0" step="1"
-                               value="{{ sh.quantity if sh else '' }}"
-                               placeholder="0">
-                    </td>
-
-                    <!-- Speichern -->
-                    <td>
+                    <!-- Neuer Eintrag: Produktzeilen (JS-initialisiert) -->
+                    <td style="min-width:320px;">
+                        <div id="items_{{ colony.planet_id }}"
+                             data-planet="{{ colony.planet_id }}"
+                             data-init="{{ cur_items | tojson | e }}">
+                        </div>
+                        <button class="sh-add-btn" onclick="addRow({{ colony.planet_id }})">+ Zeile</button>
+                        <br>
                         <button class="sh-save-btn" id="btn_{{ colony.planet_id }}"
                                 onclick="saveEntry({{ colony.planet_id }}, '{{ colony.character_name | replace("'", "\\'") }}')">
                             <i class="bi bi-floppy me-1"></i>Speichern
@@ -232,25 +214,22 @@ html[data-theme="light"] .sh-hist-popup { background: #fff; box-shadow: 0 8px 24
                     <!-- Verlauf -->
                     <td style="position:relative;">
                         {% if hist %}
-                        <button class="sh-hist-btn" onclick="toggleHist({{ colony.planet_id }})"
-                                title="Letzte Einträge">
+                        <button class="sh-hist-btn" onclick="toggleHist({{ colony.planet_id }})" title="Letzte Einträge">
                             <i class="bi bi-clock-history"></i>
-                            <span style="font-size:.65rem;vertical-align:middle;">{{ hist | length }}</span>
+                            <span style="font-size:.65rem;vertical-align:middle;margin-left:2px;">{{ hist | length }}</span>
                         </button>
                         <div class="sh-hist-popup" id="hist_{{ colony.planet_id }}">
-                            <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.5rem;">
-                                Letzte Einträge
-                            </div>
+                            <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">Letzte Einträge</div>
                             {% for h in hist %}
-                            <div class="d-flex justify-content-between align-items-start gap-3 {% if not loop.last %}mb-2 pb-2{% endif %}"
+                            <div class="{% if not loop.last %}mb-3 pb-2{% endif %}"
                                  {% if not loop.last %}style="border-bottom:1px solid var(--eve-card-border);"{% endif %}>
-                                <div>
-                                    <div style="color:var(--eve-text);font-size:.78rem;font-weight:600;">{{ h.product_name }}</div>
-                                    <div style="color:var(--eve-text-muted);font-size:.68rem;">{{ h.recorded_at }}</div>
+                                <div style="color:var(--eve-text-muted);font-size:.65rem;margin-bottom:3px;">{{ h.recorded_at }}</div>
+                                {% for it in h.items %}
+                                <div class="d-flex justify-content-between gap-3">
+                                    <span style="color:var(--eve-text);font-size:.78rem;">{{ it.product_name }}</span>
+                                    <span style="color:#7a9a6a;font-size:.78rem;font-weight:600;white-space:nowrap;">{{ "{:,}".format(it.quantity) }}</span>
                                 </div>
-                                <div style="color:#7a9a6a;font-size:.78rem;white-space:nowrap;font-weight:600;">
-                                    {{ "{:,}".format(h.quantity) }}
-                                </div>
+                                {% endfor %}
                             </div>
                             {% endfor %}
                         </div>
@@ -270,26 +249,97 @@ html[data-theme="light"] .sh-hist-popup { background: #fff; box-shadow: 0 8px 24
 
 {% block extra_scripts %}
 <script>
+const SH_PRODUCTS = {{ pi_products | tojson }};
+
+// Build <option> HTML for a select
+function buildOptions(selected) {
+    let html = '<option value="">— Produkt —</option>';
+    for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
+        html += `<optgroup label="${tier}">`;
+        for (const p of prods) {
+            html += `<option value="${p}"${p === selected ? ' selected' : ''}>${p}</option>`;
+        }
+        html += '</optgroup>';
+    }
+    return html;
+}
+
+function makeRow(prodName = '', qty = '') {
+    const div = document.createElement('div');
+    div.className = 'sh-item-row';
+    div.innerHTML = `
+        <select class="sh-select sh-prod">${buildOptions(prodName)}</select>
+        <input type="number" class="sh-qty" min="0" value="${qty}" placeholder="0">
+        <button class="sh-remove-btn" onclick="removeRow(this)" title="Entfernen">×</button>
+    `;
+    return div;
+}
+
+function addRow(planetId, prodName = '', qty = '') {
+    document.getElementById('items_' + planetId).appendChild(makeRow(prodName, qty));
+}
+
+function removeRow(btn) {
+    const row = btn.closest('.sh-item-row');
+    const container = row.parentElement;
+    if (container.querySelectorAll('.sh-item-row').length > 1) {
+        row.remove();
+    } else {
+        row.querySelector('select').value = '';
+        row.querySelector('input').value = '';
+    }
+}
+
+// Initialise rows from data-init attribute
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-init]').forEach(container => {
+        const planetId = container.dataset.planet;
+        let items = [];
+        try { items = JSON.parse(container.dataset.init); } catch {}
+        if (items.length) {
+            items.forEach(it => container.appendChild(makeRow(it.product_name, it.quantity)));
+        } else {
+            container.appendChild(makeRow());
+        }
+    });
+});
+
 async function saveEntry(planetId, charName) {
-    const prod = document.getElementById('prod_' + planetId)?.value;
-    const qty  = parseInt(document.getElementById('qty_'  + planetId)?.value || '0');
-    const btn  = document.getElementById('btn_' + planetId);
-    if (!prod) { showToast('Bitte ein Produkt wählen.', 'warning'); return; }
-    if (isNaN(qty) || qty < 0) { showToast('Ungültige Menge.', 'warning'); return; }
+    const container = document.getElementById('items_' + planetId);
+    const btn = document.getElementById('btn_' + planetId);
+    const items = [];
+    container.querySelectorAll('.sh-item-row').forEach(row => {
+        const prod = row.querySelector('.sh-prod').value;
+        const qty  = parseInt(row.querySelector('.sh-qty').value || '0');
+        if (prod) items.push({ product_name: prod, quantity: isNaN(qty) ? 0 : qty });
+    });
+    if (!items.length) { showToast('Bitte mindestens ein Produkt angeben.', 'warning'); return; }
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;border-width:2px;"></span>';
-
     try {
         const res = await fetch('/skyhook/entry', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ planet_id: planetId, character_name: charName, product_name: prod, quantity: qty })
+            body: JSON.stringify({ planet_id: planetId, character_name: charName, items })
         });
         if (!res.ok) throw new Error();
+
+        // Live-Update "Aktueller Bestand"
+        const currentEl = document.getElementById('current_' + planetId);
+        if (currentEl) {
+            currentEl.innerHTML = items.map(it =>
+                `<div class="sh-current-item">
+                    <i class="bi bi-dot" style="color:#7a9a6a;font-size:.9rem;"></i>
+                    <strong>${it.quantity.toLocaleString('de')}</strong>
+                    <span>${it.product_name}</span>
+                </div>`
+            ).join('');
+        }
+
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Gespeichert';
         btn.classList.add('saved');
-        showToast('Skyhook-Eintrag gespeichert.', 'success');
+        showToast('Gespeichert.', 'success');
         setTimeout(() => {
             btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Speichern';
             btn.classList.remove('saved');
@@ -306,13 +356,10 @@ function toggleHist(planetId) {
     const popup = document.getElementById('hist_' + planetId);
     if (!popup) return;
     const isOpen = popup.classList.contains('open');
-    // close all
     document.querySelectorAll('.sh-hist-popup.open').forEach(p => p.classList.remove('open'));
     if (!isOpen) popup.classList.add('open');
 }
-
-// close popups on outside click
-document.addEventListener('click', function(e) {
+document.addEventListener('click', e => {
     if (!e.target.closest('.sh-hist-btn') && !e.target.closest('.sh-hist-popup'))
         document.querySelectorAll('.sh-hist-popup.open').forEach(p => p.classList.remove('open'));
 });

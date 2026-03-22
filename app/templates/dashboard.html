@@ -346,16 +346,20 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% set sh = skyhook_data.get(colony.planet_id) %}
-                                    {% if sh %}
+                                    {% set sh_items = skyhook_data.get(colony.planet_id) %}
+                                    {% if sh_items %}
                                     <div class="eve-hover-wrap">
                                         <span style="font-size:0.75rem;color:#7a9a6a;white-space:nowrap;cursor:default;">
-                                            <i class="bi bi-box-seam me-1" style="font-size:.7rem;"></i>{{ "{:,}".format(sh.quantity) }}
+                                            <i class="bi bi-box-seam me-1" style="font-size:.7rem;"></i>{{ sh_items | length }}×
                                         </span>
-                                        <div class="eve-hover-card" style="min-width:160px;">
+                                        <div class="eve-hover-card" style="min-width:180px;">
                                             <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Skyhook</div>
-                                            <div style="color:#7a9a6a;font-weight:600;">{{ sh.product_name }}</div>
-                                            <div style="color:#c9d1d9;font-size:.8rem;">{{ "{:,}".format(sh.quantity) }} Stück</div>
+                                            {% for it in sh_items %}
+                                            <div class="d-flex justify-content-between gap-3" style="{% if not loop.last %}margin-bottom:3px;{% endif %}">
+                                                <span style="color:#7ec8e3;">{{ it.product_name }}</span>
+                                                <span style="color:#7a9a6a;font-weight:600;">{{ "{:,}".format(it.quantity) }}</span>
+                                            </div>
+                                            {% endfor %}
                                         </div>
                                     </div>
                                     {% else %}

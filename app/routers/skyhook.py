@@ -2,28 +2,25 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import func as sqlfunc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import engine, get_db
 from app.dependencies import require_account
-from app.models import SkyhookEntry
+from app.models import SkyhookEntry, SkyhookItem
 from app.pi_data import ALL_P1, ALL_P2, ALL_P3, ALL_P4
 from app.templates_env import templates
 
 router = APIRouter(prefix="/skyhook", tags=["skyhook"])
 
-# Tabelle anlegen falls noch nicht vorhanden
+# Tabellen anlegen falls noch nicht vorhanden
 SkyhookEntry.__table__.create(bind=engine, checkfirst=True)
+SkyhookItem.__table__.create(bind=engine, checkfirst=True)
 
-PI_PRODUCTS_BY_TIER = {
-    "P4": ALL_P4,
-    "P3": ALL_P3,
-    "P2": ALL_P2,
-    "P1": ALL_P1,
-}
+PI_PRODUCTS_BY_TIER = {"P4": ALL_P4, "P3": ALL_P3, "P2": ALL_P2, "P1": ALL_P1}
 
 
-def _latest_entries(account_id: int, planet_ids: list[int], db: Session) -> dict:
+def _load_latest(account_id: int, planet_ids: list[int], db: Session) -> dict:
+    """Returns {planet_id: [{"product_name": ..., "quantity": ...}]}"""
     if not planet_ids:
         return {}
     subq = (
@@ -32,30 +29,38 @@ def _latest_entries(account_id: int, planet_ids: list[int], db: Session) -> dict
         .group_by(SkyhookEntry.planet_id)
         .subquery()
     )
-    rows = db.query(SkyhookEntry).join(subq, SkyhookEntry.id == subq.c.max_id).all()
-    return {r.planet_id: {"product_name": r.product_name, "quantity": r.quantity} for r in rows}
+    entries = (
+        db.query(SkyhookEntry)
+        .join(subq, SkyhookEntry.id == subq.c.max_id)
+        .options(joinedload(SkyhookEntry.items))
+        .all()
+    )
+    return {
+        e.planet_id: [{"product_name": i.product_name, "quantity": i.quantity} for i in e.items]
+        for e in entries
+    }
 
 
-def _history(account_id: int, planet_ids: list[int], db: Session, limit: int = 3) -> dict:
-    """Returns last `limit` entries per planet as dict {planet_id: [entries]}."""
+def _load_history(account_id: int, planet_ids: list[int], db: Session, limit: int = 3) -> dict:
+    """Returns {planet_id: [entries with items, newest first]}"""
     if not planet_ids:
         return {}
-    all_rows = (
+    entries = (
         db.query(SkyhookEntry)
         .filter(SkyhookEntry.account_id == account_id, SkyhookEntry.planet_id.in_(planet_ids))
-        .order_by(SkyhookEntry.planet_id, SkyhookEntry.id.desc())
+        .options(joinedload(SkyhookEntry.items))
+        .order_by(SkyhookEntry.id.desc())
         .all()
     )
     result: dict = {}
-    for r in all_rows:
-        pid = r.planet_id
+    for e in entries:
+        pid = e.planet_id
         if pid not in result:
             result[pid] = []
         if len(result[pid]) < limit:
             result[pid].append({
-                "product_name": r.product_name,
-                "quantity": r.quantity,
-                "recorded_at": r.recorded_at.strftime("%d.%m.%Y %H:%M") if r.recorded_at else "—",
+                "recorded_at": e.recorded_at.strftime("%d.%m.%Y %H:%M") if e.recorded_at else "—",
+                "items": [{"product_name": i.product_name, "quantity": i.quantity} for i in e.items],
             })
     return result
 
@@ -71,8 +76,8 @@ def skyhook_page(
     colonies = cached["colonies"] if cached else []
 
     planet_ids = [c["planet_id"] for c in colonies if c.get("planet_id")]
-    latest = _latest_entries(account.id, planet_ids, db)
-    history = _history(account.id, planet_ids, db)
+    latest  = _load_latest(account.id, planet_ids, db)
+    history = _load_history(account.id, planet_ids, db)
 
     return templates.TemplateResponse("skyhook.html", {
         "request": request,
@@ -84,11 +89,14 @@ def skyhook_page(
     })
 
 
+class ItemIn(BaseModel):
+    product_name: str
+    quantity: int
+
 class EntryIn(BaseModel):
     planet_id: int
     character_name: str = ""
-    product_name: str
-    quantity: int
+    items: list[ItemIn]
 
 
 @router.post("/entry")
@@ -97,33 +105,18 @@ def save_entry(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
+    valid = [i for i in body.items if i.product_name and i.quantity >= 0]
+    if not valid:
+        return JSONResponse({"ok": False, "error": "no valid items"}, status_code=400)
+
     entry = SkyhookEntry(
         account_id=account.id,
         planet_id=body.planet_id,
         character_name=body.character_name or None,
-        product_name=body.product_name,
-        quantity=body.quantity,
     )
     db.add(entry)
+    db.flush()
+    for it in valid:
+        db.add(SkyhookItem(entry_id=entry.id, product_name=it.product_name, quantity=it.quantity))
     db.commit()
     return JSONResponse({"ok": True})
-
-
-@router.get("/history/{planet_id}")
-def get_history(
-    planet_id: int,
-    account=Depends(require_account),
-    db: Session = Depends(get_db),
-):
-    rows = (
-        db.query(SkyhookEntry)
-        .filter(SkyhookEntry.account_id == account.id, SkyhookEntry.planet_id == planet_id)
-        .order_by(SkyhookEntry.id.desc())
-        .limit(3)
-        .all()
-    )
-    return JSONResponse([{
-        "product_name": r.product_name,
-        "quantity": r.quantity,
-        "recorded_at": r.recorded_at.strftime("%d.%m.%Y %H:%M") if r.recorded_at else "—",
-    } for r in rows])

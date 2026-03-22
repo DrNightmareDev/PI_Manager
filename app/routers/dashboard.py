@@ -11,8 +11,9 @@ from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache
 from app.market import get_sell_prices_by_names
-from app.models import Account, Character, IskSnapshot, SkyhookEntry
+from app.models import Account, Character, IskSnapshot, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
+from sqlalchemy.orm import joinedload as _joinedload
 from app.pi_data import PLANET_TYPE_COLORS
 from app import sde as _sde
 from app.templates_env import templates
@@ -445,7 +446,7 @@ def dashboard(
     cache_age_sec = int(now - payload["fetched_at"])
     cooldown_remaining = max(0, int(REFRESH_COOLDOWN_SEC - (now - _refresh_cooldown.get(account.id, 0))))
 
-    # Skyhook-Daten laden
+    # Skyhook-Daten laden (neuester Snapshot pro Planet, mit allen Items)
     planet_ids = [c["planet_id"] for c in payload["colonies"] if c.get("planet_id")]
     skyhook_data = {}
     if planet_ids:
@@ -455,8 +456,13 @@ def dashboard(
             .group_by(SkyhookEntry.planet_id)
             .subquery()
         )
-        for e in db.query(SkyhookEntry).join(subq, SkyhookEntry.id == subq.c.max_id).all():
-            skyhook_data[e.planet_id] = {"product_name": e.product_name, "quantity": e.quantity}
+        for e in (db.query(SkyhookEntry)
+                    .join(subq, SkyhookEntry.id == subq.c.max_id)
+                    .options(_joinedload(SkyhookEntry.items))
+                    .all()):
+            skyhook_data[e.planet_id] = [
+                {"product_name": i.product_name, "quantity": i.quantity} for i in e.items
+            ]
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,

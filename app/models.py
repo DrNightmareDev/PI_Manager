@@ -117,9 +117,20 @@ class SkyhookEntry(Base):
     account_id     = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     planet_id      = Column(Integer, nullable=False, index=True)
     character_name = Column(String(255), nullable=True)
-    product_name   = Column(String(255), nullable=False)
-    quantity       = Column(Integer, nullable=False, default=0)
     recorded_at    = Column(DateTime(timezone=True), server_default=func.now())
+
+    items = relationship("SkyhookItem", back_populates="entry", cascade="all, delete-orphan")
+
+
+class SkyhookItem(Base):
+    __tablename__ = "skyhook_items"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    entry_id     = Column(Integer, ForeignKey("skyhook_entries.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_name = Column(String(255), nullable=False)
+    quantity     = Column(Integer, nullable=False, default=0)
+
+    entry = relationship("SkyhookEntry", back_populates="items")
 
 
 class AccessPolicy(Base):
