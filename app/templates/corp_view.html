@@ -53,17 +53,37 @@
     {% endif %}
 </div>
 
+<!-- Filter -->
+<div class="eve-card card border-0 mb-3">
+    <div class="card-body p-3">
+        <div class="row g-2 align-items-center">
+            <div class="col-sm-6">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-person"></i></span>
+                    <input type="text" id="filterChar" class="form-control eve-input" placeholder="Charakter..." oninput="applyCorpFilters()">
+                </div>
+            </div>
+            <div class="col-sm-6">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" style="background:#0a1520;border-color:#1a2d3d;color:#586e75;"><i class="bi bi-geo-alt"></i></span>
+                    <input type="text" id="filterSystem" class="form-control eve-input" placeholder="System / Region..." oninput="applyCorpFilters()">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Kolonien-Tabelle -->
 <div class="eve-card card border-0">
     <div class="card-header eve-card-header d-flex align-items-center gap-2">
         <i class="bi bi-globe2 eve-accent"></i>
         <span class="fw-medium">Kolonien der Korporation</span>
-        <span class="badge eve-badge-count">{{ total_colonies }}</span>
+        <span class="badge eve-badge-count" id="tableBadge">{{ total_colonies }}</span>
     </div>
     <div class="card-body p-0">
         {% if corp_colonies %}
         <div class="table-responsive">
-            <table class="table eve-table mb-0">
+            <table class="table eve-table mb-0" id="corpTable">
                 <thead>
                     <tr>
                         <th>Charakter</th>
@@ -79,7 +99,9 @@
                 </thead>
                 <tbody>
                 {% for colony in corp_colonies %}
-                <tr>
+                <tr
+                    data-char="{{ colony.character_name | lower }}"
+                    data-system="{{ colony.solar_system_name | lower }} {{ colony.region_name | lower }}">
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
@@ -168,6 +190,9 @@
                 </tbody>
             </table>
         </div>
+        <div id="noResultsMsg" style="display:none;" class="text-center py-4 text-muted small">
+            <i class="bi bi-search me-1"></i>Keine Kolonien gefunden.
+        </div>
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-globe fs-1 text-muted d-block mb-3"></i>
@@ -177,4 +202,27 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function applyCorpFilters() {
+    const char   = document.getElementById('filterChar').value.toLowerCase().trim();
+    const system = document.getElementById('filterSystem').value.toLowerCase().trim();
+
+    const rows = document.querySelectorAll('#corpTable tbody tr');
+    let visible = 0;
+
+    rows.forEach(row => {
+        const match =
+            (!char   || row.dataset.char.includes(char)) &&
+            (!system || row.dataset.system.includes(system));
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+
+    document.getElementById('tableBadge').textContent = visible;
+    document.getElementById('noResultsMsg').style.display = visible === 0 ? '' : 'none';
+}
+</script>
 {% endblock %}
