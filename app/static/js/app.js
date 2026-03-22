@@ -176,16 +176,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Filter ---
-    const filterSelect = document.getElementById('charFilter');
-    if (filterSelect) {
-        filterSelect.addEventListener('change', applyFilter);
-    }
+    const filterSelect  = document.getElementById('charFilter');
+    const expiredCheck  = document.getElementById('expiredFilter');
+
+    // Globale Funktion damit onchange-Attribute im Template funktionieren
+    window.applyFilters = applyFilter;
 
     function applyFilter() {
-        const val = filterSelect ? filterSelect.value : '';
+        const charVal    = filterSelect ? filterSelect.value : '';
+        const onlyExpired = expiredCheck ? expiredCheck.checked : false;
         let visible = 0;
         tbody.querySelectorAll('tr').forEach(r => {
-            const show = !val || r.dataset.char === val;
+            const charMatch    = !charVal || r.dataset.char === charVal;
+            const expiredMatch = !onlyExpired || r.dataset.expired === '1';
+            const show = charMatch && expiredMatch;
             r.style.display = show ? '' : 'none';
             if (show) visible++;
         });

@@ -146,10 +146,18 @@
                     {% endif %}
                 </div>
                 <div class="d-flex align-items-center gap-3 flex-wrap">
+                    {% if colonies %}
+                    <div class="d-flex align-items-center gap-2">
+                        <input class="form-check-input" type="checkbox" id="expiredFilter" onchange="applyFilters()" style="cursor:pointer;">
+                        <label class="form-check-label small text-muted" for="expiredFilter" style="cursor:pointer;">
+                            <i class="bi bi-exclamation-circle me-1" style="color:#e74c3c;"></i>Abgelaufen
+                        </label>
+                    </div>
+                    {% endif %}
                     {% if colonies and char_count > 1 %}
                     <div class="d-flex align-items-center gap-2">
                         <i class="bi bi-person-fill text-muted small"></i>
-                        <select id="charFilter" class="eve-select form-select form-select-sm">
+                        <select id="charFilter" class="eve-select form-select form-select-sm" onchange="applyFilters()">
                             <option value="">Alle Charaktere</option>
                             {% set seen = [] %}
                             {% for colony in colonies %}
@@ -224,7 +232,8 @@
                                 data-sort-level="{{ colony.upgrade_level }}"
                                 data-sort-tier="{{ colony.highest_tier or 'P0' }}"
                                 data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
-                                data-sort-isk="{{ colony.isk_day }}">
+                                data-sort-isk="{{ colony.isk_day }}"
+                                data-expired="{{ '1' if colony.extractor_status.expired > 0 else '0' }}">
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
@@ -404,6 +413,18 @@ const COLONY_FACTORIES = [
 
 {% endfor %}
 ];
+const COLONY_STORAGE = [
+{% for colony in colonies %}
+  {{ colony.storage | tojson }}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+];
+const COLONY_EXTRACTOR = [
+{% for colony in colonies %}
+  {{ colony.extractor_status | tojson }}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+];
 
 // ── Colony Detail Modal ───────────────────────────────────────────────────────
 const colonyModal = new bootstrap.Modal(document.getElementById('colonyDetailModal'));
@@ -417,19 +438,70 @@ function formatIsk(val) {
     return val.toFixed(0) + ' ISK';
 }
 
+function fmtM3(val) {
+    if (val >= 1000) return (val/1000).toFixed(1) + ' km³';
+    return val.toFixed(0) + ' m³';
+}
+
 function openColonyDetail(idx) {
-    const meta = COLONY_META[idx];
+    const meta      = COLONY_META[idx];
     const factories = COLONY_FACTORIES[idx] || [];
+    const storage   = COLONY_STORAGE[idx]   || [];
+    const extStatus = COLONY_EXTRACTOR[idx] || {total:0, expired:0};
     const c = meta.color;
+
+    // Titel mit Extractor-Status
+    let extBadge = '';
+    if (extStatus.total > 0) {
+        if (extStatus.expired > 0) {
+            extBadge = `<span class="badge ms-2" style="background:#e74c3c20;color:#e74c3c;border:1px solid #e74c3c40;">
+                <i class="bi bi-exclamation-circle me-1"></i>${extStatus.expired}/${extStatus.total} abgelaufen</span>`;
+        } else {
+            extBadge = `<span class="badge ms-2" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">
+                <i class="bi bi-check-circle me-1"></i>${extStatus.total} Extraktoren aktiv</span>`;
+        }
+    }
     document.getElementById('colonyDetailTitle').innerHTML =
         `<span class="badge me-2" style="background:${c}20;color:${c};border:1px solid ${c}40;">${meta.type}</span>${meta.name}
-         <span class="text-muted small ms-2">${meta.char}</span>`;
+         <span class="text-muted small ms-2">${meta.char}</span>${extBadge}`;
 
-    const body = document.getElementById('colonyDetailBody');
+    let html = '';
+
+    // ── Storage ──────────────────────────────────────────────
+    if (storage.length > 0) {
+        html += '<div class="p-3 pb-0"><h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-box-seam me-1"></i>LAGERSTATUS</h6>';
+        storage.forEach(s => {
+            const pct = s.fill_pct;
+            const barColor = pct > 85 ? '#e74c3c' : pct > 60 ? '#f4a300' : '#2dc653';
+            html += `<div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small fw-medium">${s.struct}</span>
+                    <span class="small text-muted">${fmtM3(s.used_m3)} / ${fmtM3(s.capacity)} (${pct}%)</span>
+                </div>
+                <div class="progress mb-2" style="height:6px;background:#1a2d3d;">
+                    <div class="progress-bar" style="width:${pct}%;background:${barColor};transition:width .3s;"></div>
+                </div>`;
+            if (s.items.length > 0) {
+                html += '<div class="d-flex flex-wrap gap-1 mb-1">';
+                s.items.forEach(it => {
+                    html += `<span class="badge" style="background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.7em;">
+                        ${it.name} <span style="color:#f4a300;">${it.amount.toLocaleString()}</span></span>`;
+                });
+                html += '</div>';
+            } else {
+                html += '<div class="text-muted small">Leer</div>';
+            }
+            html += '</div>';
+        });
+        html += '</div><hr style="border-color:#1a2d3d;margin:.5rem 0;">';
+    }
+
+    // ── Fabriken ─────────────────────────────────────────────
+    html += '<div class="p-3 pt-2"><h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-gear me-1"></i>FABRIKEN</h6>';
     if (!factories.length) {
-        body.innerHTML = '<p class="text-muted p-3">Keine aktiven Fabriken gefunden.</p>';
+        html += '<p class="text-muted small">Keine aktiven Fabriken gefunden.</p>';
     } else {
-        let html = '<div class="table-responsive"><table class="table eve-table mb-0"><thead><tr>'
+        html += '<div class="table-responsive"><table class="table eve-table mb-0"><thead><tr>'
             + '<th>Produkt</th><th>Tier</th><th>Menge/Tag</th><th>ISK/Tag</th>'
             + '</tr></thead><tbody>';
         factories.forEach(f => {
@@ -442,8 +514,10 @@ function openColonyDetail(idx) {
             </tr>`;
         });
         html += '</tbody></table></div>';
-        body.innerHTML = html;
     }
+    html += '</div>';
+
+    document.getElementById('colonyDetailBody').innerHTML = html;
     colonyModal.show();
 }
 

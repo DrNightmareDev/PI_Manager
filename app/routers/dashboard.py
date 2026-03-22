@@ -66,6 +66,78 @@ def _hours_until(dt: datetime | None) -> float | None:
     return (dt - now).total_seconds() / 3600.0
 
 
+# Launchpad type IDs (alle Planetentypen) + Storage Facility
+_STORAGE_TYPE_IDS: dict[int, tuple[str, float]] = {
+    2257: ("Storage", 12_000.0),
+    2544: ("Launchpad", 500_000.0), 2547: ("Launchpad", 500_000.0),
+    2550: ("Launchpad", 500_000.0), 2553: ("Launchpad", 500_000.0),
+    2556: ("Launchpad", 500_000.0), 2559: ("Launchpad", 500_000.0),
+    2562: ("Launchpad", 500_000.0), 2565: ("Launchpad", 500_000.0),
+}
+
+# PI Produktvolumen m³ nach Tier
+_PI_VOLUMES: dict[str, float] = {}  # befüllt lazy
+
+def _get_pi_volumes() -> dict[str, float]:
+    global _PI_VOLUMES
+    if _PI_VOLUMES:
+        return _PI_VOLUMES
+    from app.pi_data import P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4
+    vols: dict[str, float] = {}
+    for n in P0_TO_P1:           vols[n] = 0.01   # P0
+    for n in P0_TO_P1.values():  vols[n] = 0.38   # P1
+    for n in P1_TO_P2:           vols[n] = 1.5    # P2
+    for n in P2_TO_P3:           vols[n] = 6.0    # P3
+    for n in P3_TO_P4:           vols[n] = 100.0  # P4
+    _PI_VOLUMES = vols
+    return vols
+
+
+def _compute_storage(pins: list) -> list[dict]:
+    """Gibt Lagerstatus je Storage/Launchpad Pin zurück."""
+    from app.sde import get_type_name
+    vols = _get_pi_volumes()
+    result = []
+    for pin in pins:
+        type_id = pin.get("type_id")
+        if type_id not in _STORAGE_TYPE_IDS:
+            continue
+        struct_label, capacity = _STORAGE_TYPE_IDS[type_id]
+        contents_raw = pin.get("contents") or []
+        items = []
+        used_m3 = 0.0
+        for c in contents_raw:
+            name = get_type_name(c["type_id"]) or f"Type {c['type_id']}"
+            amt  = c.get("amount", 0)
+            vol  = vols.get(name, 0.01) * amt
+            used_m3 += vol
+            items.append({"name": name, "amount": amt, "volume": round(vol, 1)})
+        result.append({
+            "struct": struct_label,
+            "capacity": capacity,
+            "used_m3": round(used_m3, 1),
+            "fill_pct": round(min(used_m3 / capacity * 100, 100), 1) if capacity else 0,
+            "items": sorted(items, key=lambda x: x["volume"], reverse=True),
+        })
+    return result
+
+
+def _get_extractor_status(pins: list) -> dict:
+    """Zählt Extraktoren und abgelaufene."""
+    now = datetime.now(timezone.utc)
+    total = 0
+    expired = 0
+    for pin in pins:
+        if pin.get("extractor_details") is None:
+            continue
+        total += 1
+        exp_str = pin.get("expiry_time", "")
+        exp_dt  = _parse_expiry(exp_str) if exp_str else None
+        if exp_dt is None or exp_dt <= now:
+            expired += 1
+    return {"total": total, "expired": expired}
+
+
 def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str, int], str | None]:
     """Gibt (productions, prod_tiers, highest_tier_label) zurück.
     prod_tiers: product_name -> tier_num (1–4).
@@ -247,6 +319,8 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             "isk_day": isk_day,
             "highest_tier": highest_tier,
             "factories": _compute_factories(pins, prices),
+            "storage": _compute_storage(pins),
+            "extractor_status": _get_extractor_status(pins),
         })
 
     colony_count = len(colonies)
