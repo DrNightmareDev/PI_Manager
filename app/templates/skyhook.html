@@ -51,8 +51,8 @@
     border: 1px dashed var(--eve-card-border);
     color: var(--eve-text-muted);
     border-radius: 4px;
-    padding: .12rem .5rem;
-    font-size: .72rem;
+    padding: .1rem .45rem;
+    font-size: .7rem;
     cursor: pointer;
     transition: all .15s;
     margin-top: 2px;
@@ -64,21 +64,14 @@
     border: 1px solid var(--eve-card-border);
     color: var(--eve-text-muted);
     border-radius: 4px;
-    padding: .25rem .7rem;
-    font-size: .75rem;
+    padding: .1rem .45rem;
+    font-size: .7rem;
     transition: all .15s;
-    white-space: nowrap;
     cursor: pointer;
-    margin-top: 6px;
+    margin-top: 3px;
 }
 .sh-save-btn:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
 .sh-save-btn.saved { border-color: var(--eve-green) !important; color: var(--eve-green) !important; }
-
-.sh-current-item {
-    font-size: .75rem; display: flex; align-items: center; gap: 6px;
-    color: var(--eve-text-muted); margin-bottom: 2px;
-}
-.sh-current-item strong { color: #7a9a6a; }
 
 .sh-hist-btn {
     background: transparent; border: none;
@@ -109,7 +102,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 {% block content %}
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
     <h4 class="mb-0 eve-page-title"><i class="bi bi-box-seam me-2 eve-accent"></i>Skyhook Inventar</h4>
-    <span class="text-muted small">Manuelle Erfassung der Skyhook-Bestände pro Kolonie</span>
+    <span class="text-muted small">Bestand direkt editieren und mit Enter oder Speichern bestätigen</span>
     <a href="/dashboard" class="btn eve-btn-outline btn-sm ms-auto">
         <i class="bi bi-arrow-left me-1"></i>Zurück
     </a>
@@ -135,15 +128,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                         <th>Typ</th>
                         <th>System</th>
                         <th>Max. Produkt</th>
-                        <th>Aktueller Bestand</th>
-                        <th>Neuer Eintrag</th>
+                        <th>Skyhook Bestand</th>
                         <th style="width:80px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                 {% for colony in colonies %}
                 {% set cur_items = latest.get(colony.planet_id, []) %}
-                {% set hist     = history.get(colony.planet_id, []) %}
+                {% set hist = history.get(colony.planet_id, []) %}
                 {% set tier_products = colony.factories | selectattr('tier', 'equalto', colony.highest_tier) | unique(attribute='name') | list if colony.highest_tier else [] %}
                 {% set tc_map = {'p1':'#586e75','p2':'#00b4d8','p3':'#f4a300','p4':'#e63946'} %}
                 {% set tc_color = tc_map.get(colony.highest_tier | lower, '#586e75') if colony.highest_tier else '#586e75' %}
@@ -180,35 +172,20 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                         {% else %}<span class="text-muted">—</span>{% endif %}
                     </td>
 
-                    <!-- Aktueller Bestand (live-updated via JS) -->
-                    <td style="min-width:160px;">
-                        <div id="current_{{ colony.planet_id }}">
-                            {% if cur_items %}
-                                {% for it in cur_items %}
-                                <div class="sh-current-item">
-                                    <i class="bi bi-dot" style="color:#7a9a6a;font-size:.9rem;"></i>
-                                    <strong>{{ "{:,}".format(it.quantity) }}</strong>
-                                    <span>{{ it.product_name }}</span>
-                                </div>
-                                {% endfor %}
-                            {% else %}
-                                <span class="text-muted" style="font-size:.75rem;">kein Eintrag</span>
-                            {% endif %}
-                        </div>
-                    </td>
-
-                    <!-- Neuer Eintrag: Produktzeilen (JS-initialisiert) -->
+                    <!-- Direkt editierbarer Bestand -->
                     <td style="min-width:320px;">
                         <div id="items_{{ colony.planet_id }}"
                              data-planet="{{ colony.planet_id }}"
-                             data-init="{{ cur_items | tojson | e }}">
+                             data-init="{{ cur_items | tojson | e }}"
+                             data-char="{{ colony.character_name | e }}">
                         </div>
-                        <button class="sh-add-btn" onclick="addRow({{ colony.planet_id }})">+ Zeile</button>
-                        <br>
-                        <button class="sh-save-btn" id="btn_{{ colony.planet_id }}"
-                                onclick="saveEntry({{ colony.planet_id }}, '{{ colony.character_name | replace("'", "\\'") }}')">
-                            <i class="bi bi-floppy me-1"></i>Speichern
-                        </button>
+                        <div class="d-flex gap-2 mt-1">
+                            <button class="sh-add-btn" onclick="addRow({{ colony.planet_id }})">+ Zeile</button>
+                            <button class="sh-save-btn" id="btn_{{ colony.planet_id }}"
+                                    onclick="saveEntry({{ colony.planet_id }})">
+                                <i class="bi bi-floppy me-1"></i>Speichern
+                            </button>
+                        </div>
                     </td>
 
                     <!-- Verlauf -->
@@ -251,7 +228,6 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 <script>
 const SH_PRODUCTS = {{ pi_products | tojson }};
 
-// Build <option> HTML for a select
 function buildOptions(selected) {
     let html = '<option value="">— Produkt —</option>';
     for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
@@ -264,7 +240,7 @@ function buildOptions(selected) {
     return html;
 }
 
-function makeRow(prodName = '', qty = '') {
+function makeRow(planetId, prodName = '', qty = '') {
     const div = document.createElement('div');
     div.className = 'sh-item-row';
     div.innerHTML = `
@@ -272,11 +248,15 @@ function makeRow(prodName = '', qty = '') {
         <input type="number" class="sh-qty" min="0" value="${qty}" placeholder="0">
         <button class="sh-remove-btn" onclick="removeRow(this)" title="Entfernen">×</button>
     `;
+    // Enter-Taste auf qty → saveEntry
+    div.querySelector('.sh-qty').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); saveEntry(planetId); }
+    });
     return div;
 }
 
 function addRow(planetId, prodName = '', qty = '') {
-    document.getElementById('items_' + planetId).appendChild(makeRow(prodName, qty));
+    document.getElementById('items_' + planetId).appendChild(makeRow(planetId, prodName, qty));
 }
 
 function removeRow(btn) {
@@ -290,23 +270,24 @@ function removeRow(btn) {
     }
 }
 
-// Initialise rows from data-init attribute
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-init]').forEach(container => {
-        const planetId = container.dataset.planet;
+        const planetId = parseInt(container.dataset.planet);
         let items = [];
         try { items = JSON.parse(container.dataset.init); } catch {}
         if (items.length) {
-            items.forEach(it => container.appendChild(makeRow(it.product_name, it.quantity)));
+            items.forEach(it => container.appendChild(makeRow(planetId, it.product_name, it.quantity)));
         } else {
-            container.appendChild(makeRow());
+            container.appendChild(makeRow(planetId));
         }
     });
 });
 
-async function saveEntry(planetId, charName) {
+async function saveEntry(planetId) {
     const container = document.getElementById('items_' + planetId);
     const btn = document.getElementById('btn_' + planetId);
+    const charName = container.dataset.char || '';
+
     const items = [];
     container.querySelectorAll('.sh-item-row').forEach(row => {
         const prod = row.querySelector('.sh-prod').value;
@@ -316,7 +297,9 @@ async function saveEntry(planetId, charName) {
     if (!items.length) { showToast('Bitte mindestens ein Produkt angeben.', 'warning'); return; }
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;border-width:2px;"></span>';
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;"></span>';
+
     try {
         const res = await fetch('/skyhook/entry', {
             method: 'POST',
@@ -325,28 +308,16 @@ async function saveEntry(planetId, charName) {
         });
         if (!res.ok) throw new Error();
 
-        // Live-Update "Aktueller Bestand"
-        const currentEl = document.getElementById('current_' + planetId);
-        if (currentEl) {
-            currentEl.innerHTML = items.map(it =>
-                `<div class="sh-current-item">
-                    <i class="bi bi-dot" style="color:#7a9a6a;font-size:.9rem;"></i>
-                    <strong>${it.quantity.toLocaleString('de')}</strong>
-                    <span>${it.product_name}</span>
-                </div>`
-            ).join('');
-        }
-
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Gespeichert';
         btn.classList.add('saved');
         showToast('Gespeichert.', 'success');
         setTimeout(() => {
-            btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Speichern';
+            btn.innerHTML = orig;
             btn.classList.remove('saved');
             btn.disabled = false;
-        }, 2500);
+        }, 2000);
     } catch {
-        btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Speichern';
+        btn.innerHTML = orig;
         btn.disabled = false;
         showToast('Fehler beim Speichern.', 'error');
     }
