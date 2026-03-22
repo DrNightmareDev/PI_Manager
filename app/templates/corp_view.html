@@ -172,7 +172,13 @@
                             <span class="text-muted">—</span>
                         {% endif %}
                     </td>
-                    <td class="small">{{ colony.isk_day | format_isk }}</td>
+                    <td class="small">
+                        {% if not colony.is_active %}
+                            <span class="text-muted" title="Kolonie läuft nicht — theoretischer Wert">~{{ colony.isk_day | format_isk }}</span>
+                        {% else %}
+                            {{ colony.isk_day | format_isk }}
+                        {% endif %}
+                    </td>
                     <td>
                         {% if colony.storage %}
                             {% set max_pct = colony.storage | map(attribute='fill_pct') | max %}

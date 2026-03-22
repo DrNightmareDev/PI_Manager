@@ -352,7 +352,9 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             if prod_tiers.get(name, 0) == highest_tier_num
         )
         expiry_hours = _hours_until(expiry_time)
-        total_isk_day += isk_day
+        is_active = expiry_hours is not None and expiry_hours > 0
+        if is_active:
+            total_isk_day += isk_day
 
         if expiry_time is not None and (next_expiry is None or expiry_time < next_expiry):
             next_expiry = expiry_time
@@ -376,6 +378,7 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             "corporation_name": char.corporation_name or "",
             "alliance_name": char.alliance_name or "",
             "expiry_hours": expiry_hours,
+            "is_active": is_active,
             "isk_day": isk_day,
             "highest_tier": highest_tier,
             "factories": _compute_factories(pins, prices),
@@ -514,7 +517,7 @@ def overview_page(
             })
 
     all_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
-    total_isk = sum(c.get("isk_day", 0) for c in all_colonies)
+    total_isk = sum(c.get("isk_day", 0) for c in all_colonies if c.get("is_active", True))
 
     return templates.TemplateResponse("overview.html", {
         "request": request,
@@ -576,7 +579,7 @@ def corp_view_page(
             uncached_count += 1
 
     corp_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
-    total_isk = sum(c.get("isk_day", 0) for c in corp_colonies)
+    total_isk = sum(c.get("isk_day", 0) for c in corp_colonies if c.get("is_active", True))
 
     return templates.TemplateResponse("corp_view.html", {
         "request": request,
