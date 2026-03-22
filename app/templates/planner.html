@@ -159,7 +159,7 @@ const PLANET_RESOURCES = {{ planet_resources | tojson }};
 const PLANET_COLORS  = {{ planet_type_colors | tojson }};
 const ALL_PRODUCTS   = {{ all_products | tojson }};
 
-const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const TIER_COLORS = {P0:'#7a9a6a', P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 const TIER_ORDER  = ['P1', 'P2', 'P3', 'P4'];
 
 // ── Planetenfilter-State ──────────────────────────────────────────────────────
@@ -203,6 +203,8 @@ function calcAvailability(nodes) {
         let result;
         if (tier === 'PLANET') {
             result = selectedPlanets.has(name);
+        } else if (tier === 'P0') {
+            result = [...selectedPlanets].some(pt => PLANET_RESOURCES[pt]?.includes(name));
         } else if (tier === 'P1') {
             const p0s = getInputs(name, 'P1');
             result = p0s.some(p0 => [...selectedPlanets].some(pt => PLANET_RESOURCES[pt]?.includes(p0)));
@@ -468,7 +470,7 @@ function renderGraph(product) {
     const COL_SPACING = 210, TIER_H = 24, PAD_V = 16, PAD_H = 20;
     // Planet column is narrower
     const PLANET_W = 110;
-    const GRAPH_TIERS = ['PLANET', 'P1', 'P2', 'P3', 'P4'];
+    const GRAPH_TIERS = ['PLANET', 'P0', 'P1', 'P2', 'P3', 'P4'];
 
     // Build nodes and edges
     const nodes  = new Map();   // name → {name, tier, isSelected, p0s:[]}
@@ -488,6 +490,16 @@ function renderGraph(product) {
         const inputs = getInputs(name, tier);
         if (tier === 'P1') {
             if (nodes.has(name)) nodes.get(name).p0s = inputs;
+            for (const p0 of inputs) {
+                addNode(p0, 'P0');
+                addEdge(p0, name);
+                for (const [pt, res] of Object.entries(PLANET_RESOURCES)) {
+                    if (res.includes(p0)) {
+                        if (!nodes.has(pt)) nodes.set(pt, {name: pt, tier: 'PLANET', isSelected: false, p0s: []});
+                        addEdge(pt, p0);
+                    }
+                }
+            }
             return;
         }
         for (const inp of inputs) {
@@ -499,18 +511,6 @@ function renderGraph(product) {
         }
     })(product.name, product.tier, 0);
 
-    // ── Planetenspalte: für jeden P1-Knoten Planetentypen hinzufügen ─────────
-    for (const [, node] of nodes) {
-        if (node.tier !== 'P1') continue;
-        for (const p0 of node.p0s) {
-            for (const [pt, res] of Object.entries(PLANET_RESOURCES)) {
-                if (res.includes(p0)) {
-                    if (!nodes.has(pt)) nodes.set(pt, {name: pt, tier: 'PLANET', isSelected: false, p0s: []});
-                    addEdge(pt, node.name);
-                }
-            }
-        }
-    }
 
     // ── Outputs (rechts vom gewählten Produkt) ────────────────────────────────
     (function addOutputs(name, tier, depth) {
@@ -526,8 +526,9 @@ function renderGraph(product) {
     const byTier = {};
     GRAPH_TIERS.forEach(t => byTier[t] = []);
     for (const n of nodes.values()) if (byTier[n.tier]) byTier[n.tier].push(n);
-    // Planets sorted by name; PI nodes: selected first then alpha
+    // Planets sorted by name; P0 alphabetically; PI nodes: selected first then alpha
     byTier['PLANET'].sort((a, b) => a.name.localeCompare(b.name));
+    byTier['P0'].sort((a, b) => a.name.localeCompare(b.name));
     for (const t of ['P1','P2','P3','P4'])
         byTier[t].sort((a, b) => (b.isSelected - a.isSelected) || a.name.localeCompare(b.name));
 
@@ -592,7 +593,7 @@ function renderGraph(product) {
         const cw = colW(tier);
         const isPlanet = tier === 'PLANET';
         const tc = isPlanet ? '#4a7a5a' : (TIER_COLORS[tier] || '#586e75');
-        const label = isPlanet ? 'PLANETS' : tier;
+        const label = isPlanet ? 'PLANETS' : (tier === 'P0' ? 'RAW' : tier);
         s += `<rect x="${r(cx - cw/2 - 8)}" y="0" width="${cw + 16}" height="${svgH}"
                     fill="${tc}" fill-opacity="${isPlanet ? 0.05 : 0.03}" rx="6"/>
               <line x1="${r(cx - cw/2 - 8)}" y1="${TIER_H}" x2="${r(cx + cw/2 + 8)}" y2="${TIER_H}"
@@ -645,6 +646,26 @@ function renderGraph(product) {
         const nx  = r(node.x - nw / 2);
         const ny  = r(node.y);
         const sel = node.isSelected;
+
+        if (node.tier === 'P0') {
+            const p0c = TIER_COLORS['P0'];
+            const nodeAvail = avail.get(node.name) !== false;
+            const dim = !nodeAvail;
+            const fc = dim ? '#586e75' : p0c;
+            const srcPlanets = Object.entries(PLANET_RESOURCES).filter(([,r]) => r.includes(node.name)).map(([pt]) => pt);
+            s += `<g>
+              <title>${node.name}\n⛏ ${srcPlanets.join(', ')}</title>
+              <rect x="${nx}" y="${ny}" width="${NODE_W}" height="${NODE_H}" rx="4"
+                    fill="${fc}" fill-opacity="${dim ? 0.03 : 0.09}"
+                    stroke="${fc}" stroke-opacity="${dim ? 0.12 : 0.45}"
+                    stroke-width="1" stroke-dasharray="4 2"/>
+              <text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
+                    fill="${fc}" fill-opacity="${dim ? 0.25 : 0.9}"
+                    font-size="10" font-weight="400"
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${node.name}</text>
+            </g>`;
+            continue;
+        }
 
         if (isPlanet) {
             // Planet node: pill shape, clickable to toggle filter
