@@ -155,8 +155,9 @@ let searchTimeout = null;
 let allRecs = [];
 let currentTier = '';
 let currentTrendPeriod = 'trend_1d';
-let activeFilters = new Set(); // enthält Planetentypen UND Input-Namen
+let activeFilters = new Set(); // enthält Planetentypen, P0-Ressourcen UND Input-Namen
 let sortState = { col: 'isk_sell', asc: false };
+let resourceToPlanet = {}; // P0-Ressource → [Planetentypen die sie produzieren]
 
 const searchInput  = document.getElementById('systemSearch');
 const searchResults = document.getElementById('searchResults');
@@ -301,6 +302,7 @@ function toggleFilter(value) {
         activeFilters.add(value);
     }
     updatePlanetTiles();
+    updateResourceBadges();
     document.getElementById('clearPlanetFilter').classList.toggle('d-none', activeFilters.size === 0);
     renderRecs();
 }
@@ -308,6 +310,7 @@ function toggleFilter(value) {
 function clearFilters() {
     activeFilters.clear();
     updatePlanetTiles();
+    updateResourceBadges();
     document.getElementById('clearPlanetFilter').classList.add('d-none');
     renderRecs();
 }
@@ -321,7 +324,19 @@ function updatePlanetTiles() {
     });
 }
 
-// Klick auf Filter-Badges in der Tabelle
+function updateResourceBadges() {
+    document.querySelectorAll('#resourceGrid .eve-filter-badge').forEach(badge => {
+        const f = badge.dataset.filter;
+        const isActive = activeFilters.has(f);
+        const pt = badge.closest('.eve-planet-tile')?.dataset.planetType;
+        const c = pt ? (PLANET_COLORS[pt] || '#586e75') : '#586e75';
+        badge.style.background   = isActive ? `${c}38` : `${c}12`;
+        badge.style.borderColor  = isActive ? `${c}90` : `${c}28`;
+        badge.style.fontWeight   = isActive ? '600' : '';
+    });
+}
+
+// Klick auf Filter-Badges in der Tabelle (Empfehlungen)
 document.getElementById('recommendationBody')?.addEventListener('click', e => {
     const badge = e.target.closest('.eve-filter-badge');
     if (badge) toggleFilter(badge.dataset.filter);
@@ -404,7 +419,16 @@ function renderAnalysis(data) {
     // Filter + Sort zurücksetzen
     activeFilters.clear();
     sortState = { col: 'isk_sell', asc: false };
+    resourceToPlanet = {};
     document.getElementById('clearPlanetFilter').classList.add('d-none');
+
+    // P0-Ressource → Planetentyp Mapping aufbauen
+    (data.planet_types || []).forEach(pt => {
+        (pt.resources || []).forEach(r => {
+            if (!resourceToPlanet[r]) resourceToPlanet[r] = [];
+            resourceToPlanet[r].push(pt.type);
+        });
+    });
 
     // System Header
     document.getElementById('systemName').textContent    = data.system_name || '—';
@@ -436,7 +460,10 @@ function renderAnalysis(data) {
         const col = document.createElement('div');
         col.className = 'col-md-6 col-xl-4';
         const resources = (pt.resources || []).map(r =>
-            `<span class="badge me-1 mb-1" style="background:${pt.color}12;color:${pt.color};border:1px solid ${pt.color}28;font-size:0.72rem;">${r}</span>`
+            `<span class="badge me-1 mb-1 eve-filter-badge"
+                   data-filter="${r}"
+                   style="cursor:pointer;background:${pt.color}12;color:${pt.color};border:1px solid ${pt.color}28;font-size:0.72rem;transition:all 0.12s;"
+                   title="Filter: ${r}">${r}</span>`
         ).join('');
         col.innerHTML = `
             <div class="p-2 rounded h-100 eve-planet-tile"
@@ -451,8 +478,16 @@ function renderAnalysis(data) {
         resGrid.appendChild(col);
     });
 
-    document.querySelectorAll('.eve-planet-tile').forEach(el =>
-        el.addEventListener('click', () => toggleFilter(el.dataset.planetType)));
+    // Ein delegierter Handler für den gesamten Ressourcen-Grid:
+    // Badge-Klick (P0-Ressource) hat Vorrang vor Tile-Klick (Planetentyp)
+    const resGridEl = document.getElementById('resourceGrid');
+    resGridEl.replaceWith(resGridEl.cloneNode(true)); // alte Listener entfernen
+    document.getElementById('resourceGrid').addEventListener('click', e => {
+        const badge = e.target.closest('.eve-filter-badge');
+        if (badge) { toggleFilter(badge.dataset.filter); return; }
+        const tile = e.target.closest('.eve-planet-tile');
+        if (tile) toggleFilter(tile.dataset.planetType);
+    });
 
     // Empfehlungen
     allRecs = data.recommendations || [];
@@ -468,10 +503,16 @@ function renderRecs() {
     let filtered = currentTier ? allRecs.filter(r => r.tier === currentTier) : [...allRecs];
 
     if (activeFilters.size > 0) {
-        filtered = filtered.filter(r =>
-            (r.planets_needed || []).some(p => activeFilters.has(p)) ||
-            (r.inputs || []).some(i => activeFilters.has(i))
-        );
+        filtered = filtered.filter(r => {
+            const planets = r.planets_needed || [];
+            const inputs  = r.inputs || [];
+            return [...activeFilters].some(f => {
+                // Direkter Treffer: Planetentyp oder Input-Name
+                if (planets.includes(f) || inputs.includes(f)) return true;
+                // P0-Ressource → zugehörige Planetentypen prüfen
+                return (resourceToPlanet[f] || []).some(pt => planets.includes(pt));
+            });
+        });
     }
 
     const tierColors = { P1: '#586e75', P2: '#00b4d8', P3: '#f4a300', P4: '#e63946' };
