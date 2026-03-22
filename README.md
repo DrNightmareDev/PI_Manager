@@ -304,6 +304,6 @@ Schick einfach eine ISK-Spende in EVE Online an **DrNightmare**. Jeder Betrag is
 
 ## Rechtliche Hinweise
 
-EVE Online, das EVE-Logo, EVE und alle zugehörigen Logos und Designs sind eingetragene Marken oder Marken von CCP hf. Alle EVE-In-Game-Screenshots und Bilder sind Eigentum von CCP hf. Alle Rechte vorbehalten. CCP hf. ist weder mit diesem Projekt verbunden noch hat CCP hf. dieses Projekt genehmigt oder unterstützt.
+EVE Online, das EVE-Logo, EVE und alle zugehörigen Logos und Designs sind eingetragene Marken oder Marken von CCP ehf. Alle EVE-In-Game-Screenshots und Bilder sind Eigentum von CCP ehf. Alle Rechte vorbehalten. CCP ehf. ist weder mit diesem Projekt verbunden noch hat CCP ehf. dieses Projekt genehmigt oder unterstützt.
 
 *EVE PI Manager* ist ein unabhängiges Drittanbieter-Tool und steht in keiner Verbindung zu CCP Games.
