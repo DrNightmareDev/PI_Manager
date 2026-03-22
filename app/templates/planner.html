@@ -89,6 +89,9 @@
                 <button class="btn btn-sm eve-btn-ghost" id="sysClearBtn" onclick="clearSystem()" style="display:none;padding:2px 6px;" title="System entfernen">
                     <i class="bi bi-x"></i>
                 </button>
+                <span id="sysLoadSpinner" style="display:none;">
+                    <span class="spinner-border spinner-border-sm text-muted" style="width:.85rem;height:.85rem;border-width:2px;" role="status"></span>
+                </span>
                 <div id="systemCheckResult" class="d-none d-flex align-items-center gap-1 flex-wrap"></div>
                 <a id="chainFindSystemsBtn" href="/system" class="btn eve-btn-primary btn-sm ms-auto disabled" style="pointer-events:none;opacity:.4;" aria-disabled="true">
                     <i class="bi bi-globe2 me-1"></i>System Analyzer öffnen
@@ -308,6 +311,20 @@ async function toggleFavorite() {
     btn.disabled = false;
 }
 
+async function removeFavorite(name) {
+    if (!favorites.has(name)) return;
+    try {
+        await fetch('/planner/favorites/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_name: name}),
+        });
+        favorites.delete(name);
+        updateFavBtn();
+        renderFavoritesBlock();
+    } catch(e) {}
+}
+
 function updateFavBtn() {
     if (!selectedProduct) return;
     const isFav = favorites.has(selectedProduct.name);
@@ -335,20 +352,26 @@ function renderFavoritesBlock() {
         .sort((a, b) => (TIER_SORT[b.tier] - TIER_SORT[a.tier]) || a.name.localeCompare(b.name));
 
     pills.innerHTML = favList.map(p => {
-        const tc  = TIER_COLORS[p.tier] || '#586e75';
-        const sel = selectedProduct && selectedProduct.name === p.name;
-        return `<button
-            onclick="selectProduct({name:'${p.name.replace(/'/g,"\\'")}',tier:'${p.tier}'})"
-            class="btn btn-sm"
-            style="background:${tc}${sel ? '30' : '14'};color:${tc};
-                   border:1px solid ${tc}${sel ? '90' : '35'};
-                   font-size:0.8rem;transition:all .15s;
-                   ${sel ? 'box-shadow:0 0 8px '+tc+'50;' : ''}"
-            onmouseenter="this.style.background='${tc}28'"
-            onmouseleave="this.style.background='${tc}${sel ? '30' : '14'}'">
-            <span style="opacity:.7;font-size:.7rem;">${p.tier}</span>
-            &nbsp;${p.name}
-        </button>`;
+        const tc   = TIER_COLORS[p.tier] || '#586e75';
+        const sel  = selectedProduct && selectedProduct.name === p.name;
+        const safe = p.name.replace(/'/g, "\\'");
+        return `<div class="d-inline-flex align-items-center"
+                     style="background:${tc}${sel ? '30' : '14'};
+                            border:1px solid ${tc}${sel ? '90' : '35'};
+                            border-radius:4px;transition:all .15s;
+                            ${sel ? 'box-shadow:0 0 8px '+tc+'50;' : ''}">
+            <button onclick="selectProduct({name:'${safe}',tier:'${p.tier}'})"
+                    class="btn btn-sm border-0 py-1 px-2"
+                    style="background:transparent;color:${tc};font-size:0.8rem;">
+                <span style="opacity:.7;font-size:.7rem;">${p.tier}</span>&nbsp;${p.name}
+            </button>
+            <button onclick="removeFavorite('${safe}')"
+                    class="btn btn-sm border-0 py-1 px-1"
+                    style="background:transparent;color:${tc};opacity:.45;font-size:.75rem;line-height:1;"
+                    title="Favorit entfernen"
+                    onmouseenter="this.style.opacity='1'"
+                    onmouseleave="this.style.opacity='.45'">×</button>
+        </div>`;
     }).join('');
 
     block.classList.remove('d-none');
@@ -778,6 +801,7 @@ async function chooseSystem(sys) {
     sysSearchEl.value = sys.name;
     sysResultsEl.classList.add('d-none');
     document.getElementById('sysClearBtn').style.display = '';
+    document.getElementById('sysLoadSpinner').style.display = '';
     const saBtn = document.getElementById('chainFindSystemsBtn');
     saBtn.href = `/system/${encodeURIComponent(sys.name)}`;
     saBtn.classList.remove('disabled');
@@ -789,6 +813,7 @@ async function chooseSystem(sys) {
         selectedSystem = { id: sys.id, name: sys.name, data };
         applySystemCheck();
     } catch(e) {}
+    document.getElementById('sysLoadSpinner').style.display = 'none';
 }
 
 function clearSystem() {
@@ -813,28 +838,42 @@ function applySystemCheck() {
     const p0Set = new Set(), planetSet = new Set();
     collectRequirements(selectedProduct.name, selectedProduct.tier, p0Set, planetSet, new Set());
 
-    const availTypes  = new Set((data.planet_types || []).map(pt => pt.type));
-    const ptCounts    = Object.fromEntries((data.planet_types || []).map(pt => [pt.type, pt.count]));
-    const missing     = [...planetSet].filter(pt => !availTypes.has(pt));
+    const availTypes = new Set((data.planet_types || []).map(pt => pt.type));
+    const ptCounts   = Object.fromEntries((data.planet_types || []).map(pt => [pt.type, pt.count]));
+
+    // A P0 is coverable if at least one available planet type produces it
+    const uncoverableP0s = [...p0Set].filter(p0 =>
+        !Object.entries(PLANET_RESOURCES).some(([pt, res]) => res.includes(p0) && availTypes.has(pt))
+    );
+    const canProduce = uncoverableP0s.length === 0;
+
+    // Planet types to show as ✗: those in planetSet, not in system,
+    // AND covering at least one uncoverable P0 (truly missing, not just redundant)
+    const neededMissing = new Set();
+    for (const p0 of uncoverableP0s)
+        for (const [pt, res] of Object.entries(PLANET_RESOURCES))
+            if (res.includes(p0) && !availTypes.has(pt)) neededMissing.add(pt);
+
+    // Planet types to show: available+relevant ∪ truly missing
+    const relevantAvail = [...planetSet].filter(pt => availTypes.has(pt));
+    const showTypes = [...new Set([...relevantAvail, ...neededMissing])];
 
     // Auto-set planet filter to system's planet types
     selectedPlanets = new Set([...availTypes]);
     updatePlanetFilterUI();
     renderGraph(selectedProduct);
 
-    // Verdict chip
-    const verdictHtml = missing.length === 0
+    const divider = `<span style="color:#1a3a5a;font-size:1rem;">|</span>`;
+
+    const verdictHtml = canProduce
         ? `<span style="color:#2dc653;font-size:.78rem;font-weight:600;white-space:nowrap;">
                <i class="bi bi-check-circle-fill me-1"></i>Alles verfügbar
            </span>`
         : `<span style="color:#e74c3c;font-size:.78rem;font-weight:600;white-space:nowrap;">
-               <i class="bi bi-x-circle-fill me-1"></i>${missing.length} fehlen
+               <i class="bi bi-x-circle-fill me-1"></i>${neededMissing.size} Planetentyp(en) fehlen
            </span>`;
 
-    // Divider
-    const divider = `<span style="color:#1a3a5a;font-size:1rem;">|</span>`;
-
-    const badgesHtml = [...planetSet].map(pt => {
+    const badgesHtml = showTypes.map(pt => {
         const c   = PLANET_COLORS[pt] || '#586e75';
         const has = availTypes.has(pt);
         const cnt = ptCounts[pt] || 0;
@@ -850,8 +889,7 @@ function applySystemCheck() {
     }).join('');
 
     const resultEl = document.getElementById('systemCheckResult');
-    resultEl.innerHTML = verdictHtml
-        + (badgesHtml ? divider + badgesHtml : '');
+    resultEl.innerHTML = verdictHtml + (badgesHtml ? divider + badgesHtml : '');
     resultEl.classList.remove('d-none');
 }
 </script>

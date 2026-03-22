@@ -17,21 +17,26 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | **PI Kolonien** | Übersicht aller Planeten-Kolonien für Main + Alts |
 | **ISK/Tag Berechnung** | Echtzeit-Preise via Fuzzwork Jita 4-4 |
 | **Dashboard Cache** | Daten 15 min gecacht, Force-Refresh max. 1×/60 s (API-Schutz) |
-| **Kolonie-Detail** | Fabrik-Übersicht pro Kolonie (Tier, Stück/Tag, ISK/Tag) |
+| **Kolonie-Detail** | Fabrik-Übersicht pro Kolonie (Tier, Stück/Tag, ISK/Tag), fehlende Inputs, Lagerstand |
 | **ISK/Tag Verlauf** | Tägliche Snapshots mit Chart.js Verlaufsgraph |
-| **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem |
+| **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem, Filter für inaktive Kolonien |
 | **Push-Benachrichtigungen** | Browser-Notifications wenn Extractoren ablaufen (120/60/30/10 Min.) |
-| **PI Chain Planner** | Vollständige P2–P4 Produktionsketten mit interaktivem SVG-Graph |
+| **Pagination** | Alle Tabellen mit konfigurierbarer Seitengröße (6/15/25/100/Alle) |
+| **PI Chain Planner** | Vollständige P1–P4 Produktionsketten mit interaktivem SVG-Graph |
 | **Planeten-Filter** | Im Graphen Planeten anklicken → nicht produzierbare Knoten ausgegraut |
-| **System Analyzer** | PI-Potential eines Systems analysieren (P0→P4 Ketten) |
+| **Planner System-Check** | System direkt im Planner prüfen — zeigt ob alle P0-Ressourcen verfügbar sind |
+| **System Analyzer** | PI-Potential eines Systems analysieren (P0→P4 Ketten, Preise, Trends) |
 | **System Vergleich** | Bis zu 4 Systeme nebeneinander vergleichen (localStorage) |
-| **Favoriten** | PI-Produkte als Favorit speichern, Schnellauswahl im Planner |
+| **System-Favoriten** | Systeme im Analyzer als Favorit speichern, Schnellzugriff per Pill (localStorage) |
+| **Produkt-Favoriten** | PI-Produkte als Favorit speichern, Schnellauswahl im Planner |
+| **Korporation-Übersicht** | Alle Kolonien der eigenen Korporation auf einen Blick (CEO/Admin) |
+| **Gesamt-Übersicht** | Alle Kolonien aller Accounts aggregiert (Owner/Admin), filterbar |
 | **Multi-Charakter** | Main + beliebig viele Alts unter einem Account |
 | **EVE SSO** | Login via EVE Online OAuth2, kein eigenes Passwort |
 | **Admin Panel** | Account-Verwaltung, Charakter-Suche, Admin-Filter |
 | **Zugangspolitik** | Besitzer kann System offen, per Allowlist oder Blocklist betreiben |
 | **Owner-System** | Erster Account = Besitzer, geschützt vor Löschung/Entfernung |
-| **Jita Marktpreise** | Live-Preise P1–P4, Tier-Filter, Sortierung, 24h/7T Trends |
+| **Jita Marktpreise** | Live-Preise P1–P4, Tier-Filter, Sortierung, 24h/7T/30T Trends |
 | **EveRef SDE** | Statische Spieldaten lokal (Schematics, Types) – kein ESI-Overhead |
 
 ---
@@ -325,7 +330,6 @@ Mögliche zukünftige Features — Pull Requests willkommen:
 | Idee | Beschreibung |
 |---|---|
 | **Discord / Telegram Webhook** | Extractor-Ablauf-Notifications via Webhook statt Browser |
-| **Corp PI Übersicht** | Aggregierte Ansicht für mehrere Accounts / Corp-weites PI |
 | **Hauling Kalkulator** | Transportkosten Planet → Jita in ISK/Tag einrechnen |
 | **PI Setup Vorlagen** | Kolonien-Konfigurationen speichern und teilen |
 | **Preisalarm** | Notification wenn PI-Produkt Preis-Schwellenwert über-/unterschreitet |
