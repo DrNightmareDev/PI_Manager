@@ -296,10 +296,14 @@
                                         <div style="min-width:70px;" title="{{ colony.storage | length }} Lager – {{ max_pct }}% voll">
                                             <div class="d-flex justify-content-between" style="font-size:.7rem;color:#7a8a9a;margin-bottom:2px;">
                                                 <span>{{ colony.storage | length }}×</span>
+                                                {% if max_pct == 0 %}
+                                                <span style="color:#3a5a7a;">Leer</span>
+                                                {% else %}
                                                 <span>{{ max_pct }}%</span>
+                                                {% endif %}
                                             </div>
                                             <div style="height:5px;background:#1a2d3d;border-radius:3px;overflow:hidden;">
-                                                <div style="height:100%;width:{{ max_pct }}%;background:{{ bar_color }};border-radius:3px;transition:width .3s;"></div>
+                                                <div style="height:100%;width:{{ [max_pct, 2] | max }}%;background:{{ bar_color }};border-radius:3px;transition:width .3s;opacity:{{ '0.3' if max_pct == 0 else '1' }};"></div>
                                             </div>
                                         </div>
                                     {% else %}
