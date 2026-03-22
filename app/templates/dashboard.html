@@ -302,8 +302,8 @@
                                         {% set ns = namespace(tip='') %}
                                         {% for s in colony.storage %}
                                             {% set ns.tip = ns.tip ~ s.label ~ ': ' ~ s.fill_pct ~ '%' %}
-                                            {% if s.items %}
-                                                {% for it in s.items %}{% set ns.tip = ns.tip ~ ' · ' ~ it.name ~ ' ' ~ it.amount %}{% endfor %}
+                                            {% if s['items'] %}
+                                                {% for it in s['items'] %}{% set ns.tip = ns.tip ~ ' · ' ~ it.name ~ ' ' ~ it.amount %}{% endfor %}
                                             {% else %}
                                                 {% set ns.tip = ns.tip ~ ' · leer' %}
                                             {% endif %}
