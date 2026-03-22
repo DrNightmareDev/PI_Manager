@@ -612,7 +612,7 @@ def corp_view_page(
     # Accounts list for force-load (owner only)
     corp_accounts: list[dict] = []
     if account.is_owner:
-        for acc_id in sorted(account_ids):
+        for acc_id in sorted(a for a in account_ids if a is not None):
             acc = db.query(Account).filter(Account.id == acc_id).first()
             if not acc:
                 continue
@@ -663,7 +663,7 @@ def corp_accounts_api(
     if not account.is_owner:
         raise HTTPException(status_code=403)
     corp_chars = db.query(Character).filter(Character.corporation_id == corp_id).all()
-    account_ids = {c.account_id for c in corp_chars}
+    account_ids = {c.account_id for c in corp_chars if c.account_id is not None}
     result = []
     for acc_id in sorted(account_ids):
         acc = db.query(Account).filter(Account.id == acc_id).first()
