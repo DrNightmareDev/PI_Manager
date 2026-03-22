@@ -42,6 +42,12 @@ if [[ ! -d "${APP_DIR}" ]]; then
     exit 1
 fi
 
+# ============ 0. Abhängigkeiten prüfen ============
+if ! command -v rsync &>/dev/null; then
+    log_info "rsync nicht gefunden, installiere..."
+    apt-get install -y -qq rsync
+fi
+
 # ============ 1. Git Pull ============
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "${SCRIPT_DIR}")"

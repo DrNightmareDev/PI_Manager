@@ -44,6 +44,7 @@ apt-get update -qq
 log_info "Installiere benötigte Pakete..."
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     sudo \
+    rsync \
     python3 \
     python3-pip \
     python3-venv \
