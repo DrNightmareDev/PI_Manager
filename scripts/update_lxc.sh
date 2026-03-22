@@ -42,16 +42,23 @@ if [[ ! -d "${APP_DIR}" ]]; then
     exit 1
 fi
 
-# ============ 1. .env sichern ============
+# ============ 1. Git Pull ============
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "${SCRIPT_DIR}")"
+
+log_info "Aktualisiere Repository..."
+cd "${PROJECT_DIR}"
+git fetch origin main
+git reset --hard origin/main
+log_ok "Repository aktualisiert"
+
+# ============ 2. .env sichern ============
 log_info "Sichere .env..."
 ENV_BACKUP=$(mktemp /tmp/eve-pi-env-backup.XXXXXX)
 cp "${APP_DIR}/.env" "${ENV_BACKUP}"
 log_ok ".env gesichert → ${ENV_BACKUP}"
 
-# ============ 2. Neue Dateien einspielen ============
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "${SCRIPT_DIR}")"
-
+# ============ 3. Neue Dateien einspielen ============
 log_info "Kopiere aktualisierte App-Dateien nach ${APP_DIR}..."
 rsync -a --exclude='.env' \
          --exclude='venv/' \
@@ -62,13 +69,13 @@ rsync -a --exclude='.env' \
          "${PROJECT_DIR}/" "${APP_DIR}/"
 log_ok "Dateien aktualisiert"
 
-# ============ 3. .env wiederherstellen ============
+# ============ 4. .env wiederherstellen ============
 cp "${ENV_BACKUP}" "${APP_DIR}/.env"
 chmod 600 "${APP_DIR}/.env"
 rm -f "${ENV_BACKUP}"
 log_ok ".env wiederhergestellt"
 
-# ============ 4. Dateirechte setzen ============
+# ============ 5. Dateirechte setzen ============
 log_info "Setze Dateirechte..."
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 find "${APP_DIR}" -type d -exec chmod 755 {} \;
@@ -77,19 +84,19 @@ chmod 755 "${APP_DIR}/venv/bin/"* 2>/dev/null || true
 chmod 600 "${APP_DIR}/.env"
 log_ok "Dateirechte gesetzt"
 
-# ============ 5. Python-Abhängigkeiten aktualisieren ============
+# ============ 6. Python-Abhängigkeiten aktualisieren ============
 log_info "Aktualisiere Python-Abhängigkeiten..."
 "${APP_DIR}/venv/bin/pip" install --quiet --upgrade pip
 "${APP_DIR}/venv/bin/pip" install --quiet -r "${APP_DIR}/requirements.txt"
 log_ok "Abhängigkeiten aktualisiert"
 
-# ============ 6. Datenbank-Migrationen ============
+# ============ 7. Datenbank-Migrationen ============
 log_info "Führe Datenbank-Migrationen aus..."
 cd "${APP_DIR}"
 sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/alembic" upgrade head
 log_ok "Migrationen abgeschlossen"
 
-# ============ 7. Service neu starten ============
+# ============ 8. Service neu starten ============
 log_info "Starte Service neu..."
 systemctl restart "${SERVICE_NAME}"
 sleep 2
