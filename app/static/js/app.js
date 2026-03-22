@@ -113,6 +113,26 @@ document.querySelectorAll('img[onerror]').forEach(img => {
     });
 });
 
+// ============ Theme Toggle ============
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    document.documentElement.setAttribute('data-bs-theme', next);
+    localStorage.setItem('eve-theme', next);
+    updateThemeIcon(next);
+}
+
+function updateThemeIcon(theme) {
+    const icon = document.getElementById('themeIcon');
+    if (!icon) return;
+    icon.className = theme === 'light' ? 'bi bi-moon' : 'bi bi-sun';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'dark');
+});
+
 // ============ Colony Table: Sort + Filter + Paginate ============
 document.addEventListener('DOMContentLoaded', function () {
     const table = document.getElementById('coloniesTable');

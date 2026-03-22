@@ -938,3 +938,229 @@ main {
     border-color: var(--eve-accent);
     color: var(--eve-accent);
 }
+
+/* ============ Theme Toggle Button ============ */
+.eve-theme-toggle {
+    background: transparent;
+    border: 1px solid var(--eve-card-border);
+    color: var(--eve-text-muted);
+    border-radius: 6px;
+    padding: 0.25rem 0.5rem;
+    line-height: 1;
+    transition: color 0.15s, border-color 0.15s;
+}
+.eve-theme-toggle:hover {
+    color: var(--eve-accent);
+    border-color: var(--eve-accent);
+}
+
+/* ============ Light Mode ============ */
+html[data-theme="light"] {
+    --eve-bg:           #f0f4f8;
+    --eve-bg-2:         #e6edf4;
+    --eve-bg-3:         #dae3ed;
+    --eve-card:         #ffffff;
+    --eve-card-border:  #c5d5e4;
+    --eve-accent:       #0077b6;
+    --eve-text:         #1a2332;
+    --eve-text-muted:   #4a6a7c;
+}
+
+html[data-theme="light"] body.eve-body {
+    background-color: var(--eve-bg);
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-navbar {
+    background-color: rgba(240, 244, 248, 0.97);
+}
+
+html[data-theme="light"] .eve-footer {
+    background: rgba(240, 244, 248, 0.97);
+}
+
+html[data-theme="light"] .eve-card-header {
+    background: rgba(197, 213, 228, 0.35);
+}
+
+html[data-theme="light"] .eve-table thead th {
+    background: rgba(197, 213, 228, 0.35);
+}
+
+html[data-theme="light"] .eve-table tbody tr {
+    border-color: rgba(197, 213, 228, 0.5);
+}
+
+html[data-theme="light"] .eve-table tbody tr:hover {
+    background: rgba(0, 119, 182, 0.04);
+}
+
+html[data-theme="light"] .eve-table td {
+    border-color: rgba(197, 213, 228, 0.5);
+}
+
+html[data-theme="light"] .eve-table-sm th {
+    background: rgba(197, 213, 228, 0.25);
+}
+
+html[data-theme="light"] .eve-table-sm td {
+    border-color: rgba(197, 213, 228, 0.3);
+}
+
+html[data-theme="light"] .eve-input {
+    background: #fff;
+    color: var(--eve-text);
+    border-color: var(--eve-card-border);
+}
+
+html[data-theme="light"] .eve-input:focus {
+    background: #fff;
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-search-dropdown {
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+html[data-theme="light"] .eve-search-item {
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-dropdown {
+    background: #fff;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+html[data-theme="light"] .eve-dropdown .dropdown-item {
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-dropdown .dropdown-item:hover {
+    background: rgba(0, 119, 182, 0.07);
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-btn-ghost:hover {
+    background: rgba(0,0,0,0.06);
+}
+
+html[data-theme="light"] .eve-token-info,
+html[data-theme="light"] .eve-scope-list {
+    background: rgba(218, 227, 237, 0.5);
+}
+
+html[data-theme="light"] .eve-features {
+    background: rgba(218, 227, 237, 0.5);
+}
+
+html[data-theme="light"] .eve-login-body {
+    background-color: var(--eve-bg);
+}
+
+html[data-theme="light"] .eve-login-card {
+    background: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 0 0 1px rgba(0, 119, 182, 0.15);
+}
+
+html[data-theme="light"] .eve-grid-lines {
+    background-image:
+        linear-gradient(rgba(0, 119, 182, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 119, 182, 0.05) 1px, transparent 1px);
+}
+
+html[data-theme="light"] .eve-sso-btn {
+    background: linear-gradient(135deg, #dae3ed 0%, #f0f4f8 100%);
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-sso-btn:hover {
+    background: linear-gradient(135deg, #cdd8e5 0%, #e6edf4 100%);
+    box-shadow: 0 0 20px rgba(0, 119, 182, 0.2);
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-account-entry {
+    background: var(--eve-bg-2);
+}
+
+html[data-theme="light"] .card {
+    background: var(--eve-card);
+    border-color: var(--eve-card-border);
+}
+
+html[data-theme="light"] .eve-select {
+    background-color: #fff;
+    border-color: rgba(0,119,182,0.25);
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-select:focus {
+    background-color: #fff;
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-select option {
+    background-color: #fff;
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-track {
+    background: var(--eve-bg-2);
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: var(--eve-card-border);
+}
+
+html[data-theme="light"] .eve-info-alert {
+    background: rgba(0, 119, 182, 0.06);
+    border-color: rgba(0, 119, 182, 0.2) !important;
+}
+
+html[data-theme="light"] .navbar-nav .nav-link:hover {
+    background: rgba(0, 119, 182, 0.07);
+}
+
+html[data-theme="light"] .navbar-nav .nav-link.active {
+    background: rgba(0, 119, 182, 0.1);
+}
+
+html[data-theme="light"] .eve-admin-link:hover {
+    background: rgba(244, 163, 0, 0.08) !important;
+}
+
+html[data-theme="light"] .eve-admin-link.active {
+    background: rgba(244, 163, 0, 0.1) !important;
+}
+
+html[data-theme="light"] .eve-char-btn {
+    background: var(--eve-bg-3);
+    border-color: var(--eve-card-border);
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-char-btn:hover {
+    background: var(--eve-bg-3);
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-stat-value {
+    color: var(--eve-text);
+}
+
+html[data-theme="light"] .eve-page-tabs {
+    border-bottom-color: var(--eve-card-border);
+}
+
+html[data-theme="light"] .eve-page-tabs .nav-link.active {
+    background: transparent;
+}
+
+html[data-theme="light"] .eve-tier-filter-btn.active {
+    background: rgba(0, 119, 182, 0.1);
+}
+
+html[data-theme="light"] .dropdown-menu {
+    --bs-dropdown-bg: #fff;
+}
