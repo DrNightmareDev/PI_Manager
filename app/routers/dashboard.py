@@ -116,6 +116,7 @@ def _compute_storage(pins: list) -> list[dict]:
         if type_id not in _STORAGE_TYPE_IDS:
             continue
         struct_label, capacity = _STORAGE_TYPE_IDS[type_id]
+        struct_name = get_type_name(type_id) or struct_label
         contents_raw = pin.get("contents") or []
         items = []
         used_m3 = 0.0
@@ -126,7 +127,7 @@ def _compute_storage(pins: list) -> list[dict]:
             used_m3 += vol
             items.append({"name": name, "amount": amt, "volume": round(vol, 1)})
         result.append({
-            "struct": struct_label,
+            "struct": struct_name,
             "capacity": capacity,
             "used_m3": round(used_m3, 1),
             "fill_pct": round(min(used_m3 / capacity * 100, 100), 1) if capacity else 0,
