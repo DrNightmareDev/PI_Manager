@@ -44,6 +44,17 @@
     </div>
 </div>
 
+<!-- Favoriten Schnellauswahl (nur sichtbar wenn Favoriten vorhanden) -->
+<div id="favoritesBlock" class="eve-card card border-0 mb-4 d-none">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+        <span style="color:#f4a300;">★</span>
+        <span class="fw-medium">Meine Favoriten</span>
+    </div>
+    <div class="card-body p-3">
+        <div id="favoritePills" class="d-flex flex-wrap gap-2"></div>
+    </div>
+</div>
+
 <!-- Kein Produkt gewählt -->
 <div id="emptyState" class="text-center py-5">
     <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-3"></i>
@@ -206,6 +217,7 @@ async function loadFavorites() {
         const data = await res.json();
         favorites = new Set(data);
         updateFavBtn();
+        renderFavoritesBlock();
     } catch(e) {}
 }
 
@@ -223,6 +235,7 @@ async function toggleFavorite() {
         if (data.favorited) favorites.add(selectedProduct.name);
         else favorites.delete(selectedProduct.name);
         updateFavBtn();
+        renderFavoritesBlock();
     } catch(e) {}
     btn.disabled = false;
 }
@@ -233,6 +246,44 @@ function updateFavBtn() {
     const icon  = document.getElementById('favBtnIcon');
     icon.textContent = isFav ? '★' : '☆';
     icon.style.color = isFav ? '#f4a300' : '';
+}
+
+function renderFavoritesBlock() {
+    const block = document.getElementById('favoritesBlock');
+    const pills = document.getElementById('favoritePills');
+
+    if (!favorites.size) {
+        block.classList.add('d-none');
+        return;
+    }
+
+    // Alle Favoriten mit Tier-Info anreichern und nach Tier+Name sortieren
+    const TIER_SORT = {P2: 2, P3: 3, P4: 4, P1: 1};
+    const favList = [...favorites]
+        .map(name => {
+            const p = ALL_PRODUCTS.find(x => x.name === name);
+            return p || {name, tier: 'P2'};
+        })
+        .sort((a, b) => (TIER_SORT[b.tier] - TIER_SORT[a.tier]) || a.name.localeCompare(b.name));
+
+    pills.innerHTML = favList.map(p => {
+        const tc  = TIER_COLORS[p.tier] || '#586e75';
+        const sel = selectedProduct && selectedProduct.name === p.name;
+        return `<button
+            onclick="selectProduct({name:'${p.name.replace(/'/g,"\\'")}',tier:'${p.tier}'})"
+            class="btn btn-sm"
+            style="background:${tc}${sel ? '30' : '14'};color:${tc};
+                   border:1px solid ${tc}${sel ? '90' : '35'};
+                   font-size:0.8rem;transition:all .15s;
+                   ${sel ? 'box-shadow:0 0 8px '+tc+'50;' : ''}"
+            onmouseenter="this.style.background='${tc}28'"
+            onmouseleave="this.style.background='${tc}${sel ? '30' : '14'}'">
+            <span style="opacity:.7;font-size:.7rem;">${p.tier}</span>
+            &nbsp;${p.name}
+        </button>`;
+    }).join('');
+
+    block.classList.remove('d-none');
 }
 
 loadFavorites();
@@ -298,6 +349,7 @@ function selectProduct(p) {
     dropdown.classList.add('d-none');
     renderChain(p);
     updateFavBtn();
+    renderFavoritesBlock();
 }
 
 function clearSelection() {
