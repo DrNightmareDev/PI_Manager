@@ -24,11 +24,15 @@
                 </div>
             </div>
             <div class="col-md-3">
-                <div id="tierFilter" class="d-flex gap-1">
+                <div id="tierFilter" class="d-flex gap-1 flex-wrap">
                     <button class="btn eve-tier-filter-btn active" data-tier="">Alle</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P4">P4</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P3">P3</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P2">P2</button>
+                    <button class="btn eve-tier-filter-btn" id="favFilterBtn" data-tier="FAV"
+                            title="Nur Favoriten anzeigen" style="color:#f4a300;">
+                        ★
+                    </button>
                 </div>
             </div>
             <div class="col-md-3">
@@ -37,6 +41,17 @@
                 </button>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Favoriten Schnellauswahl (nur sichtbar wenn Favoriten vorhanden) -->
+<div id="favoritesBlock" class="eve-card card border-0 mb-4 d-none">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+        <span style="color:#f4a300;">★</span>
+        <span class="fw-medium">Meine Favoriten</span>
+    </div>
+    <div class="card-body p-3">
+        <div id="favoritePills" class="d-flex flex-wrap gap-2"></div>
     </div>
 </div>
 
@@ -60,35 +75,57 @@
                         <div id="chainTierBadge"></div>
                     </div>
                 </div>
-                <a id="chainFindSystemsBtn" href="/system" class="btn eve-btn-primary btn-sm">
-                    <i class="bi bi-globe2 me-1"></i>System Analyzer öffnen
-                </a>
+                <div class="d-flex gap-2 align-items-center">
+                    <button id="favBtn" class="btn btn-sm eve-btn-ghost" onclick="toggleFavorite()" title="Favorit">
+                        <span id="favBtnIcon" style="font-size:1.2rem;line-height:1;">☆</span>
+                    </button>
+                    <a id="chainFindSystemsBtn" href="/system" class="btn eve-btn-primary btn-sm">
+                        <i class="bi bi-globe2 me-1"></i>System Analyzer öffnen
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-4">
-
-        <!-- Produktionskette -->
-        <div class="col-lg-8">
-            <div class="eve-card card border-0">
-                <div class="card-header eve-card-header d-flex align-items-center gap-2">
-                    <i class="bi bi-diagram-3 eve-accent"></i>
-                    <span class="fw-medium">Produktionskette</span>
-                </div>
-                <div class="card-body p-3" id="chainTree"></div>
+    <!-- Produktions-Graph -->
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-share-fill eve-accent"></i>
+                <span class="fw-medium">Produktions-Graph</span>
+                <span id="planetFilterBadge" class="d-none d-flex align-items-center gap-1 ms-2">
+                    <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;font-size:0.7rem;">
+                        <i class="bi bi-globe2 me-1"></i><span id="planetFilterCount">0</span> Planeten
+                    </span>
+                    <button onclick="clearPlanetFilter()" class="btn btn-sm p-0 px-1"
+                            style="font-size:0.75rem;color:#586e75;" title="Planetenfilter zurücksetzen">✕</button>
+                </span>
+            </div>
+            <span id="planetUnavailWarning" class="d-none" style="color:#e63946;font-size:0.8rem;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Mit diesen Planeten nicht produzierbar
+            </span>
+            <span class="text-muted small">← Eingaben &nbsp;|&nbsp; Weiterverarbeitung →
+                &nbsp;|&nbsp; Planeten anklicken zum Filtern</span>
+        </div>
+        <div class="card-body p-0">
+            <div id="graphContainer" style="overflow-x:auto;">
+                <svg id="chainGraph" width="100%" style="display:block;"></svg>
             </div>
         </div>
+    </div>
 
-        <!-- Planeten + Ressourcen -->
-        <div class="col-lg-4">
-            <div class="eve-card card border-0 mb-4">
+    <!-- Planeten + P0 -->
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="eve-card card border-0">
                 <div class="card-header eve-card-header d-flex align-items-center gap-2">
                     <i class="bi bi-globe2 eve-accent"></i>
                     <span class="fw-medium">Benötigte Planetentypen</span>
                 </div>
                 <div class="card-body p-3" id="chainPlanets"></div>
             </div>
+        </div>
+        <div class="col-md-6">
             <div class="eve-card card border-0">
                 <div class="card-header eve-card-header d-flex align-items-center gap-2">
                     <i class="bi bi-layers eve-accent"></i>
@@ -97,14 +134,14 @@
                 <div class="card-body p-3" id="chainP0"></div>
             </div>
         </div>
-
     </div>
+
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-// ── PI-Daten (vom Backend) ────────────────────────────────────────────────────
+// ── PI-Daten ──────────────────────────────────────────────────────────────────
 const P0_TO_P1       = {{ p0_to_p1 | tojson }};
 const P1_TO_P2       = {{ p1_to_p2 | tojson }};
 const P2_TO_P3       = {{ p2_to_p3 | tojson }};
@@ -114,26 +151,222 @@ const PLANET_COLORS  = {{ planet_type_colors | tojson }};
 const ALL_PRODUCTS   = {{ all_products | tojson }};
 
 const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const TIER_ORDER  = ['P1', 'P2', 'P3', 'P4'];
+
+// ── Planetenfilter-State ──────────────────────────────────────────────────────
+let selectedPlanets = new Set();
+
+function togglePlanetFilter(planetName) {
+    if (selectedPlanets.has(planetName)) selectedPlanets.delete(planetName);
+    else selectedPlanets.add(planetName);
+    updatePlanetFilterUI();
+    if (selectedProduct) renderGraph(selectedProduct);
+}
+
+function clearPlanetFilter() {
+    selectedPlanets.clear();
+    updatePlanetFilterUI();
+    if (selectedProduct) renderGraph(selectedProduct);
+}
+
+function updatePlanetFilterUI() {
+    const badge   = document.getElementById('planetFilterBadge');
+    const warning = document.getElementById('planetUnavailWarning');
+    if (selectedPlanets.size > 0) {
+        badge.classList.remove('d-none');
+        document.getElementById('planetFilterCount').textContent = selectedPlanets.size;
+    } else {
+        badge.classList.add('d-none');
+        warning.classList.add('d-none');
+    }
+}
+
+// Berechnet Verfügbarkeit jedes Knotens basierend auf selectedPlanets
+function calcAvailability(nodes) {
+    const avail = new Map();
+    if (selectedPlanets.size === 0) {
+        for (const [n] of nodes) avail.set(n, true);
+        return avail;
+    }
+    const cache = new Map();
+    function isAvail(name, tier) {
+        if (cache.has(name)) return cache.get(name);
+        let result;
+        if (tier === 'PLANET') {
+            result = selectedPlanets.has(name);
+        } else if (tier === 'P1') {
+            const p0s = getInputs(name, 'P1');
+            result = p0s.some(p0 => [...selectedPlanets].some(pt => PLANET_RESOURCES[pt]?.includes(p0)));
+        } else {
+            const inputs = getInputs(name, tier);
+            result = inputs.length > 0 && inputs.every(inp => {
+                const t = getTier(inp);
+                return t ? isAvail(inp, t) : true;
+            });
+        }
+        cache.set(name, result);
+        return result;
+    }
+    for (const [name, node] of nodes) avail.set(name, isAvail(name, node.tier));
+    return avail;
+}
+
+// P1-Name-Set für schnelle Tier-Erkennung
+const P1_NAMES = new Set(Object.values(P0_TO_P1));
+
+// ── Reverse-Lookup ────────────────────────────────────────────────────────────
+const P1_USED_IN_P2 = {}, P2_USED_IN_P3 = {}, P3_USED_IN_P4 = {};
+for (const [p2, p1s] of Object.entries(P1_TO_P2))
+    for (const p1 of p1s) (P1_USED_IN_P2[p1] = P1_USED_IN_P2[p1] || []).push(p2);
+for (const [p3, p2s] of Object.entries(P2_TO_P3))
+    for (const p2 of p2s) (P2_USED_IN_P3[p2] = P2_USED_IN_P3[p2] || []).push(p3);
+for (const [p4, ins] of Object.entries(P3_TO_P4))
+    for (const inp of ins)
+        if (inp in P2_TO_P3) (P3_USED_IN_P4[inp] = P3_USED_IN_P4[inp] || []).push(p4);
+
+// ── Hilfsfunktionen ───────────────────────────────────────────────────────────
+function getTier(name) {
+    if (name in P3_TO_P4) return 'P4';
+    if (name in P2_TO_P3) return 'P3';
+    if (name in P1_TO_P2) return 'P2';
+    if (P1_NAMES.has(name)) return 'P1';
+    return null;
+}
+
+function getInputs(name, tier) {
+    if (tier === 'P4') return P3_TO_P4[name] || [];
+    if (tier === 'P3') return P2_TO_P3[name] || [];
+    if (tier === 'P2') return P1_TO_P2[name] || [];
+    if (tier === 'P1') return Object.entries(P0_TO_P1).filter(([, p1]) => p1 === name).map(([p0]) => p0);
+    return [];
+}
+
+function getDirectUsers(name, tier) {
+    if (tier === 'P1') return (P1_USED_IN_P2[name] || []).map(n => ({name: n, tier: 'P2'}));
+    if (tier === 'P2') return (P2_USED_IN_P3[name] || []).map(n => ({name: n, tier: 'P3'}));
+    if (tier === 'P3') return (P3_USED_IN_P4[name] || []).map(n => ({name: n, tier: 'P4'}));
+    return [];
+}
+
+function collectRequirements(name, tier, p0Set, planetSet, visited) {
+    const key = name + '|' + tier;
+    if (visited.has(key)) return;
+    visited.add(key);
+    const inputs = getInputs(name, tier);
+    if (tier === 'P1') {
+        inputs.forEach(p0 => {
+            p0Set.add(p0);
+            for (const [pt, res] of Object.entries(PLANET_RESOURCES))
+                if (res.includes(p0)) planetSet.add(pt);
+        });
+    } else {
+        inputs.forEach(inp => { const t = getTier(inp); if (t) collectRequirements(inp, t, p0Set, planetSet, visited); });
+    }
+}
+
+function r(n) { return Math.round(n * 10) / 10; }
+
+// ── Favoriten ─────────────────────────────────────────────────────────────────
+let favorites = new Set();
+
+async function loadFavorites() {
+    try {
+        const res = await fetch('/planner/favorites');
+        const data = await res.json();
+        favorites = new Set(data);
+        updateFavBtn();
+        renderFavoritesBlock();
+    } catch(e) {}
+}
+
+async function toggleFavorite() {
+    if (!selectedProduct) return;
+    const btn = document.getElementById('favBtn');
+    btn.disabled = true;
+    try {
+        const res = await fetch('/planner/favorites/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_name: selectedProduct.name}),
+        });
+        const data = await res.json();
+        if (data.favorited) favorites.add(selectedProduct.name);
+        else favorites.delete(selectedProduct.name);
+        updateFavBtn();
+        renderFavoritesBlock();
+    } catch(e) {}
+    btn.disabled = false;
+}
+
+function updateFavBtn() {
+    if (!selectedProduct) return;
+    const isFav = favorites.has(selectedProduct.name);
+    const icon  = document.getElementById('favBtnIcon');
+    icon.textContent = isFav ? '★' : '☆';
+    icon.style.color = isFav ? '#f4a300' : '';
+}
+
+function renderFavoritesBlock() {
+    const block = document.getElementById('favoritesBlock');
+    const pills = document.getElementById('favoritePills');
+
+    if (!favorites.size) {
+        block.classList.add('d-none');
+        return;
+    }
+
+    // Alle Favoriten mit Tier-Info anreichern und nach Tier+Name sortieren
+    const TIER_SORT = {P2: 2, P3: 3, P4: 4, P1: 1};
+    const favList = [...favorites]
+        .map(name => {
+            const p = ALL_PRODUCTS.find(x => x.name === name);
+            return p || {name, tier: getTier(name) || 'P1'};
+        })
+        .sort((a, b) => (TIER_SORT[b.tier] - TIER_SORT[a.tier]) || a.name.localeCompare(b.name));
+
+    pills.innerHTML = favList.map(p => {
+        const tc  = TIER_COLORS[p.tier] || '#586e75';
+        const sel = selectedProduct && selectedProduct.name === p.name;
+        return `<button
+            onclick="selectProduct({name:'${p.name.replace(/'/g,"\\'")}',tier:'${p.tier}'})"
+            class="btn btn-sm"
+            style="background:${tc}${sel ? '30' : '14'};color:${tc};
+                   border:1px solid ${tc}${sel ? '90' : '35'};
+                   font-size:0.8rem;transition:all .15s;
+                   ${sel ? 'box-shadow:0 0 8px '+tc+'50;' : ''}"
+            onmouseenter="this.style.background='${tc}28'"
+            onmouseleave="this.style.background='${tc}${sel ? '30' : '14'}'">
+            <span style="opacity:.7;font-size:.7rem;">${p.tier}</span>
+            &nbsp;${p.name}
+        </button>`;
+    }).join('');
+
+    block.classList.remove('d-none');
+}
+
+loadFavorites().then(() => {
+    // URL-Parameter ?product=NAME → Produkt direkt vorauswählen
+    const urlProduct = new URLSearchParams(window.location.search).get('product');
+    if (urlProduct) {
+        const match = ALL_PRODUCTS.find(p => p.name === urlProduct)
+            || {name: urlProduct, tier: getTier(urlProduct) || 'P2'};
+        selectProduct(match);
+    }
+});
 
 // ── Produktsuche ──────────────────────────────────────────────────────────────
 let activeTierFilter = '';
-let selectedProduct = null;
+let selectedProduct  = null;
+const searchInput = document.getElementById('productSearch');
+const dropdown    = document.getElementById('productDropdown');
 
-const searchInput   = document.getElementById('productSearch');
-const dropdown      = document.getElementById('productDropdown');
-
-searchInput.addEventListener('input', function() {
-    const q = this.value.trim().toLowerCase();
-    showDropdown(q);
-});
-searchInput.addEventListener('focus', function() {
-    showDropdown(this.value.trim().toLowerCase());
-});
+searchInput.addEventListener('input', function() { showDropdown(this.value.trim().toLowerCase()); });
+searchInput.addEventListener('focus', function() { showDropdown(this.value.trim().toLowerCase()); });
+searchInput.addEventListener('keydown', function(e) { if (e.key === 'Escape') dropdown.classList.add('d-none'); });
 document.addEventListener('click', e => {
     if (!e.target.closest('#productSearch') && !e.target.closest('#productDropdown'))
         dropdown.classList.add('d-none');
 });
-
 document.getElementById('tierFilter').addEventListener('click', function(e) {
     const btn = e.target.closest('[data-tier]');
     if (!btn) return;
@@ -144,17 +377,31 @@ document.getElementById('tierFilter').addEventListener('click', function(e) {
 
 function showDropdown(q) {
     let filtered = ALL_PRODUCTS;
-    if (activeTierFilter) filtered = filtered.filter(p => p.tier === activeTierFilter);
+    if (activeTierFilter === 'FAV') {
+        filtered = filtered.filter(p => favorites.has(p.name));
+    } else if (activeTierFilter) {
+        filtered = filtered.filter(p => p.tier === activeTierFilter);
+    }
     if (q) filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
-    filtered = filtered.slice(0, 20);
+
+    // Favoriten nach oben sortieren, dann alphabetisch
+    filtered = [...filtered].sort((a, b) => {
+        const af = favorites.has(a.name), bf = favorites.has(b.name);
+        if (af !== bf) return bf - af;
+        return a.name.localeCompare(b.name);
+    }).slice(0, 20);
 
     dropdown.innerHTML = '';
     if (!filtered.length) { dropdown.classList.add('d-none'); return; }
     filtered.forEach(p => {
-        const tc = TIER_COLORS[p.tier] || '#586e75';
+        const tc  = TIER_COLORS[p.tier] || '#586e75';
+        const isFav = favorites.has(p.name);
         const item = document.createElement('div');
         item.className = 'eve-search-item d-flex justify-content-between align-items-center';
-        item.innerHTML = `<span class="fw-medium">${p.name}</span>
+        item.innerHTML = `<span class="fw-medium d-flex align-items-center gap-1">
+                ${isFav ? '<span style="color:#f4a300;font-size:0.8rem;">★</span>' : ''}
+                ${p.name}
+            </span>
             <span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;">${p.tier}</span>`;
         item.addEventListener('click', () => selectProduct(p));
         dropdown.appendChild(item);
@@ -166,69 +413,276 @@ function selectProduct(p) {
     selectedProduct = p;
     searchInput.value = p.name;
     dropdown.classList.add('d-none');
+    selectedPlanets.clear();
+    updatePlanetFilterUI();
+    history.replaceState(null, '', '/planner?product=' + encodeURIComponent(p.name));
     renderChain(p);
+    updateFavBtn();
+    renderFavoritesBlock();
 }
 
 function clearSelection() {
     selectedProduct = null;
     searchInput.value = '';
     dropdown.classList.add('d-none');
+    history.replaceState(null, '', '/planner');
     document.getElementById('emptyState').classList.remove('d-none');
     document.getElementById('chainResult').classList.add('d-none');
 }
 
-// ── Ketten-Berechnung ─────────────────────────────────────────────────────────
+// ── Graph ─────────────────────────────────────────────────────────────────────
+function renderGraph(product) {
+    const NODE_W = 152, NODE_H = 32, GAP_Y = 12;
+    const COL_SPACING = 210, TIER_H = 24, PAD_V = 16, PAD_H = 20;
+    // Planet column is narrower
+    const PLANET_W = 110;
+    const GRAPH_TIERS = ['PLANET', 'P1', 'P2', 'P3', 'P4'];
 
-// Gibt den Tier eines Produkts zurück (P1/P2/P3/P4) oder null
-function getTier(name) {
-    if (P3_TO_P4[name] !== undefined) return 'P4';  // P4 keys are product names — wait, P3_TO_P4 maps P4->P3 inputs
-    // Actually: P3_TO_P4 maps P4 name -> [P3 inputs]
-    if (name in P3_TO_P4) return 'P4';
-    if (name in P2_TO_P3) return 'P3';
-    if (name in P1_TO_P2) return 'P2';
-    // P1: appears as value in P0_TO_P1
-    const p1Names = new Set(Object.values(P0_TO_P1));
-    if (p1Names.has(name)) return 'P1';
-    return null;
-}
+    // Build nodes and edges
+    const nodes  = new Map();   // name → {name, tier, isSelected, p0s:[]}
+    const edgeSet = new Set();  // "a||b"
 
-// Gibt direkte Inputs zurück (oder [])
-function getInputs(name, tier) {
-    if (tier === 'P4') return P3_TO_P4[name] || [];
-    if (tier === 'P3') return P2_TO_P3[name] || [];
-    if (tier === 'P2') return P1_TO_P2[name] || [];
-    if (tier === 'P1') {
-        // Find which P0 produces this P1
-        return Object.entries(P0_TO_P1).filter(([p0, p1]) => p1 === name).map(([p0]) => p0);
-    }
-    return [];
-}
+    const addNode = (name, tier, sel = false) => {
+        if (!nodes.has(name)) nodes.set(name, {name, tier, isSelected: sel, p0s: []});
+        if (sel) nodes.get(name).isSelected = true;
+    };
+    const addEdge = (a, b) => { if (a !== b) edgeSet.add(a + '||' + b); };
 
-// Sammelt alle P0-Ressourcen und Planetentypen für ein Produkt
-function collectRequirements(name, tier, p0Set, planetSet, visited) {
-    const key = name + '|' + tier;
-    if (visited.has(key)) return;
-    visited.add(key);
+    addNode(product.name, product.tier, true);
 
-    const inputs = getInputs(name, tier);
-    if (tier === 'P1') {
-        // inputs are P0 resources
-        inputs.forEach(p0 => {
-            p0Set.add(p0);
-            for (const [pt, resources] of Object.entries(PLANET_RESOURCES)) {
-                if (resources.includes(p0)) planetSet.add(pt);
+    // ── Inputs (links vom gewählten Produkt) ─────────────────────────────────
+    (function addInputs(name, tier, depth) {
+        if (depth > 6) return;
+        const inputs = getInputs(name, tier);
+        if (tier === 'P1') {
+            if (nodes.has(name)) nodes.get(name).p0s = inputs;
+            return;
+        }
+        for (const inp of inputs) {
+            const t = getTier(inp);
+            if (!t) continue;
+            addNode(inp, t);
+            addEdge(inp, name);
+            addInputs(inp, t, depth + 1);
+        }
+    })(product.name, product.tier, 0);
+
+    // ── Planetenspalte: für jeden P1-Knoten Planetentypen hinzufügen ─────────
+    for (const [, node] of nodes) {
+        if (node.tier !== 'P1') continue;
+        for (const p0 of node.p0s) {
+            for (const [pt, res] of Object.entries(PLANET_RESOURCES)) {
+                if (res.includes(p0)) {
+                    if (!nodes.has(pt)) nodes.set(pt, {name: pt, tier: 'PLANET', isSelected: false, p0s: []});
+                    addEdge(pt, node.name);
+                }
             }
-        });
+        }
+    }
+
+    // ── Outputs (rechts vom gewählten Produkt) ────────────────────────────────
+    (function addOutputs(name, tier, depth) {
+        if (depth > 3) return;
+        for (const u of getDirectUsers(name, tier)) {
+            addNode(u.name, u.tier);
+            addEdge(name, u.name);
+            addOutputs(u.name, u.tier, depth + 1);
+        }
+    })(product.name, product.tier, 0);
+
+    // Group and sort nodes by tier
+    const byTier = {};
+    GRAPH_TIERS.forEach(t => byTier[t] = []);
+    for (const n of nodes.values()) if (byTier[n.tier]) byTier[n.tier].push(n);
+    // Planets sorted by name; PI nodes: selected first then alpha
+    byTier['PLANET'].sort((a, b) => a.name.localeCompare(b.name));
+    for (const t of ['P1','P2','P3','P4'])
+        byTier[t].sort((a, b) => (b.isSelected - a.isSelected) || a.name.localeCompare(b.name));
+
+    const activeTiers = GRAPH_TIERS.filter(t => byTier[t].length > 0);
+    if (!activeTiers.length) return;
+
+    // ── Dimensions ───────────────────────────────────────────────────────────
+    // Planet column width differs from PI columns
+    const colW = t => t === 'PLANET' ? PLANET_W : NODE_W;
+    const maxNodes = Math.max(...activeTiers.map(t => byTier[t].length));
+    const colH  = maxNodes * (NODE_H + GAP_Y) - GAP_Y;
+    const svgH  = TIER_H + PAD_V + colH + PAD_V;
+
+    // X positions: accumulate column widths + spacings
+    const tierX = {};
+    let curX = PAD_H;
+    for (const t of activeTiers) {
+        tierX[t] = curX + colW(t) / 2;
+        curX += colW(t) + COL_SPACING - NODE_W; // spacing between columns
+    }
+    // Recalculate with proper fixed COL_SPACING between column CENTERS
+    // Simpler: equal COL_SPACING between centers, but planet col shifted
+    curX = PAD_H + colW(activeTiers[0]) / 2;
+    activeTiers.forEach((t, i) => {
+        if (i === 0) { tierX[t] = curX; return; }
+        const prevT = activeTiers[i - 1];
+        tierX[t] = tierX[prevT] + colW(prevT) / 2 + COL_SPACING - NODE_W / 2 + colW(t) / 2;
+    });
+    const svgW = tierX[activeTiers[activeTiers.length - 1]] + colW(activeTiers[activeTiers.length - 1]) / 2 + PAD_H;
+
+    // Node Y positions (vertically centered per column)
+    for (const tier of activeTiers) {
+        const tns    = byTier[tier];
+        const totalH = tns.length * (NODE_H + GAP_Y) - GAP_Y;
+        const startY = TIER_H + PAD_V + (colH - totalH) / 2;
+        tns.forEach((n, i) => { n.x = tierX[tier]; n.y = startY + i * (NODE_H + GAP_Y); });
+    }
+
+    const edges = [...edgeSet].map(e => { const [f, t] = e.split('||'); return {from: f, to: t}; });
+
+    const avail = calcAvailability(nodes);
+
+    // ── SVG content ──────────────────────────────────────────────────────────
+    let s = `<style>#arr path{fill:#7a9ab5;}</style>
+<defs>
+  <filter id="glow-sel" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="6" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glow-edge" x="-10%" y="-10%" width="120%" height="120%">
+    <feGaussianBlur stdDeviation="1.5" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0,1 L6,3.5 L0,6 Z" fill-opacity="0.45"/>
+  </marker>
+</defs>`;
+
+    // Column backgrounds + labels
+    for (const tier of activeTiers) {
+        const cx = tierX[tier];
+        const cw = colW(tier);
+        const isPlanet = tier === 'PLANET';
+        const tc = isPlanet ? '#4a7a5a' : (TIER_COLORS[tier] || '#586e75');
+        const label = isPlanet ? 'PLANETS' : tier;
+        s += `<rect x="${r(cx - cw/2 - 8)}" y="0" width="${cw + 16}" height="${svgH}"
+                    fill="${tc}" fill-opacity="${isPlanet ? 0.05 : 0.03}" rx="6"/>
+              <line x1="${r(cx - cw/2 - 8)}" y1="${TIER_H}" x2="${r(cx + cw/2 + 8)}" y2="${TIER_H}"
+                    stroke="${tc}" stroke-opacity="0.15" stroke-width="1"/>
+              <text x="${r(cx)}" y="${TIER_H - 7}" text-anchor="middle"
+                    fill="${tc}" fill-opacity="0.55" font-size="9" font-weight="700"
+                    font-family="monospace" letter-spacing="2">${label}</text>`;
+    }
+
+    // Separator line between input and output side
+    const selTierIdx = GRAPH_TIERS.indexOf(product.tier);
+    if (tierX[product.tier] !== undefined) {
+        const hasLeft  = activeTiers.some(t => GRAPH_TIERS.indexOf(t) < selTierIdx);
+        const hasRight = activeTiers.some(t => GRAPH_TIERS.indexOf(t) > selTierIdx);
+        if (hasLeft && hasRight) {
+            const nextTier = activeTiers[activeTiers.indexOf(product.tier) + 1];
+            const sepX = nextTier
+                ? r((tierX[product.tier] + colW(product.tier)/2 + tierX[nextTier] - colW(nextTier)/2) / 2)
+                : r(tierX[product.tier] + colW(product.tier)/2 + 20);
+            s += `<line x1="${sepX}" y1="${TIER_H + 4}" x2="${sepX}" y2="${svgH - 4}"
+                        stroke="#2a4a5e" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.5"/>`;
+        }
+    }
+
+    // Edges
+    for (const {from, to} of edges) {
+        const fn = nodes.get(from), tn = nodes.get(to);
+        if (!fn || !tn) continue;
+        const fnW = colW(fn.tier), tnW = colW(tn.tier);
+        const sx = r(fn.x + fnW / 2), sy = r(fn.y + NODE_H / 2);
+        const tx = r(tn.x - tnW / 2), ty = r(tn.y + NODE_H / 2);
+        const mx = r((sx + tx) / 2);
+        const isPlanetEdge = fn.tier === 'PLANET';
+        const ec = isPlanetEdge ? (PLANET_COLORS[fn.name] || '#4a7a5a') : (TIER_COLORS[tn.tier] || '#586e75');
+        const connected = fn.isSelected || tn.isSelected;
+        const edgeAvail = avail.get(from) !== false && avail.get(to) !== false;
+        s += `<path d="M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty}"
+                   fill="none" stroke="${edgeAvail ? ec : '#586e75'}"
+                   stroke-opacity="${edgeAvail ? (connected ? 0.55 : 0.18) : 0.08}"
+                   stroke-width="${edgeAvail ? (connected ? 2 : 1.5) : 1}"
+                   ${edgeAvail && connected ? 'filter="url(#glow-edge)"' : ''}
+                   marker-end="url(#arr)"/>`;
+    }
+
+    // Nodes
+    for (const node of nodes.values()) {
+        const isPlanet = node.tier === 'PLANET';
+        const tc  = isPlanet ? (PLANET_COLORS[node.name] || '#4a7a5a') : (TIER_COLORS[node.tier] || '#586e75');
+        const nw  = colW(node.tier);
+        const nx  = r(node.x - nw / 2);
+        const ny  = r(node.y);
+        const sel = node.isSelected;
+
+        if (isPlanet) {
+            // Planet node: pill shape, clickable to toggle filter
+            const planetSel  = selectedPlanets.has(node.name);
+            const isFiltering = selectedPlanets.size > 0;
+            const dimmed = isFiltering && !planetSel;
+            const safePN = node.name.replace(/'/g, "\\'");
+            s += `<g style="cursor:pointer;" onclick="togglePlanetFilter('${safePN}')">
+              <title>${node.name}${planetSel ? ' ✓ aktiv' : ' – klicken zum Filtern'}</title>
+              <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="${NODE_H/2}"
+                    fill="${tc}" fill-opacity="${planetSel ? 0.32 : (dimmed ? 0.04 : 0.1)}"
+                    stroke="${tc}" stroke-opacity="${planetSel ? 1 : (dimmed ? 0.18 : 0.5)}"
+                    stroke-width="${planetSel ? 2 : 1}"
+                    ${planetSel ? '' : 'stroke-dasharray="3 2"'}/>
+              <text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
+                    fill="${tc}" fill-opacity="${planetSel ? 1 : (dimmed ? 0.3 : 0.9)}"
+                    font-size="10" font-weight="${planetSel ? 700 : 500}"
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${node.name}</text>
+            </g>`;
+            continue;
+        }
+
+        const nodeAvail = avail.get(node.name) !== false;
+        const dimNode = !nodeAvail;
+        const dimTC = dimNode ? '#586e75' : tc;
+        const label  = node.name.length > 18 ? node.name.slice(0, 16) + '…' : node.name;
+        const safeN  = node.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const clickAttr = sel
+            ? `style="cursor:default;"`
+            : `style="cursor:pointer;" onclick="selectProduct({name:'${safeN}',tier:'${node.tier}'})"`;
+
+        s += `<g ${clickAttr} ${sel ? 'filter="url(#glow-sel)"' : ''}>
+          <title>${node.name} · ${node.tier}${dimNode ? ' (nicht verfügbar)' : ''}</title>
+          <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
+                fill="${dimTC}" fill-opacity="${sel ? 0.22 : (dimNode ? 0.03 : 0.07)}"
+                stroke="${dimTC}" stroke-opacity="${sel ? 1 : (dimNode ? 0.15 : 0.3)}"
+                stroke-width="${sel ? 2 : 1}"/>`;
+        if (sel) {
+            s += `<rect x="${r(nx+2)}" y="${r(ny+2)}" width="${nw-4}" height="${NODE_H-4}" rx="4"
+                        fill="${dimTC}" fill-opacity="0.1" stroke="${dimTC}" stroke-opacity="0.4" stroke-width="0.5"/>`;
+        }
+        if (!sel && !dimNode) {
+            s += `<rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
+                        fill="transparent" stroke="none"
+                        onmouseenter="this.previousElementSibling.setAttribute('fill-opacity','0.18')"
+                        onmouseleave="this.previousElementSibling.setAttribute('fill-opacity','0.07')"/>`;
+        }
+        s += `<text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
+                    fill="${dimTC}" fill-opacity="${sel ? 1 : (dimNode ? 0.28 : 0.85)}"
+                    font-size="${sel ? 11.5 : 10.5}" font-weight="${sel ? 700 : 400}"
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${label}</text>
+        </g>`;
+    }
+
+    const svgEl = document.getElementById('chainGraph');
+    svgEl.setAttribute('viewBox', `0 0 ${r(svgW)} ${svgH}`);
+    svgEl.setAttribute('height', svgH);
+    svgEl.style.minWidth = r(svgW) + 'px';
+    svgEl.innerHTML = s;
+
+    // Update unavailability warning
+    const warning = document.getElementById('planetUnavailWarning');
+    if (selectedPlanets.size > 0) {
+        warning.classList.toggle('d-none', avail.get(product.name) !== false);
     } else {
-        inputs.forEach(inp => {
-            const inpTier = getTier(inp);
-            if (inpTier) collectRequirements(inp, inpTier, p0Set, planetSet, visited);
-        });
+        warning.classList.add('d-none');
     }
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
-
+// ── Haupt-Render ──────────────────────────────────────────────────────────────
 function renderChain(product) {
     document.getElementById('emptyState').classList.add('d-none');
     document.getElementById('chainResult').classList.remove('d-none');
@@ -238,101 +692,29 @@ function renderChain(product) {
     document.getElementById('chainTierBadge').innerHTML =
         `<span class="badge fs-6" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${product.tier}</span>`;
 
-    // Baum aufbauen
-    const chainTreeEl = document.getElementById('chainTree');
-    chainTreeEl.innerHTML = renderNode(product.name, product.tier, 0, new Set());
+    renderGraph(product);
 
-    // Requirements sammeln
-    const p0Set = new Set();
-    const planetSet = new Set();
+    const p0Set = new Set(), planetSet = new Set();
     collectRequirements(product.name, product.tier, p0Set, planetSet, new Set());
 
-    // Planeten rendern
-    const planetsEl = document.getElementById('chainPlanets');
-    planetsEl.innerHTML = [...planetSet].map(pt => {
-        const c = PLANET_COLORS[pt] || '#586e75';
-        return `<span class="badge me-1 mb-1" style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:0.4rem 0.7rem;">${pt}</span>`;
-    }).join('') || '<span class="text-muted small">—</span>';
-
-    // P0 rendern
-    const p0El = document.getElementById('chainP0');
-    p0El.innerHTML = [...p0Set].map(p0 => {
-        // Find which planets produce this P0
-        const planets = Object.entries(PLANET_RESOURCES)
-            .filter(([, res]) => res.includes(p0))
-            .map(([pt]) => pt);
-        const planetDots = planets.map(pt => {
+    document.getElementById('chainPlanets').innerHTML =
+        [...planetSet].map(pt => {
             const c = PLANET_COLORS[pt] || '#586e75';
-            return `<span style="color:${c};font-size:0.7rem;" title="${pt}">●</span>`;
-        }).join(' ');
-        return `<div class="d-flex align-items-center justify-content-between mb-1">
-            <span class="small text-muted">${p0}</span>
-            <span>${planetDots}</span>
-        </div>`;
-    }).join('') || '<span class="text-muted small">—</span>';
+            return `<span class="badge me-1 mb-1"
+                         style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:.4rem .7rem;">${pt}</span>`;
+        }).join('') || '<span class="text-muted small">—</span>';
+
+    document.getElementById('chainP0').innerHTML =
+        [...p0Set].map(p0 => {
+            const planets = Object.entries(PLANET_RESOURCES).filter(([, r]) => r.includes(p0)).map(([pt]) => pt);
+            const dots = planets.map(pt => {
+                const c = PLANET_COLORS[pt] || '#586e75';
+                return `<span style="color:${c};font-size:.7rem;" title="${pt}">●</span>`;
+            }).join(' ');
+            return `<div class="d-flex align-items-center justify-content-between mb-1">
+                <span class="small text-muted">${p0}</span><span>${dots}</span>
+            </div>`;
+        }).join('') || '<span class="text-muted small">—</span>';
 }
-
-function renderNode(name, tier, depth, visited) {
-    const key = name + '|' + depth;
-    if (depth > 6 || visited.has(key)) return '';
-    visited.add(key);
-
-    const tc = TIER_COLORS[tier] || '#586e75';
-    const inputs = getInputs(name, tier);
-    const indent = depth * 20;
-    const hasChildren = inputs.length > 0 && tier !== 'P0';
-
-    let html = `<div style="margin-left:${indent}px;margin-bottom:4px;" class="d-flex align-items-start gap-2">`;
-    if (depth > 0) html += `<span style="color:#2a3f52;margin-top:2px;">└</span>`;
-    html += `<span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;white-space:normal;">${name}</span>`;
-    html += `<span class="badge" style="background:#1a2d3d;color:#586e75;font-size:0.65rem;">${tier}</span>`;
-    html += `</div>`;
-
-    if (hasChildren) {
-        if (tier === 'P1') {
-            // P0 inputs
-            inputs.forEach(p0 => {
-                html += renderP0Node(p0, depth + 1);
-            });
-        } else {
-            inputs.forEach(inp => {
-                const inpTier = getTier(inp);
-                if (inpTier) {
-                    html += renderNode(inp, inpTier, depth + 1, new Set(visited));
-                } else {
-                    // Unknown — show as-is
-                    const dIndent = (depth + 1) * 20;
-                    html += `<div style="margin-left:${dIndent}px;margin-bottom:4px;" class="d-flex align-items-center gap-2">
-                        <span style="color:#2a3f52;">└</span>
-                        <span class="small text-muted">${inp}</span>
-                    </div>`;
-                }
-            });
-        }
-    }
-    return html;
-}
-
-function renderP0Node(p0name, depth) {
-    const indent = depth * 20;
-    const planets = Object.entries(PLANET_RESOURCES)
-        .filter(([, res]) => res.includes(p0name))
-        .map(([pt]) => pt);
-    const planetDots = planets.map(pt => {
-        const c = PLANET_COLORS[pt] || '#586e75';
-        return `<span style="color:${c};font-size:0.75rem;" title="${pt}">●</span>`;
-    }).join(' ');
-    return `<div style="margin-left:${indent}px;margin-bottom:4px;" class="d-flex align-items-center gap-2">
-        <span style="color:#2a3f52;">└</span>
-        <span class="small" style="color:#4a6278;">${p0name}</span>
-        <span class="badge" style="background:#1a2d3d;color:#586e75;font-size:0.6rem;">P0</span>
-        <span>${planetDots}</span>
-    </div>`;
-}
-
-// Beim Laden Dropdown öffnen wenn Eingabe vorhanden
-searchInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') dropdown.classList.add('d-none');
-});
 </script>
 {% endblock %}

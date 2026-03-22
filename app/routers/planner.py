@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.dependencies import require_account
+from app.models import PiFavorite
 from app.pi_data import (
     P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4,
     PLANET_RESOURCES, PLANET_TYPE_COLORS,
@@ -31,3 +35,32 @@ def planner_page(request: Request, account=Depends(require_account)):
         "planet_type_colors": PLANET_TYPE_COLORS,
         "all_products": all_products,
     })
+
+
+@router.get("/favorites")
+def get_favorites(account=Depends(require_account), db: Session = Depends(get_db)):
+    favs = db.query(PiFavorite).filter(PiFavorite.account_id == account.id).all()
+    return JSONResponse([f.product_name for f in favs])
+
+
+class FavoriteToggle(BaseModel):
+    product_name: str
+
+
+@router.post("/favorites/toggle")
+def toggle_favorite(
+    body: FavoriteToggle,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    existing = db.query(PiFavorite).filter(
+        PiFavorite.account_id == account.id,
+        PiFavorite.product_name == body.product_name,
+    ).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return JSONResponse({"favorited": False})
+    db.add(PiFavorite(account_id=account.id, product_name=body.product_name))
+    db.commit()
+    return JSONResponse({"favorited": True})

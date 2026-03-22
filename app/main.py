@@ -105,7 +105,8 @@ def index(request: Request):
         finally:
             db.close()
 
-    return templates.TemplateResponse("index.html", {"request": request})
+    error = request.query_params.get("error")
+    return templates.TemplateResponse("index.html", {"request": request, "error": error})
 
 
 @app.get("/health")

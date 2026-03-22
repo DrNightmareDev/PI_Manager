@@ -11,10 +11,32 @@ from app.esi import (
     generate_auth_url, exchange_code_for_tokens,
     verify_token, get_character_info, get_corporation_info, get_alliance_info
 )
-from app.models import Account, Character, SSOState
+from app.models import Account, Character, SSOState, AccessPolicy
 from app.session import create_session, clear_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _check_access_policy(db: Session, corporation_id, alliance_id) -> bool:
+    """Gibt True zurück wenn Zugang erlaubt, False wenn verweigert."""
+    policy = db.get(AccessPolicy, 1)
+    if policy is None or policy.mode == "open":
+        return True
+
+    corp_ids     = {e.entity_id for e in policy.entries if e.entity_type == "corporation"}
+    alliance_ids = {e.entity_id for e in policy.entries if e.entity_type == "alliance"}
+
+    if policy.mode == "allowlist":
+        return bool(
+            (corporation_id and corporation_id in corp_ids) or
+            (alliance_id and alliance_id in alliance_ids)
+        )
+    if policy.mode == "blocklist":
+        return not bool(
+            (corporation_id and corporation_id in corp_ids) or
+            (alliance_id and alliance_id in alliance_ids)
+        )
+    return True
 
 
 def _generate_state(db: Session, flow: str, account_id: int | None = None) -> str:
@@ -142,6 +164,10 @@ def callback(
         # Neuen Account erstellen
         total_accounts = db.query(Account).count()
         is_first = total_accounts == 0
+
+        # Zugangspolitik prüfen (nicht für den ersten Account / Besitzer)
+        if not is_first and not _check_access_policy(db, corporation_id, alliance_id):
+            return RedirectResponse(url="/?error=access_denied", status_code=302)
 
         new_account = Account(is_admin=is_first, is_owner=is_first)
         db.add(new_account)
