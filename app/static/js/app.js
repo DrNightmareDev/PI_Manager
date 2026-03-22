@@ -173,13 +173,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Filter ---
     const filterSelect = document.getElementById('charFilter');
-    const expiredCheck = document.getElementById('expiredFilter');
+    const expiredCheck = document.getElementById('expiredFilter'); // now a button with class 'active'
 
     window.applyFilters = applyFilter;
 
     function applyFilter() {
         const charVal     = filterSelect ? filterSelect.value : '';
-        const onlyExpired = expiredCheck ? expiredCheck.checked : false;
+        const onlyExpired = expiredCheck ? expiredCheck.classList.contains('active') : false;
         const matched = rows.filter(r => {
             const charOk    = !charVal     || r.dataset.char    === charVal;
             const expiredOk = !onlyExpired || r.dataset.expired === '1';

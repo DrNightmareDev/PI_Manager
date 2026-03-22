@@ -147,12 +147,9 @@
                 </div>
                 <div class="d-flex align-items-center gap-3 flex-wrap">
                     {% if colonies %}
-                    <div class="d-flex align-items-center gap-2">
-                        <input class="form-check-input" type="checkbox" id="expiredFilter" onchange="applyFilters()" style="cursor:pointer;">
-                        <label class="form-check-label small text-muted" for="expiredFilter" style="cursor:pointer;">
-                            <i class="bi bi-exclamation-circle me-1" style="color:#e74c3c;"></i>Abgelaufen
-                        </label>
-                    </div>
+                    <button id="expiredFilter" class="eve-expired-toggle" onclick="toggleExpiredFilter()">
+                        <i class="bi bi-exclamation-circle"></i>Inaktiv
+                    </button>
                     {% endif %}
                     {% if colonies and char_count > 1 %}
                     <div class="d-flex align-items-center gap-2">
@@ -890,8 +887,39 @@ initServiceWorker();
 .eve-hover-wrap:hover .eve-hover-card {
     display: block;
 }
+.eve-expired-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 11px;
+    font-size: .78rem;
+    font-weight: 500;
+    border-radius: 20px;
+    border: 1px solid #3a1a1a;
+    background: #1a0a0a;
+    color: #7a4a4a;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.eve-expired-toggle:hover {
+    border-color: #e74c3c60;
+    color: #e74c3c;
+    background: #1f0d0d;
+}
+.eve-expired-toggle.active {
+    border-color: #e74c3c80;
+    background: #e74c3c18;
+    color: #e74c3c;
+}
 </style>
 <script>
 // tooltips via CSS .eve-hover-wrap – no JS init needed
+
+function toggleExpiredFilter() {
+    const btn = document.getElementById('expiredFilter');
+    btn.classList.toggle('active');
+    window.applyFilters();
+}
 </script>
 {% endblock %}
