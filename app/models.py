@@ -108,3 +108,26 @@ class PiFavorite(Base):
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     product_name = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AccessPolicy(Base):
+    __tablename__ = "access_policy"
+
+    id = Column(Integer, primary_key=True)  # singleton, always id=1
+    mode = Column(String(20), nullable=False, default="open")  # open | allowlist | blocklist
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    entries = relationship("AccessPolicyEntry", back_populates="policy", cascade="all, delete-orphan")
+
+
+class AccessPolicyEntry(Base):
+    __tablename__ = "access_policy_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    policy_id = Column(Integer, ForeignKey("access_policy.id", ondelete="CASCADE"), nullable=False)
+    entity_type = Column(String(20), nullable=False)   # "corporation" | "alliance"
+    entity_id = Column(BigInteger, nullable=False)
+    entity_name = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    policy = relationship("AccessPolicy", back_populates="entries")

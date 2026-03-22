@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
 from app.dependencies import require_admin, require_account
-from app.models import Account, Character, IskSnapshot
+from app.models import Account, Character, IskSnapshot, AccessPolicy, AccessPolicyEntry
 from app.templates_env import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -58,6 +58,14 @@ def admin_panel(
             "colony_count": colony_counts.get(acc.id, 0),
         })
 
+    policy = db.get(AccessPolicy, 1)
+    policy_entries = (
+        db.query(AccessPolicyEntry)
+        .filter_by(policy_id=1)
+        .order_by(AccessPolicyEntry.entity_type, AccessPolicyEntry.entity_name)
+        .all()
+    )
+
     return templates.TemplateResponse("admin.html", {
         "request": request,
         "account": account,
@@ -66,6 +74,8 @@ def admin_panel(
         "total_chars": total_chars,
         "total_admins": total_admins,
         "total_colonies": total_colonies,
+        "policy": policy,
+        "policy_entries": policy_entries,
     })
 
 
@@ -134,3 +144,112 @@ def admin_set_main(
     target_account.main_character_id = char.id
     db.commit()
     return RedirectResponse(url="/admin", status_code=302)
+
+
+# ── Zugangspolitik (nur Besitzer) ─────────────────────────────────────────────
+
+def _require_owner(account):
+    if not account.is_owner:
+        raise HTTPException(status_code=403, detail="Nur der Besitzer kann die Zugangspolitik verwalten")
+
+
+@router.post("/access-policy/mode")
+async def set_access_policy_mode(
+    request: Request,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _require_owner(account)
+    form = await request.form()
+    mode = form.get("mode", "open")
+    if mode not in ("open", "allowlist", "blocklist"):
+        raise HTTPException(status_code=400, detail="Ungültiger Modus")
+    policy = db.get(AccessPolicy, 1)
+    policy.mode = mode
+    db.commit()
+    return RedirectResponse(url="/admin#access-policy", status_code=302)
+
+
+@router.post("/access-policy/add")
+async def add_access_policy_entry(
+    request: Request,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _require_owner(account)
+    form = await request.form()
+    entity_type = form.get("entity_type", "")
+    entity_id_raw = form.get("entity_id", "")
+    entity_name = (form.get("entity_name") or "").strip()
+
+    if entity_type not in ("corporation", "alliance"):
+        raise HTTPException(status_code=400, detail="Ungültiger Typ")
+    try:
+        entity_id = int(entity_id_raw)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="entity_id muss eine Ganzzahl sein")
+
+    existing = db.query(AccessPolicyEntry).filter_by(
+        policy_id=1, entity_type=entity_type, entity_id=entity_id
+    ).first()
+    if not existing:
+        db.add(AccessPolicyEntry(
+            policy_id=1,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name or None,
+        ))
+        db.commit()
+    return RedirectResponse(url="/admin#access-policy", status_code=302)
+
+
+@router.get("/access-policy/remove/{entry_id}")
+def remove_access_policy_entry(
+    entry_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _require_owner(account)
+    entry = db.query(AccessPolicyEntry).filter_by(id=entry_id, policy_id=1).first()
+    if entry:
+        db.delete(entry)
+        db.commit()
+    return RedirectResponse(url="/admin#access-policy", status_code=302)
+
+
+@router.get("/access-policy/search")
+def search_access_policy_entity(
+    q: str = "",
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Sucht Corps/Allianzen via ESI (benötigt Main-Charakter-Token des Besitzers)."""
+    _require_owner(account)
+    if not q.strip():
+        return JSONResponse({"corporations": [], "alliances": []})
+
+    from app.esi import search_entities, get_corporation_info, get_alliance_info, ensure_valid_token
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
+    if not main_char:
+        return JSONResponse({"corporations": [], "alliances": []})
+
+    token = ensure_valid_token(main_char, db)
+    result = search_entities(main_char.eve_character_id, token, q.strip())
+
+    corps = []
+    for cid in result.get("corporation", [])[:8]:
+        try:
+            info = get_corporation_info(cid)
+            corps.append({"id": cid, "name": info.get("name", str(cid))})
+        except Exception:
+            pass
+
+    alliances = []
+    for aid in result.get("alliance", [])[:8]:
+        try:
+            info = get_alliance_info(aid)
+            alliances.append({"id": aid, "name": info.get("name", str(aid))})
+        except Exception:
+            pass
+
+    return JSONResponse({"corporations": corps, "alliances": alliances})
