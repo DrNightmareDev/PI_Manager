@@ -70,6 +70,28 @@
                 </div>
             </div>
         </div>
+        <div class="row g-2 mt-1 align-items-center">
+            <div class="col-auto">
+                <span class="small text-muted"><i class="bi bi-globe2 me-1"></i>Typ:</span>
+            </div>
+            <div class="col">
+                <div class="d-flex flex-wrap gap-1" id="typeToggles">
+                    {% for ptype in ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'] %}
+                    <button class="btn btn-sm eve-filter-toggle" data-val="{{ ptype | lower }}" onclick="toggleFilter(this,'typeToggles','applyCorpFilters')">{{ ptype }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-auto ms-2">
+                <span class="small text-muted"><i class="bi bi-layers me-1"></i>Tier:</span>
+            </div>
+            <div class="col-auto">
+                <div class="d-flex flex-wrap gap-1" id="tierToggles">
+                    {% for tier in ['P1','P2','P3','P4'] %}
+                    <button class="btn btn-sm eve-filter-toggle" data-val="{{ tier | lower }}" onclick="toggleFilter(this,'tierToggles','applyCorpFilters')">{{ tier }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -101,7 +123,9 @@
                 {% for colony in corp_colonies %}
                 <tr
                     data-char="{{ colony.character_name | lower }}"
-                    data-system="{{ colony.solar_system_name | lower }} {{ colony.region_name | lower }}">
+                    data-system="{{ colony.solar_system_name | lower }} {{ colony.region_name | lower }}"
+                    data-type="{{ colony.planet_type | lower }}"
+                    data-tier="{{ colony.highest_tier | lower if colony.highest_tier else 'none' }}">
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
@@ -206,17 +230,31 @@
 
 {% block extra_scripts %}
 <script>
+function getActive(groupId) {
+    return [...document.querySelectorAll(`#${groupId} .eve-filter-toggle.active`)]
+        .map(b => b.dataset.val);
+}
+
+function toggleFilter(btn, groupId, applyFn) {
+    btn.classList.toggle('active');
+    window[applyFn]();
+}
+
 function applyCorpFilters() {
     const char   = document.getElementById('filterChar').value.toLowerCase().trim();
     const system = document.getElementById('filterSystem').value.toLowerCase().trim();
+    const types  = getActive('typeToggles');
+    const tiers  = getActive('tierToggles');
 
     const rows = document.querySelectorAll('#corpTable tbody tr');
     let visible = 0;
 
     rows.forEach(row => {
         const match =
-            (!char   || row.dataset.char.includes(char)) &&
-            (!system || row.dataset.system.includes(system));
+            (!char         || row.dataset.char.includes(char)) &&
+            (!system       || row.dataset.system.includes(system)) &&
+            (!types.length || types.includes(row.dataset.type)) &&
+            (!tiers.length || tiers.includes(row.dataset.tier));
         row.style.display = match ? '' : 'none';
         if (match) visible++;
     });
@@ -225,4 +263,16 @@ function applyCorpFilters() {
     document.getElementById('noResultsMsg').style.display = visible === 0 ? '' : 'none';
 }
 </script>
+<style>
+.eve-filter-toggle {
+    background: #0a1520;
+    border: 1px solid #1a2d3d;
+    color: #586e75;
+    font-size: .72rem;
+    padding: 2px 8px;
+    transition: all .15s;
+}
+.eve-filter-toggle:hover { border-color: #2a4a6b; color: #7ec8e3; }
+.eve-filter-toggle.active { background: #1a3a5a; border-color: #4a8abf; color: #7ec8e3; }
+</style>
 {% endblock %}
