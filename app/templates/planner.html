@@ -737,14 +737,23 @@ function renderChain(product) {
         }).join('') || '<span class="text-muted small">—</span>';
 
     document.getElementById('chainP0').innerHTML =
-        [...p0Set].map(p0 => {
+        [...p0Set].sort().map(p0 => {
+            const p1 = P0_TO_P1[p0] || '—';
             const planets = Object.entries(PLANET_RESOURCES).filter(([, r]) => r.includes(p0)).map(([pt]) => pt);
-            const dots = planets.map(pt => {
+            const primaryColor = planets.length ? (PLANET_COLORS[planets[0]] || '#586e75') : '#586e75';
+            const planetBadges = planets.map(pt => {
                 const c = PLANET_COLORS[pt] || '#586e75';
-                return `<span style="color:${c};font-size:.7rem;" title="${pt}">●</span>`;
-            }).join(' ');
-            return `<div class="d-flex align-items-center justify-content-between mb-1">
-                <span class="small text-muted">${p0}</span><span>${dots}</span>
+                return `<span style="background:${c}18;color:${c};border:1px solid ${c}35;font-size:0.62rem;padding:1px 6px;border-radius:3px;white-space:nowrap;">${pt}</span>`;
+            }).join('');
+            return `<div class="d-flex align-items-center gap-2 p-2 mb-1"
+                         style="border-left:3px solid ${primaryColor};background:${primaryColor}0d;border-radius:0 4px 4px 0;">
+                <div class="flex-grow-1" style="min-width:0;">
+                    <div class="small fw-medium">${p0}</div>
+                    <div class="d-flex flex-wrap gap-1 mt-1">${planetBadges}</div>
+                </div>
+                <div style="font-size:0.7rem;color:var(--eve-text-muted);white-space:nowrap;">
+                    → <span style="color:${TIER_COLORS['P1']};">${p1}</span>
+                </div>
             </div>`;
         }).join('') || '<span class="text-muted small">—</span>';
 
