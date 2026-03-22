@@ -413,13 +413,14 @@ function _getItems(planetId) {
 
 function _markDirty(planetId) {
     if (_shDirty[planetId]) return;
-    _shUndo[planetId]  = _getItems(planetId);
+    // snapshot already captured at load time (or after last save)
     _shDirty[planetId] = true;
     document.getElementById('undo_' + planetId)?.classList.remove('d-none');
     _lockOthers(planetId);
 }
 
 function _markClean(planetId) {
+    _shUndo[planetId]  = _getItems(planetId); // refresh snapshot to current (saved) state
     _shDirty[planetId] = false;
     document.getElementById('undo_' + planetId)?.classList.add('d-none');
     _unlockAll();
@@ -516,6 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateFillBar(planetId);
         updateValueCell(planetId);
+        _shUndo[planetId] = _getItems(planetId); // capture clean baseline for undo
     });
 
     // Sort headers

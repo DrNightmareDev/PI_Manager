@@ -375,10 +375,10 @@ function sortCorpTable(col, asc) {
 {% if account.is_owner %}
 // ── Force Load ────────────────────────────────────────────────────────────────
 const _corpId = {{ corp_id or 'null' }};
-const _modal  = new bootstrap.Modal(document.getElementById('forceLoadModal'));
 
 async function openForceLoad() {
     if (!_corpId) return;
+    const _modal = new bootstrap.Modal(document.getElementById('forceLoadModal'));
     const res = await fetch(`/dashboard/corp/accounts?corp_id=${_corpId}`);
     const { accounts } = await res.json();
 
