@@ -97,11 +97,11 @@ def _get_pi_volumes() -> dict[str, float]:
         return _PI_VOLUMES
     from app.pi_data import P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4
     vols: dict[str, float] = {}
-    for n in P0_TO_P1:           vols[n] = 0.01   # P0
-    for n in P0_TO_P1.values():  vols[n] = 0.38   # P1
-    for n in P1_TO_P2:           vols[n] = 1.5    # P2
-    for n in P2_TO_P3:           vols[n] = 6.0    # P3
-    for n in P3_TO_P4:           vols[n] = 100.0  # P4
+    for n in P0_TO_P1:           vols[n] = 0.005  # P0
+    for n in P0_TO_P1.values():  vols[n] = 0.19   # P1
+    for n in P1_TO_P2:           vols[n] = 0.75   # P2
+    for n in P2_TO_P3:           vols[n] = 3.0    # P3
+    for n in P3_TO_P4:           vols[n] = 50.0   # P4
     _PI_VOLUMES = vols
     return vols
 
