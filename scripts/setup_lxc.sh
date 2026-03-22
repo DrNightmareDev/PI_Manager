@@ -173,7 +173,8 @@ log_ok ".env erstellt"
 # ============ 7. Dateirechte setzen ============
 log_info "Setze Dateirechte..."
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
-chmod 750 "${APP_DIR}"
+chmod 755 "${APP_DIR}"                          # Nginx (www-data) muss Verzeichnis traversieren
+chmod 755 "${APP_DIR}/app/static" -R 2>/dev/null || true  # Static-Files für Nginx lesbar
 
 # ============ 8. Alembic Migrationen ============
 log_info "Führe Datenbankmigrationen aus..."
