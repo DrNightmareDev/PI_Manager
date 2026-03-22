@@ -114,6 +114,32 @@ log_ok "Python-Umgebung eingerichtet"
 # ============ 6. .env Datei generieren ============
 SECRET_KEY=$(openssl rand -base64 48 | tr -d '/+=\n' | head -c 48)
 
+# Vorhandene EVE-Credentials aus Quell-.env übernehmen (falls ausgefüllt)
+EVE_CLIENT_ID_VAL="BITTE_AUSFULLEN"
+EVE_CLIENT_SECRET_VAL="BITTE_AUSFULLEN"
+EVE_CALLBACK_URL_VAL="http://$(hostname -I | awk '{print $1}')/auth/callback"
+EVE_SCOPES_VAL="esi-planets.manage_planets.v1,esi-planets.read_customs_offices.v1,esi-location.read_location.v1,esi-search.search_structures.v1"
+
+SOURCE_ENV="${PROJECT_DIR}/.env"
+if [[ -f "${SOURCE_ENV}" ]]; then
+    _id=$(grep     "^EVE_CLIENT_ID="     "${SOURCE_ENV}" | cut -d= -f2- | tr -d '[:space:]')
+    _sec=$(grep    "^EVE_CLIENT_SECRET=" "${SOURCE_ENV}" | cut -d= -f2- | tr -d '[:space:]')
+    _cb=$(grep     "^EVE_CALLBACK_URL="  "${SOURCE_ENV}" | cut -d= -f2- | tr -d '[:space:]')
+    _sk=$(grep     "^SECRET_KEY="        "${SOURCE_ENV}" | cut -d= -f2- | tr -d '[:space:]')
+    _sc=$(grep     "^EVE_SCOPES="        "${SOURCE_ENV}" | cut -d= -f2- | tr -d '[:space:]')
+    [[ -n "$_id"  && "$_id"  != "BITTE_AUSFULLEN" ]] && EVE_CLIENT_ID_VAL="$_id"
+    [[ -n "$_sec" && "$_sec" != "BITTE_AUSFULLEN" ]] && EVE_CLIENT_SECRET_VAL="$_sec"
+    [[ -n "$_cb"  && "$_cb"  != "BITTE_AUSFULLEN" ]] && EVE_CALLBACK_URL_VAL="$_cb"
+    [[ -n "$_sk"  && ${#_sk} -ge 32               ]] && SECRET_KEY="$_sk"
+    [[ -n "$_sc"                                   ]] && EVE_SCOPES_VAL="$_sc"
+fi
+
+if [[ "$EVE_CLIENT_ID_VAL" != "BITTE_AUSFULLEN" ]]; then
+    log_ok "EVE-Credentials aus bestehender .env übernommen"
+else
+    log_warn "Keine EVE-Credentials gefunden – bitte ${APP_DIR}/.env nach dem Setup ausfüllen"
+fi
+
 log_info "Generiere .env Datei..."
 cat > "${APP_DIR}/.env" << EOF
 # EVE PI Manager Konfiguration
@@ -122,13 +148,16 @@ cat > "${APP_DIR}/.env" << EOF
 # Datenbank
 DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@localhost/${DB_NAME}
 
-# EVE Online SSO (Bitte ausfüllen!)
-EVE_CLIENT_ID=BITTE_AUSFULLEN
-EVE_CLIENT_SECRET=BITTE_AUSFULLEN
-EVE_CALLBACK_URL=http://$(hostname -I | awk '{print $1}')/auth/callback
+# Docker: Passwort für den PostgreSQL-Container
+DB_PASSWORD=${DB_PASSWORD}
 
-# Scopes
-EVE_SCOPES=esi-planets.manage_planets.v1,esi-planets.read_customs_offices.v1,esi-location.read_location.v1
+# EVE Online SSO – https://developers.eveonline.com
+EVE_CLIENT_ID=${EVE_CLIENT_ID_VAL}
+EVE_CLIENT_SECRET=${EVE_CLIENT_SECRET_VAL}
+EVE_CALLBACK_URL=${EVE_CALLBACK_URL_VAL}
+
+# ESI Scopes
+EVE_SCOPES=${EVE_SCOPES_VAL}
 
 # Sicherheit
 SECRET_KEY=${SECRET_KEY}
