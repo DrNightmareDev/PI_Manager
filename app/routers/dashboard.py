@@ -60,8 +60,12 @@ def _hours_until(dt: datetime | None) -> float | None:
     return (dt - now).total_seconds() / 3600.0
 
 
-def _compute_colony_productions(pins: list) -> tuple[dict[str, float], str | None]:
+def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str, int], str | None]:
+    """Gibt (productions, prod_tiers, highest_tier_label) zurück.
+    prod_tiers: product_name -> tier_num (1–4).
+    """
     productions: dict[str, float] = {}
+    prod_tiers: dict[str, int] = {}
     highest_tier_num = 0
     for pin in pins:
         factory = pin.get("factory_details") or {}
@@ -82,7 +86,8 @@ def _compute_colony_productions(pins: list) -> tuple[dict[str, float], str | Non
         productions[product_name] = (
             productions.get(product_name, 0.0) + qty_per_cycle * (86400.0 / float(cycle_time))
         )
-    return productions, (f"P{highest_tier_num}" if highest_tier_num > 0 else None)
+        prod_tiers[product_name] = tier_num
+    return productions, prod_tiers, (f"P{highest_tier_num}" if highest_tier_num > 0 else None)
 
 
 def _get_colony_expiry(pins: list) -> datetime | None:
@@ -186,9 +191,9 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
     all_product_names: set[str] = set()
     for info, detail in planet_data:
         pins = detail.get("pins", [])
-        productions, highest_tier = _compute_colony_productions(pins)
+        productions, prod_tiers, highest_tier = _compute_colony_productions(pins)
         expiry_time = _get_colony_expiry(pins)
-        colony_prods.append((productions, highest_tier, expiry_time, pins))
+        colony_prods.append((productions, prod_tiers, highest_tier, expiry_time, pins))
         all_product_names.update(productions.keys())
 
     # Schritt 4: Eine einzige Batch-Preisabfrage
@@ -200,14 +205,19 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
     next_expiry: datetime | None = None
     next_expiry_char: str | None = None
 
-    for (char, colony, _), (info, _detail), (productions, highest_tier, expiry_time, pins) in zip(
+    for (char, colony, _), (info, _detail), (productions, prod_tiers, highest_tier, expiry_time, pins) in zip(
         char_colony_token, planet_data, colony_prods
     ):
         planet_id = colony.get("planet_id")
         planet_type = colony.get("planet_type", "unknown").capitalize()
         planet_name = info.get("name") or f"Planet {planet_id}"
-        isk_day = sum(qty * prices.get(name, 0.0) for name, qty in productions.items())
-        logger.info(f"ISK/Tag: {isk_day:,.0f} ISK aus {productions}")
+        # Nur das höchste Tier zählt — Vorprodukte werden intern verbraucht
+        highest_tier_num = int(highest_tier[1]) if highest_tier else 0
+        isk_day = sum(
+            qty * prices.get(name, 0.0)
+            for name, qty in productions.items()
+            if prod_tiers.get(name, 0) == highest_tier_num
+        )
         expiry_hours = _hours_until(expiry_time)
         total_isk_day += isk_day
 
