@@ -37,6 +37,7 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | **Zugangspolitik** | Besitzer kann System offen, per Allowlist oder Blocklist betreiben |
 | **Owner-System** | Erster Account = Besitzer, geschützt vor Löschung/Entfernung |
 | **Jita Marktpreise** | Live-Preise P1–P4, Tier-Filter, Sortierung, 24h/7T/30T Trends |
+| **Light / Dark Mode** | Theme-Toggle in der Navbar, Einstellung per localStorage gespeichert |
 | **EveRef SDE** | Statische Spieldaten lokal (Schematics, Types) – kein ESI-Overhead |
 
 ---
