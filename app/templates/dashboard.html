@@ -361,6 +361,41 @@
     </div>
     {% endif %}
 
+    <!-- Admin-Schnellzugriff -->
+    {% if account.is_owner or account.is_admin %}
+    <div class="col-12">
+        <h5 class="text-muted mb-3">
+            <i class="bi bi-shield-fill me-2"></i>Admin-Schnellzugriff
+        </h5>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <a href="/dashboard/overview" class="text-decoration-none">
+                    <div class="eve-dev-card card border-0 h-100">
+                        <div class="card-body text-center p-4">
+                            <i class="bi bi-grid-3x3-gap fs-2 eve-accent d-block mb-3"></i>
+                            <h6 class="fw-semibold">Gesamt-Übersicht</h6>
+                            <p class="text-muted small mb-2">Alle Kolonien aller Accounts auf einen Blick</p>
+                            <span class="badge" style="background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;">Owner / Admin</span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-6">
+                <a href="/dashboard/corp" class="text-decoration-none">
+                    <div class="eve-dev-card card border-0 h-100">
+                        <div class="card-body text-center p-4">
+                            <i class="bi bi-building fs-2 eve-accent d-block mb-3"></i>
+                            <h6 class="fw-semibold">Korporation-View</h6>
+                            <p class="text-muted small mb-2">Kolonien aller Mitglieder der eigenen Korporation</p>
+                            <span class="badge" style="background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;">CEO / Admin / Owner</span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Werkzeuge -->
     <div class="col-12">
         <h5 class="text-muted mb-3">
