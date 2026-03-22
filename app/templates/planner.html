@@ -24,11 +24,15 @@
                 </div>
             </div>
             <div class="col-md-3">
-                <div id="tierFilter" class="d-flex gap-1">
+                <div id="tierFilter" class="d-flex gap-1 flex-wrap">
                     <button class="btn eve-tier-filter-btn active" data-tier="">Alle</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P4">P4</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P3">P3</button>
                     <button class="btn eve-tier-filter-btn" data-tier="P2">P2</button>
+                    <button class="btn eve-tier-filter-btn" id="favFilterBtn" data-tier="FAV"
+                            title="Nur Favoriten anzeigen" style="color:#f4a300;">
+                        ★
+                    </button>
                 </div>
             </div>
             <div class="col-md-3">
@@ -60,9 +64,14 @@
                         <div id="chainTierBadge"></div>
                     </div>
                 </div>
-                <a id="chainFindSystemsBtn" href="/system" class="btn eve-btn-primary btn-sm">
-                    <i class="bi bi-globe2 me-1"></i>System Analyzer öffnen
-                </a>
+                <div class="d-flex gap-2 align-items-center">
+                    <button id="favBtn" class="btn btn-sm eve-btn-ghost" onclick="toggleFavorite()" title="Favorit">
+                        <span id="favBtnIcon" style="font-size:1.2rem;line-height:1;">☆</span>
+                    </button>
+                    <a id="chainFindSystemsBtn" href="/system" class="btn eve-btn-primary btn-sm">
+                        <i class="bi bi-globe2 me-1"></i>System Analyzer öffnen
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -188,6 +197,46 @@ function collectRequirements(name, tier, p0Set, planetSet, visited) {
 
 function r(n) { return Math.round(n * 10) / 10; }
 
+// ── Favoriten ─────────────────────────────────────────────────────────────────
+let favorites = new Set();
+
+async function loadFavorites() {
+    try {
+        const res = await fetch('/planner/favorites');
+        const data = await res.json();
+        favorites = new Set(data);
+        updateFavBtn();
+    } catch(e) {}
+}
+
+async function toggleFavorite() {
+    if (!selectedProduct) return;
+    const btn = document.getElementById('favBtn');
+    btn.disabled = true;
+    try {
+        const res = await fetch('/planner/favorites/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_name: selectedProduct.name}),
+        });
+        const data = await res.json();
+        if (data.favorited) favorites.add(selectedProduct.name);
+        else favorites.delete(selectedProduct.name);
+        updateFavBtn();
+    } catch(e) {}
+    btn.disabled = false;
+}
+
+function updateFavBtn() {
+    if (!selectedProduct) return;
+    const isFav = favorites.has(selectedProduct.name);
+    const icon  = document.getElementById('favBtnIcon');
+    icon.textContent = isFav ? '★' : '☆';
+    icon.style.color = isFav ? '#f4a300' : '';
+}
+
+loadFavorites();
+
 // ── Produktsuche ──────────────────────────────────────────────────────────────
 let activeTierFilter = '';
 let selectedProduct  = null;
@@ -211,16 +260,31 @@ document.getElementById('tierFilter').addEventListener('click', function(e) {
 
 function showDropdown(q) {
     let filtered = ALL_PRODUCTS;
-    if (activeTierFilter) filtered = filtered.filter(p => p.tier === activeTierFilter);
+    if (activeTierFilter === 'FAV') {
+        filtered = filtered.filter(p => favorites.has(p.name));
+    } else if (activeTierFilter) {
+        filtered = filtered.filter(p => p.tier === activeTierFilter);
+    }
     if (q) filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
-    filtered = filtered.slice(0, 20);
+
+    // Favoriten nach oben sortieren, dann alphabetisch
+    filtered = [...filtered].sort((a, b) => {
+        const af = favorites.has(a.name), bf = favorites.has(b.name);
+        if (af !== bf) return bf - af;
+        return a.name.localeCompare(b.name);
+    }).slice(0, 20);
+
     dropdown.innerHTML = '';
     if (!filtered.length) { dropdown.classList.add('d-none'); return; }
     filtered.forEach(p => {
-        const tc = TIER_COLORS[p.tier] || '#586e75';
+        const tc  = TIER_COLORS[p.tier] || '#586e75';
+        const isFav = favorites.has(p.name);
         const item = document.createElement('div');
         item.className = 'eve-search-item d-flex justify-content-between align-items-center';
-        item.innerHTML = `<span class="fw-medium">${p.name}</span>
+        item.innerHTML = `<span class="fw-medium d-flex align-items-center gap-1">
+                ${isFav ? '<span style="color:#f4a300;font-size:0.8rem;">★</span>' : ''}
+                ${p.name}
+            </span>
             <span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;">${p.tier}</span>`;
         item.addEventListener('click', () => selectProduct(p));
         dropdown.appendChild(item);
@@ -233,6 +297,7 @@ function selectProduct(p) {
     searchInput.value = p.name;
     dropdown.classList.add('d-none');
     renderChain(p);
+    updateFavBtn();
 }
 
 function clearSelection() {
