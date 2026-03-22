@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}System Vergleich – EVE PI Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h2 class="eve-page-title mb-0">
+        <i class="bi bi-layout-split me-2 eve-accent"></i>System Vergleich
+    </h2>
+    <div class="d-flex gap-2">
+        <a href="/system" class="btn btn-sm eve-btn-outline">
+            <i class="bi bi-plus-circle me-1"></i>System hinzufügen
+        </a>
+        <button class="btn btn-sm eve-btn-outline text-danger" onclick="clearAll()" id="clearAllBtn" style="display:none;">
+            <i class="bi bi-trash me-1"></i>Alle entfernen
+        </button>
+    </div>
+</div>
+
+<!-- Leer -->
+<div id="emptyState" class="text-center py-5 d-none">
+    <i class="bi bi-layout-split fs-1 text-muted d-block mb-3"></i>
+    <h5>Keine Systeme zum Vergleich</h5>
+    <p class="text-muted">Analysiere ein System im <a href="/system" class="eve-link">System Analyzer</a> und klicke dort auf "Vergleich".</p>
+    <p class="text-muted small">Es können bis zu 4 Systeme gleichzeitig verglichen werden.</p>
+</div>
+
+<!-- Vergleichstabelle -->
+<div id="compareContent" class="d-none">
+
+    <!-- Übersicht-Karten -->
+    <div class="row g-3 mb-4" id="systemCards"></div>
+
+    <!-- Planetentypen -->
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-header eve-card-header d-flex align-items-center gap-2">
+            <i class="bi bi-globe2 eve-accent"></i>
+            <span class="fw-medium">Planetentypen im Vergleich</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table eve-table mb-0" id="planetTable"></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top PI Empfehlungen -->
+    <div class="eve-card card border-0">
+        <div class="card-header eve-card-header d-flex align-items-center gap-2">
+            <i class="bi bi-star eve-accent"></i>
+            <span class="fw-medium">Top PI Empfehlungen (Top 5 nach Jita Sell)</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table eve-table mb-0" id="recTable"></table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const PLANET_COLORS = {{ planet_type_colors | tojson }};
+const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const ALL_PLANET_TYPES = ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'];
+
+function formatIsk(val) {
+    if (!val || val === 0) return '—';
+    if (val >= 1e9) return (val / 1e9).toFixed(2) + ' B';
+    if (val >= 1e6) return (val / 1e6).toFixed(2) + ' M';
+    if (val >= 1e3) return (val / 1e3).toFixed(1) + ' K';
+    return val.toFixed(0);
+}
+
+function secColor(sec) {
+    return sec >= 0.5 ? '#2dc653' : sec > 0 ? '#f4a300' : '#e63946';
+}
+
+function loadSystems() {
+    let systems = [];
+    try { systems = JSON.parse(localStorage.getItem('pi_compare_systems') || '[]'); } catch(e) {}
+    return systems;
+}
+
+function clearAll() {
+    localStorage.removeItem('pi_compare_systems');
+    render();
+}
+
+function removeSystem(id) {
+    let systems = loadSystems().filter(s => s.system_id !== id);
+    localStorage.setItem('pi_compare_systems', JSON.stringify(systems));
+    render();
+}
+
+function render() {
+    const systems = loadSystems();
+    document.getElementById('emptyState').classList.toggle('d-none', systems.length > 0);
+    document.getElementById('compareContent').classList.toggle('d-none', systems.length === 0);
+    document.getElementById('clearAllBtn').style.display = systems.length > 0 ? '' : 'none';
+    if (!systems.length) return;
+
+    renderCards(systems);
+    renderPlanetTable(systems);
+    renderRecTable(systems);
+}
+
+function renderCards(systems) {
+    const el = document.getElementById('systemCards');
+    el.innerHTML = systems.map(s => {
+        const sc = secColor(s.security);
+        const topPt = (s.planet_types || []).slice(0, 4).map(pt => {
+            const c = PLANET_COLORS[pt.type] || '#586e75';
+            return `<span class="badge me-1" style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.72rem;">${pt.type} ×${pt.count}</span>`;
+        }).join('');
+        return `<div class="col-md-6 col-xl-3">
+            <div class="eve-card card border-0 h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="fw-bold mb-0">${s.system_name}</h6>
+                        <button class="btn btn-sm p-0 text-muted" onclick="removeSystem(${s.system_id})" title="Entfernen" style="font-size:0.8rem;">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    </div>
+                    <div class="text-muted small mb-2">${s.region || '—'}</div>
+                    <div class="mb-2">
+                        <span class="small" style="color:${sc};">Sec: ${s.security.toFixed(1)}</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1">${topPt}</div>
+                    <div class="mt-2">
+                        <a href="/system/${s.system_id}" class="btn btn-sm eve-btn-outline w-100" style="font-size:0.75rem;">
+                            <i class="bi bi-search me-1"></i>Analysieren
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderPlanetTable(systems) {
+    const table = document.getElementById('planetTable');
+    let html = '<thead><tr><th>Planetentyp</th>';
+    systems.forEach(s => html += `<th class="text-center">${s.system_name}</th>`);
+    html += '</tr></thead><tbody>';
+    ALL_PLANET_TYPES.forEach(pt => {
+        const c = PLANET_COLORS[pt] || '#586e75';
+        html += `<tr><td><span class="badge" style="background:${c}18;color:${c};border:1px solid ${c}30;">${pt}</span></td>`;
+        systems.forEach(s => {
+            const found = (s.planet_types || []).find(p => p.type === pt);
+            if (found) {
+                html += `<td class="text-center small fw-semibold" style="color:${c};">×${found.count}</td>`;
+            } else {
+                html += `<td class="text-center text-muted small">—</td>`;
+            }
+        });
+        html += '</tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+}
+
+function renderRecTable(systems) {
+    // Alle Produktnamen sammeln (Top-5 je System)
+    const allNames = new Set();
+    systems.forEach(s => (s.recommendations || []).forEach(r => allNames.add(r.name)));
+
+    const table = document.getElementById('recTable');
+    let html = '<thead><tr><th>Produkt</th><th>Tier</th>';
+    systems.forEach(s => html += `<th class="text-center">${s.system_name}<br><span class="text-muted small">Jita Sell</span></th>`);
+    html += '</tr></thead><tbody>';
+
+    // Nach erstem System sortieren
+    const names = [...allNames].sort((a, b) => {
+        const recA = (systems[0].recommendations || []).find(r => r.name === a);
+        const recB = (systems[0].recommendations || []).find(r => r.name === b);
+        return (recB?.isk_sell || 0) - (recA?.isk_sell || 0);
+    });
+
+    names.forEach(name => {
+        // Tier aus irgendeinem System holen
+        let tier = '—';
+        for (const s of systems) {
+            const rec = (s.recommendations || []).find(r => r.name === name);
+            if (rec) { tier = rec.tier; break; }
+        }
+        const tc = TIER_COLORS[tier] || '#c9d1d9';
+        html += `<tr><td class="fw-medium">${name}</td>
+            <td><span class="badge" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${tier}</span></td>`;
+        systems.forEach(s => {
+            const rec = (s.recommendations || []).find(r => r.name === name);
+            if (rec && rec.isk_sell > 0) {
+                html += `<td class="text-center small" style="color:var(--eve-gold,#f4a300);">${formatIsk(rec.isk_sell)}</td>`;
+            } else {
+                html += `<td class="text-center text-muted small">—</td>`;
+            }
+        });
+        html += '</tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+}
+
+render();
+</script>
+{% endblock %}

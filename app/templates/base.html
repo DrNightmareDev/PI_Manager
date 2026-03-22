@@ -40,15 +40,21 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <span class="nav-link eve-disabled" title="In Entwicklung">
-                        <i class="bi bi-diagram-3 me-1"></i>PI Chains
-                        <span class="badge eve-badge-wip ms-1">Bald</span>
-                    </span>
+                    <a class="nav-link {% if request.url.path.startswith('/planner') %}active{% endif %}"
+                       href="/planner">
+                        <i class="bi bi-diagram-3 me-1"></i>PI Planner
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/system') %}active{% endif %}"
+                    <a class="nav-link {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') %}active{% endif %}"
                        href="/system">
                         <i class="bi bi-globe2 me-1"></i>System Analyzer
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/system/compare') %}active{% endif %}"
+                       href="/system/compare">
+                        <i class="bi bi-layout-split me-1"></i>Vergleich
                     </a>
                 </li>
                 <li class="nav-item">

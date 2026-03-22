@@ -72,7 +72,13 @@
                         </div>
                     </div>
                 </div>
-                <div id="planetTypeBadges" class="d-flex flex-wrap gap-2 align-items-center"></div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <div id="planetTypeBadges" class="d-flex flex-wrap gap-2 align-items-center"></div>
+                    <button class="btn btn-sm eve-btn-outline" id="addCompareBtn" onclick="addToCompare()" title="System zum Vergleich hinzufügen (max. 4)">
+                        <i class="bi bi-layout-split me-1"></i>Vergleich
+                    </button>
+                    <span id="compareToast" class="text-muted small d-none"></span>
+                </div>
             </div>
         </div>
     </div>
@@ -430,7 +436,35 @@ document.getElementById('trendPeriodFilter').addEventListener('click', function(
 
 // ── Render ─────────────────────────────────────────────────────────────────
 
+// ── Vergleich ───────────────────────────────────────────────────────────────
+
+function addToCompare() {
+    if (!window._lastAnalysis) return;
+    const data = window._lastAnalysis;
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem('pi_compare_systems') || '[]'); } catch(e) {}
+    // Bereits vorhanden? Überschreiben
+    list = list.filter(s => s.system_id !== data.system_id);
+    if (list.length >= 4) list.shift(); // ältestes entfernen wenn voll
+    list.push(data);
+    localStorage.setItem('pi_compare_systems', JSON.stringify(list));
+    const toast = document.getElementById('compareToast');
+    toast.textContent = `✓ ${data.system_name} hinzugefügt (${list.length}/4)`;
+    toast.classList.remove('d-none');
+    setTimeout(() => toast.classList.add('d-none'), 3000);
+}
+
 function renderAnalysis(data) {
+    // Für Vergleich speichern (Top-5 Empfehlungen reichen)
+    window._lastAnalysis = {
+        system_id: selectedSystemId,
+        system_name: data.system_name,
+        security: data.security,
+        region: data.region,
+        planet_types: data.planet_types || [],
+        recommendations: (data.recommendations || []).slice(0, 5),
+    };
+
     analysisResult.classList.remove('d-none');
 
     // Filter + Sort zurücksetzen

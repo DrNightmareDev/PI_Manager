@@ -161,6 +161,18 @@ def analyze(system_id: int, account=Depends(require_account)):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+@router.get("/compare", response_class=HTMLResponse)
+def compare_page(
+    request: Request,
+    account=Depends(require_account),
+):
+    return templates.TemplateResponse("compare.html", {
+        "request": request,
+        "account": account,
+        "planet_type_colors": PLANET_TYPE_COLORS,
+    })
+
+
 @router.get("/{system_query}", response_class=HTMLResponse)
 def system_analyzer_direct(
     request: Request,

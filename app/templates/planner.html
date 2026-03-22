@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}PI Chain Planner – EVE PI Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h2 class="eve-page-title mb-0">
+        <i class="bi bi-diagram-3 me-2 eve-accent"></i>PI Chain Planner
+    </h2>
+    <div class="text-muted small">Produktionsketten planen und Planetenbedarf ermitteln</div>
+</div>
+
+<!-- Produktauswahl -->
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label text-muted small">Produkt suchen / auswählen</label>
+                <div class="position-relative">
+                    <input type="text" id="productSearch"
+                           class="form-control eve-input"
+                           placeholder="z.B. Robotics, Wetware Mainframe, Coolant..."
+                           autocomplete="off">
+                    <div id="productDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div id="tierFilter" class="d-flex gap-1">
+                    <button class="btn eve-tier-filter-btn active" data-tier="">Alle</button>
+                    <button class="btn eve-tier-filter-btn" data-tier="P4">P4</button>
+                    <button class="btn eve-tier-filter-btn" data-tier="P3">P3</button>
+                    <button class="btn eve-tier-filter-btn" data-tier="P2">P2</button>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <button class="btn eve-btn-outline w-100" onclick="clearSelection()">
+                    <i class="bi bi-x-circle me-1"></i>Auswahl löschen
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Kein Produkt gewählt -->
+<div id="emptyState" class="text-center py-5">
+    <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-3"></i>
+    <p class="text-muted">Wähle ein Produkt um die vollständige Produktionskette zu sehen.</p>
+    <p class="text-muted small">Alle P2–P4 Produkte werden unterstützt.</p>
+</div>
+
+<!-- Ergebnis -->
+<div id="chainResult" class="d-none">
+
+    <!-- Produkt-Header -->
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-body p-3">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div>
+                        <h4 class="mb-1 fw-bold" id="chainProductName">—</h4>
+                        <div id="chainTierBadge"></div>
+                    </div>
+                </div>
+                <a id="chainFindSystemsBtn" href="/system" class="btn eve-btn-primary btn-sm">
+                    <i class="bi bi-globe2 me-1"></i>System Analyzer öffnen
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- Produktionskette -->
+        <div class="col-lg-8">
+            <div class="eve-card card border-0">
+                <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-diagram-3 eve-accent"></i>
+                    <span class="fw-medium">Produktionskette</span>
+                </div>
+                <div class="card-body p-3" id="chainTree"></div>
+            </div>
+        </div>
+
+        <!-- Planeten + Ressourcen -->
+        <div class="col-lg-4">
+            <div class="eve-card card border-0 mb-4">
+                <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-globe2 eve-accent"></i>
+                    <span class="fw-medium">Benötigte Planetentypen</span>
+                </div>
+                <div class="card-body p-3" id="chainPlanets"></div>
+            </div>
+            <div class="eve-card card border-0">
+                <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-layers eve-accent"></i>
+                    <span class="fw-medium">P0 Rohstoffe</span>
+                </div>
+                <div class="card-body p-3" id="chainP0"></div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── PI-Daten (vom Backend) ────────────────────────────────────────────────────
+const P0_TO_P1       = {{ p0_to_p1 | tojson }};
+const P1_TO_P2       = {{ p1_to_p2 | tojson }};
+const P2_TO_P3       = {{ p2_to_p3 | tojson }};
+const P3_TO_P4       = {{ p3_to_p4 | tojson }};
+const PLANET_RESOURCES = {{ planet_resources | tojson }};
+const PLANET_COLORS  = {{ planet_type_colors | tojson }};
+const ALL_PRODUCTS   = {{ all_products | tojson }};
+
+const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+
+// ── Produktsuche ──────────────────────────────────────────────────────────────
+let activeTierFilter = '';
+let selectedProduct = null;
+
+const searchInput   = document.getElementById('productSearch');
+const dropdown      = document.getElementById('productDropdown');
+
+searchInput.addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    showDropdown(q);
+});
+searchInput.addEventListener('focus', function() {
+    showDropdown(this.value.trim().toLowerCase());
+});
+document.addEventListener('click', e => {
+    if (!e.target.closest('#productSearch') && !e.target.closest('#productDropdown'))
+        dropdown.classList.add('d-none');
+});
+
+document.getElementById('tierFilter').addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-tier]');
+    if (!btn) return;
+    activeTierFilter = btn.dataset.tier;
+    document.querySelectorAll('[data-tier]').forEach(b => b.classList.toggle('active', b === btn));
+    showDropdown(searchInput.value.trim().toLowerCase());
+});
+
+function showDropdown(q) {
+    let filtered = ALL_PRODUCTS;
+    if (activeTierFilter) filtered = filtered.filter(p => p.tier === activeTierFilter);
+    if (q) filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
+    filtered = filtered.slice(0, 20);
+
+    dropdown.innerHTML = '';
+    if (!filtered.length) { dropdown.classList.add('d-none'); return; }
+    filtered.forEach(p => {
+        const tc = TIER_COLORS[p.tier] || '#586e75';
+        const item = document.createElement('div');
+        item.className = 'eve-search-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `<span class="fw-medium">${p.name}</span>
+            <span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;">${p.tier}</span>`;
+        item.addEventListener('click', () => selectProduct(p));
+        dropdown.appendChild(item);
+    });
+    dropdown.classList.remove('d-none');
+}
+
+function selectProduct(p) {
+    selectedProduct = p;
+    searchInput.value = p.name;
+    dropdown.classList.add('d-none');
+    renderChain(p);
+}
+
+function clearSelection() {
+    selectedProduct = null;
+    searchInput.value = '';
+    dropdown.classList.add('d-none');
+    document.getElementById('emptyState').classList.remove('d-none');
+    document.getElementById('chainResult').classList.add('d-none');
+}
+
+// ── Ketten-Berechnung ─────────────────────────────────────────────────────────
+
+// Gibt den Tier eines Produkts zurück (P1/P2/P3/P4) oder null
+function getTier(name) {
+    if (P3_TO_P4[name] !== undefined) return 'P4';  // P4 keys are product names — wait, P3_TO_P4 maps P4->P3 inputs
+    // Actually: P3_TO_P4 maps P4 name -> [P3 inputs]
+    if (name in P3_TO_P4) return 'P4';
+    if (name in P2_TO_P3) return 'P3';
+    if (name in P1_TO_P2) return 'P2';
+    // P1: appears as value in P0_TO_P1
+    const p1Names = new Set(Object.values(P0_TO_P1));
+    if (p1Names.has(name)) return 'P1';
+    return null;
+}
+
+// Gibt direkte Inputs zurück (oder [])
+function getInputs(name, tier) {
+    if (tier === 'P4') return P3_TO_P4[name] || [];
+    if (tier === 'P3') return P2_TO_P3[name] || [];
+    if (tier === 'P2') return P1_TO_P2[name] || [];
+    if (tier === 'P1') {
+        // Find which P0 produces this P1
+        return Object.entries(P0_TO_P1).filter(([p0, p1]) => p1 === name).map(([p0]) => p0);
+    }
+    return [];
+}
+
+// Sammelt alle P0-Ressourcen und Planetentypen für ein Produkt
+function collectRequirements(name, tier, p0Set, planetSet, visited) {
+    const key = name + '|' + tier;
+    if (visited.has(key)) return;
+    visited.add(key);
+
+    const inputs = getInputs(name, tier);
+    if (tier === 'P1') {
+        // inputs are P0 resources
+        inputs.forEach(p0 => {
+            p0Set.add(p0);
+            for (const [pt, resources] of Object.entries(PLANET_RESOURCES)) {
+                if (resources.includes(p0)) planetSet.add(pt);
+            }
+        });
+    } else {
+        inputs.forEach(inp => {
+            const inpTier = getTier(inp);
+            if (inpTier) collectRequirements(inp, inpTier, p0Set, planetSet, visited);
+        });
+    }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function renderChain(product) {
+    document.getElementById('emptyState').classList.add('d-none');
+    document.getElementById('chainResult').classList.remove('d-none');
+
+    const tc = TIER_COLORS[product.tier] || '#c9d1d9';
+    document.getElementById('chainProductName').textContent = product.name;
+    document.getElementById('chainTierBadge').innerHTML =
+        `<span class="badge fs-6" style="background:${tc}1a;color:${tc};border:1px solid ${tc}3a;">${product.tier}</span>`;
+
+    // Baum aufbauen
+    const chainTreeEl = document.getElementById('chainTree');
+    chainTreeEl.innerHTML = renderNode(product.name, product.tier, 0, new Set());
+
+    // Requirements sammeln
+    const p0Set = new Set();
+    const planetSet = new Set();
+    collectRequirements(product.name, product.tier, p0Set, planetSet, new Set());
+
+    // Planeten rendern
+    const planetsEl = document.getElementById('chainPlanets');
+    planetsEl.innerHTML = [...planetSet].map(pt => {
+        const c = PLANET_COLORS[pt] || '#586e75';
+        return `<span class="badge me-1 mb-1" style="background:${c}18;color:${c};border:1px solid ${c}30;font-size:0.8rem;padding:0.4rem 0.7rem;">${pt}</span>`;
+    }).join('') || '<span class="text-muted small">—</span>';
+
+    // P0 rendern
+    const p0El = document.getElementById('chainP0');
+    p0El.innerHTML = [...p0Set].map(p0 => {
+        // Find which planets produce this P0
+        const planets = Object.entries(PLANET_RESOURCES)
+            .filter(([, res]) => res.includes(p0))
+            .map(([pt]) => pt);
+        const planetDots = planets.map(pt => {
+            const c = PLANET_COLORS[pt] || '#586e75';
+            return `<span style="color:${c};font-size:0.7rem;" title="${pt}">●</span>`;
+        }).join(' ');
+        return `<div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="small text-muted">${p0}</span>
+            <span>${planetDots}</span>
+        </div>`;
+    }).join('') || '<span class="text-muted small">—</span>';
+}
+
+function renderNode(name, tier, depth, visited) {
+    const key = name + '|' + depth;
+    if (depth > 6 || visited.has(key)) return '';
+    visited.add(key);
+
+    const tc = TIER_COLORS[tier] || '#586e75';
+    const inputs = getInputs(name, tier);
+    const indent = depth * 20;
+    const hasChildren = inputs.length > 0 && tier !== 'P0';
+
+    let html = `<div style="margin-left:${indent}px;margin-bottom:4px;" class="d-flex align-items-start gap-2">`;
+    if (depth > 0) html += `<span style="color:#2a3f52;margin-top:2px;">└</span>`;
+    html += `<span class="badge" style="background:${tc}18;color:${tc};border:1px solid ${tc}30;white-space:normal;">${name}</span>`;
+    html += `<span class="badge" style="background:#1a2d3d;color:#586e75;font-size:0.65rem;">${tier}</span>`;
+    html += `</div>`;
+
+    if (hasChildren) {
+        if (tier === 'P1') {
+            // P0 inputs
+            inputs.forEach(p0 => {
+                html += renderP0Node(p0, depth + 1);
+            });
+        } else {
+            inputs.forEach(inp => {
+                const inpTier = getTier(inp);
+                if (inpTier) {
+                    html += renderNode(inp, inpTier, depth + 1, new Set(visited));
+                } else {
+                    // Unknown — show as-is
+                    const dIndent = (depth + 1) * 20;
+                    html += `<div style="margin-left:${dIndent}px;margin-bottom:4px;" class="d-flex align-items-center gap-2">
+                        <span style="color:#2a3f52;">└</span>
+                        <span class="small text-muted">${inp}</span>
+                    </div>`;
+                }
+            });
+        }
+    }
+    return html;
+}
+
+function renderP0Node(p0name, depth) {
+    const indent = depth * 20;
+    const planets = Object.entries(PLANET_RESOURCES)
+        .filter(([, res]) => res.includes(p0name))
+        .map(([pt]) => pt);
+    const planetDots = planets.map(pt => {
+        const c = PLANET_COLORS[pt] || '#586e75';
+        return `<span style="color:${c};font-size:0.75rem;" title="${pt}">●</span>`;
+    }).join(' ');
+    return `<div style="margin-left:${indent}px;margin-bottom:4px;" class="d-flex align-items-center gap-2">
+        <span style="color:#2a3f52;">└</span>
+        <span class="small" style="color:#4a6278;">${p0name}</span>
+        <span class="badge" style="background:#1a2d3d;color:#586e75;font-size:0.6rem;">P0</span>
+        <span>${planetDots}</span>
+    </div>`;
+}
+
+// Beim Laden Dropdown öffnen wenn Eingabe vorhanden
+searchInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') dropdown.classList.add('d-none');
+});
+</script>
+{% endblock %}

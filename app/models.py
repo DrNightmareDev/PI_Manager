@@ -88,3 +88,13 @@ class MarketCache(Base):
     best_sell = Column(String(50), nullable=True)
     avg_volume = Column(String(50), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class IskSnapshot(Base):
+    __tablename__ = "isk_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+    isk_day = Column(String(50), nullable=False)
+    colony_count = Column(Integer, nullable=False, default=0)
