@@ -63,10 +63,22 @@ log_info "Starte PostgreSQL..."
 systemctl enable postgresql --quiet
 systemctl start postgresql
 
-# Zufälliges Datenbankpasswort generieren
-DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
+# DB-Passwort aus Quell-.env übernehmen falls vorhanden, sonst zufällig generieren
 DB_NAME="evepi"
 DB_USER="evepi"
+_src_env="${PROJECT_DIR}/.env"
+DB_PASSWORD=""
+if [[ -f "${_src_env}" ]]; then
+    _dbpw=$(grep "^DB_PASSWORD=" "${_src_env}" | cut -d= -f2- | tr -d '[:space:]')
+    if [[ -n "$_dbpw" && "$_dbpw" != "sicheres_passwort" && "$_dbpw" != "PASSWORT" ]]; then
+        DB_PASSWORD="$_dbpw"
+        log_ok "DB-Passwort aus .env übernommen"
+    fi
+fi
+if [[ -z "$DB_PASSWORD" ]]; then
+    DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
+    log_info "Zufälliges DB-Passwort generiert"
+fi
 
 log_info "Erstelle PostgreSQL Benutzer und Datenbank..."
 sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${DB_NAME};" 2>/dev/null || true
