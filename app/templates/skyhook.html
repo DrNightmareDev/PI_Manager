@@ -686,6 +686,8 @@ async function saveEntry(ri) {
     }
 }
 
+function toggleHist(ri) {
+    const popup = document.getElementById('hist_' + ri);
     if (!popup) return;
     const isOpen = popup.classList.contains('open');
     document.querySelectorAll('.sh-hist-popup.open').forEach(p => p.classList.remove('open'));
