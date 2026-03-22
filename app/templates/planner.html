@@ -93,19 +93,19 @@
             <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-share-fill eve-accent"></i>
                 <span class="fw-medium">Produktions-Graph</span>
-            </div>
-            <span class="text-muted small d-flex align-items-center gap-2">
-                <span>
-                    <span style="color:#586e75;">●</span> P1 &nbsp;
-                    <span style="color:#00b4d8;">●</span> P2 &nbsp;
-                    <span style="color:#f4a300;">●</span> P3 &nbsp;
-                    <span style="color:#e63946;">●</span> P4
+                <span id="planetFilterBadge" class="d-none d-flex align-items-center gap-1 ms-2">
+                    <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;font-size:0.7rem;">
+                        <i class="bi bi-globe2 me-1"></i><span id="planetFilterCount">0</span> Planeten
+                    </span>
+                    <button onclick="clearPlanetFilter()" class="btn btn-sm p-0 px-1"
+                            style="font-size:0.75rem;color:#586e75;" title="Planetenfilter zurücksetzen">✕</button>
                 </span>
-                <span class="text-muted" style="opacity:.5;">|</span>
-                <span>← Eingaben &nbsp; Weiterverarbeitung →</span>
-                <span class="text-muted" style="opacity:.5;">|</span>
-                <span>Knoten anklicken zum Wechseln</span>
+            </div>
+            <span id="planetUnavailWarning" class="d-none" style="color:#e63946;font-size:0.8rem;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Mit diesen Planeten nicht produzierbar
             </span>
+            <span class="text-muted small">← Eingaben &nbsp;|&nbsp; Weiterverarbeitung →
+                &nbsp;|&nbsp; Planeten anklicken zum Filtern</span>
         </div>
         <div class="card-body p-0">
             <div id="graphContainer" style="overflow-x:auto;">
@@ -152,6 +152,64 @@ const ALL_PRODUCTS   = {{ all_products | tojson }};
 
 const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 const TIER_ORDER  = ['P1', 'P2', 'P3', 'P4'];
+
+// ── Planetenfilter-State ──────────────────────────────────────────────────────
+let selectedPlanets = new Set();
+
+function togglePlanetFilter(planetName) {
+    if (selectedPlanets.has(planetName)) selectedPlanets.delete(planetName);
+    else selectedPlanets.add(planetName);
+    updatePlanetFilterUI();
+    if (selectedProduct) renderGraph(selectedProduct);
+}
+
+function clearPlanetFilter() {
+    selectedPlanets.clear();
+    updatePlanetFilterUI();
+    if (selectedProduct) renderGraph(selectedProduct);
+}
+
+function updatePlanetFilterUI() {
+    const badge   = document.getElementById('planetFilterBadge');
+    const warning = document.getElementById('planetUnavailWarning');
+    if (selectedPlanets.size > 0) {
+        badge.classList.remove('d-none');
+        document.getElementById('planetFilterCount').textContent = selectedPlanets.size;
+    } else {
+        badge.classList.add('d-none');
+        warning.classList.add('d-none');
+    }
+}
+
+// Berechnet Verfügbarkeit jedes Knotens basierend auf selectedPlanets
+function calcAvailability(nodes) {
+    const avail = new Map();
+    if (selectedPlanets.size === 0) {
+        for (const [n] of nodes) avail.set(n, true);
+        return avail;
+    }
+    const cache = new Map();
+    function isAvail(name, tier) {
+        if (cache.has(name)) return cache.get(name);
+        let result;
+        if (tier === 'PLANET') {
+            result = selectedPlanets.has(name);
+        } else if (tier === 'P1') {
+            const p0s = getInputs(name, 'P1');
+            result = p0s.some(p0 => [...selectedPlanets].some(pt => PLANET_RESOURCES[pt]?.includes(p0)));
+        } else {
+            const inputs = getInputs(name, tier);
+            result = inputs.length > 0 && inputs.every(inp => {
+                const t = getTier(inp);
+                return t ? isAvail(inp, t) : true;
+            });
+        }
+        cache.set(name, result);
+        return result;
+    }
+    for (const [name, node] of nodes) avail.set(name, isAvail(name, node.tier));
+    return avail;
+}
 
 // P1-Name-Set für schnelle Tier-Erkennung
 const P1_NAMES = new Set(Object.values(P0_TO_P1));
@@ -347,6 +405,8 @@ function selectProduct(p) {
     selectedProduct = p;
     searchInput.value = p.name;
     dropdown.classList.add('d-none');
+    selectedPlanets.clear();
+    updatePlanetFilterUI();
     renderChain(p);
     updateFavBtn();
     renderFavoritesBlock();
@@ -466,6 +526,8 @@ function renderGraph(product) {
 
     const edges = [...edgeSet].map(e => { const [f, t] = e.split('||'); return {from: f, to: t}; });
 
+    const avail = calcAvailability(nodes);
+
     // ── SVG content ──────────────────────────────────────────────────────────
     let s = `<style>#arr path{fill:#7a9ab5;}</style>
 <defs>
@@ -524,11 +586,12 @@ function renderGraph(product) {
         const isPlanetEdge = fn.tier === 'PLANET';
         const ec = isPlanetEdge ? (PLANET_COLORS[fn.name] || '#4a7a5a') : (TIER_COLORS[tn.tier] || '#586e75');
         const connected = fn.isSelected || tn.isSelected;
+        const edgeAvail = avail.get(from) !== false && avail.get(to) !== false;
         s += `<path d="M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty}"
-                   fill="none" stroke="${ec}"
-                   stroke-opacity="${connected ? 0.55 : 0.18}"
-                   stroke-width="${connected ? 2 : 1.5}"
-                   ${connected ? 'filter="url(#glow-edge)"' : ''}
+                   fill="none" stroke="${edgeAvail ? ec : '#586e75'}"
+                   stroke-opacity="${edgeAvail ? (connected ? 0.55 : 0.18) : 0.08}"
+                   stroke-width="${edgeAvail ? (connected ? 2 : 1.5) : 1}"
+                   ${edgeAvail && connected ? 'filter="url(#glow-edge)"' : ''}
                    marker-end="url(#arr)"/>`;
     }
 
@@ -542,19 +605,29 @@ function renderGraph(product) {
         const sel = node.isSelected;
 
         if (isPlanet) {
-            // Planet node: pill shape with dashed border, non-clickable
-            s += `<g style="cursor:default;">
-              <title>${node.name}</title>
+            // Planet node: pill shape, clickable to toggle filter
+            const planetSel  = selectedPlanets.has(node.name);
+            const isFiltering = selectedPlanets.size > 0;
+            const dimmed = isFiltering && !planetSel;
+            const safePN = node.name.replace(/'/g, "\\'");
+            s += `<g style="cursor:pointer;" onclick="togglePlanetFilter('${safePN}')">
+              <title>${node.name}${planetSel ? ' ✓ aktiv' : ' – klicken zum Filtern'}</title>
               <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="${NODE_H/2}"
-                    fill="${tc}" fill-opacity="0.1"
-                    stroke="${tc}" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="3 2"/>
+                    fill="${tc}" fill-opacity="${planetSel ? 0.32 : (dimmed ? 0.04 : 0.1)}"
+                    stroke="${tc}" stroke-opacity="${planetSel ? 1 : (dimmed ? 0.18 : 0.5)}"
+                    stroke-width="${planetSel ? 2 : 1}"
+                    ${planetSel ? '' : 'stroke-dasharray="3 2"'}/>
               <text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
-                    fill="${tc}" fill-opacity="0.9" font-size="10" font-weight="500"
+                    fill="${tc}" fill-opacity="${planetSel ? 1 : (dimmed ? 0.3 : 0.9)}"
+                    font-size="10" font-weight="${planetSel ? 700 : 500}"
                     font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${node.name}</text>
             </g>`;
             continue;
         }
 
+        const nodeAvail = avail.get(node.name) !== false;
+        const dimNode = !nodeAvail;
+        const dimTC = dimNode ? '#586e75' : tc;
         const label  = node.name.length > 18 ? node.name.slice(0, 16) + '…' : node.name;
         const safeN  = node.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const clickAttr = sel
@@ -562,23 +635,23 @@ function renderGraph(product) {
             : `style="cursor:pointer;" onclick="selectProduct({name:'${safeN}',tier:'${node.tier}'})"`;
 
         s += `<g ${clickAttr} ${sel ? 'filter="url(#glow-sel)"' : ''}>
-          <title>${node.name} · ${node.tier}</title>
+          <title>${node.name} · ${node.tier}${dimNode ? ' (nicht verfügbar)' : ''}</title>
           <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
-                fill="${tc}" fill-opacity="${sel ? 0.22 : 0.07}"
-                stroke="${tc}" stroke-opacity="${sel ? 1 : 0.3}"
+                fill="${dimTC}" fill-opacity="${sel ? 0.22 : (dimNode ? 0.03 : 0.07)}"
+                stroke="${dimTC}" stroke-opacity="${sel ? 1 : (dimNode ? 0.15 : 0.3)}"
                 stroke-width="${sel ? 2 : 1}"/>`;
         if (sel) {
             s += `<rect x="${r(nx+2)}" y="${r(ny+2)}" width="${nw-4}" height="${NODE_H-4}" rx="4"
-                        fill="${tc}" fill-opacity="0.1" stroke="${tc}" stroke-opacity="0.4" stroke-width="0.5"/>`;
+                        fill="${dimTC}" fill-opacity="0.1" stroke="${dimTC}" stroke-opacity="0.4" stroke-width="0.5"/>`;
         }
-        if (!sel) {
+        if (!sel && !dimNode) {
             s += `<rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
                         fill="transparent" stroke="none"
                         onmouseenter="this.previousElementSibling.setAttribute('fill-opacity','0.18')"
                         onmouseleave="this.previousElementSibling.setAttribute('fill-opacity','0.07')"/>`;
         }
         s += `<text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
-                    fill="${tc}" fill-opacity="${sel ? 1 : 0.85}"
+                    fill="${dimTC}" fill-opacity="${sel ? 1 : (dimNode ? 0.28 : 0.85)}"
                     font-size="${sel ? 11.5 : 10.5}" font-weight="${sel ? 700 : 400}"
                     font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${label}</text>
         </g>`;
@@ -589,6 +662,14 @@ function renderGraph(product) {
     svgEl.setAttribute('height', svgH);
     svgEl.style.minWidth = r(svgW) + 'px';
     svgEl.innerHTML = s;
+
+    // Update unavailability warning
+    const warning = document.getElementById('planetUnavailWarning');
+    if (selectedPlanets.size > 0) {
+        warning.classList.toggle('d-none', avail.get(product.name) !== false);
+    } else {
+        warning.classList.add('d-none');
+    }
 }
 
 // ── Haupt-Render ──────────────────────────────────────────────────────────────
