@@ -1,13 +1,32 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database import get_db
 from app.dependencies import require_admin, require_account
-from app.models import Account, Character
+from app.models import Account, Character, IskSnapshot
 from app.templates_env import templates
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _colony_count_per_account(db: Session) -> dict[int, int]:
+    """Ermittelt die letzte bekannte Kolonienanzahl pro Account aus IskSnapshot."""
+    # Für jeden Account: neuesten IskSnapshot holen
+    from sqlalchemy import desc
+    subq = (
+        db.query(IskSnapshot.account_id, func.max(IskSnapshot.recorded_at).label("latest"))
+        .group_by(IskSnapshot.account_id)
+        .subquery()
+    )
+    rows = (
+        db.query(IskSnapshot)
+        .join(subq, (IskSnapshot.account_id == subq.c.account_id) &
+                     (IskSnapshot.recorded_at == subq.c.latest))
+        .all()
+    )
+    return {r.account_id: r.colony_count for r in rows}
 
 
 @router.get("", response_class=HTMLResponse)
@@ -18,10 +37,12 @@ def admin_panel(
     db: Session = Depends(get_db)
 ):
     accounts = db.query(Account).all()
+    colony_counts = _colony_count_per_account(db)
 
     total_accounts = len(accounts)
     total_chars = db.query(Character).count()
     total_admins = sum(1 for a in accounts if a.is_admin)
+    total_colonies = sum(colony_counts.values())
 
     accounts_data = []
     for acc in accounts:
@@ -34,6 +55,7 @@ def admin_panel(
             "characters": chars,
             "main": main,
             "char_count": len(chars),
+            "colony_count": colony_counts.get(acc.id, 0),
         })
 
     return templates.TemplateResponse("admin.html", {
@@ -43,7 +65,7 @@ def admin_panel(
         "total_accounts": total_accounts,
         "total_chars": total_chars,
         "total_admins": total_admins,
-        "total_colonies": 0,  # Placeholder
+        "total_colonies": total_colonies,
     })
 
 
@@ -53,12 +75,17 @@ def toggle_admin(
     account=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    if target_account_id == account.id:
-        raise HTTPException(status_code=400, detail="Du kannst deine eigenen Admin-Rechte nicht entziehen")
-
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
+
+    # Besitzer kann nur von sich selbst entfernt werden
+    if target.is_owner and not account.is_owner:
+        raise HTTPException(status_code=403, detail="Admin-Rechte des Besitzers können nur vom Besitzer selbst geändert werden")
+
+    # Nicht-Besitzer können sich selbst nicht entfernen
+    if target_account_id == account.id and not account.is_owner:
+        raise HTTPException(status_code=400, detail="Du kannst deine eigenen Admin-Rechte nicht entziehen")
 
     target.is_admin = not target.is_admin
     db.commit()
@@ -77,6 +104,9 @@ def delete_account(
     target = db.query(Account).filter(Account.id == target_account_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
+
+    if target.is_owner:
+        raise HTTPException(status_code=403, detail="Der Besitzer-Account kann nicht gelöscht werden")
 
     db.delete(target)
     db.commit()

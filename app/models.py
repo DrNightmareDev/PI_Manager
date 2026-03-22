@@ -13,6 +13,7 @@ class Account(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_admin = Column(Boolean, default=False, nullable=False)
+    is_owner = Column(Boolean, default=False, nullable=False)
     main_character_id = Column(Integer, ForeignKey("characters.id", use_alter=True, name="fk_account_main_char"), nullable=True)
 
     characters = relationship(

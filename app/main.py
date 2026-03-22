@@ -49,7 +49,7 @@ def refresh_market_prices():
 
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(refresh_market_prices, 'interval', hours=1)
+scheduler.add_job(refresh_market_prices, 'interval', minutes=15)
 
 
 @asynccontextmanager
@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     sde.init()
     cleanup_old_sso_states()
     scheduler.start()
-    logger.info("APScheduler gestartet (stündlicher Marktpreis-Refresh).")
+    logger.info("APScheduler gestartet (15-min Marktpreis-Refresh).")
     yield
     # Shutdown
     scheduler.shutdown(wait=False)

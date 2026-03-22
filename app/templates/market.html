@@ -6,64 +6,287 @@
     <h2 class="eve-page-title mb-0">
         <i class="bi bi-graph-up-arrow me-2 eve-accent"></i>Jita 4-4 Marktpreise
     </h2>
-    <div class="text-muted small">
-        <i class="bi bi-info-circle me-1"></i>Cache: 15 Minuten · Station: Jita IV - Moon 4 - Caldari Navy Assembly Plant
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        {% if last_updated %}
+        <span class="text-muted small">
+            <i class="bi bi-clock me-1"></i>Zuletzt aktualisiert: <span id="lastUpdated">{{ last_updated }}</span>
+        </span>
+        {% endif %}
+        {% if account and account.is_admin %}
+        <button id="refreshBtn" class="btn btn-sm eve-btn-outline" onclick="forceRefresh()">
+            <i class="bi bi-arrow-clockwise me-1"></i>
+            <span id="refreshBtnText">Aktualisieren</span>
+        </button>
+        {% endif %}
     </div>
 </div>
 
+<!-- Tier-Filter + Suche -->
+<div class="eve-card card border-0 mb-3">
+    <div class="card-body p-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text eve-input-prefix"><i class="bi bi-search"></i></span>
+                    <input type="text" id="marketSearch" class="form-control eve-input"
+                           placeholder="Produkt suchen...">
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div id="tierFilter" class="d-flex gap-1 flex-wrap">
+                    <button class="btn btn-sm eve-tier-filter-btn active" data-tier="">Alle</button>
+                    <button class="btn btn-sm eve-tier-filter-btn" data-tier="P4" style="color:#e63946;">P4</button>
+                    <button class="btn btn-sm eve-tier-filter-btn" data-tier="P3" style="color:#f4a300;">P3</button>
+                    <button class="btn btn-sm eve-tier-filter-btn" data-tier="P2" style="color:#00b4d8;">P2</button>
+                    <button class="btn btn-sm eve-tier-filter-btn" data-tier="P1" style="color:#586e75;">P1</button>
+                </div>
+            </div>
+            <div class="col-md-2 text-end">
+                <span class="text-muted small"><span id="rowCount">{{ rows | length }}</span> Produkte</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Markttabelle -->
 <div class="eve-card card border-0">
     <div class="card-body p-0">
-        {% if market_data %}
         <div class="table-responsive">
             <table class="table eve-table mb-0" id="marketTable">
                 <thead>
                     <tr>
-                        <th>PI Produkt</th>
-                        <th class="text-end">Bester Kauf</th>
-                        <th class="text-end">Bester Verkauf</th>
-                        <th class="text-end">Ø Volumen/Tag</th>
-                        <th class="text-end">Spread</th>
+                        <th class="eve-sortable" data-sort="name" style="cursor:pointer;">
+                            Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
+                        <th class="eve-sortable" data-sort="tier" style="cursor:pointer;">
+                            Tier <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
+                        <th class="eve-sortable text-end" data-sort="sell" style="cursor:pointer;">
+                            Jita Sell <i class="bi bi-chevron-down eve-sort-icon"></i>
+                        </th>
+                        <th class="eve-sortable text-end" data-sort="buy" style="cursor:pointer;">
+                            Jita Buy <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
+                        <th class="eve-sortable text-end" data-sort="spread" style="cursor:pointer;">
+                            Spread <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
+                        <th class="text-end">Trend 24h</th>
+                        <th class="text-end">Trend 7T</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for item in market_data %}
-                    <tr>
-                        <td class="fw-medium">{{ item.name }}</td>
-                        <td class="text-end text-muted small">
-                            {% if item.best_buy %}
-                            {{ "{:,.2f}".format(item.best_buy) }} ISK
-                            {% else %}—{% endif %}
+                <tbody id="marketBody">
+                    {% for row in rows %}
+                    <tr class="market-row"
+                        data-name="{{ row.name | lower }}"
+                        data-tier="{{ row.tier }}"
+                        data-sell="{{ row.sell }}"
+                        data-buy="{{ row.buy }}"
+                        data-spread="{{ row.spread if row.spread is not none else '' }}">
+                        <td class="fw-medium">{{ row.name }}</td>
+                        <td>
+                            {% set tc = tier_colors.get(row.tier, '#586e75') %}
+                            <span class="badge" style="background:{{ tc }}1a;color:{{ tc }};border:1px solid {{ tc }}3a;">{{ row.tier }}</span>
                         </td>
-                        <td class="text-end eve-accent fw-medium small">
-                            {% if item.best_sell %}
-                            {{ "{:,.2f}".format(item.best_sell) }} ISK
-                            {% else %}—{% endif %}
+                        <td class="text-end small" style="color:var(--eve-gold);">
+                            {% if row.sell > 0 %}{{ "{:,.2f}".format(row.sell) }}{% else %}—{% endif %}
                         </td>
-                        <td class="text-end text-muted small">
-                            {% if item.avg_volume %}
-                            {{ "{:,.0f}".format(item.avg_volume) }}
-                            {% else %}—{% endif %}
+                        <td class="text-end small" style="color:#2dc653;">
+                            {% if row.buy > 0 %}{{ "{:,.2f}".format(row.buy) }}{% else %}—{% endif %}
                         </td>
                         <td class="text-end small">
-                            {% if item.best_buy and item.best_sell and item.best_buy > 0 %}
-                            {% set spread = ((item.best_sell - item.best_buy) / item.best_buy * 100) %}
-                            <span class="{{ 'eve-green' if spread < 5 else ('eve-gold' if spread < 15 else 'eve-red') }}">
-                                {{ "{:.1f}".format(spread) }}%
+                            {% if row.spread is not none %}
+                            <span class="{{ 'eve-green' if row.spread < 5 else ('eve-gold' if row.spread < 20 else 'eve-red') }}">
+                                {{ "{:.1f}".format(row.spread) }}%
                             </span>
                             {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end small trend-1d" data-name="{{ row.name }}">
+                            <span class="text-muted">…</span>
+                        </td>
+                        <td class="text-end small trend-7d" data-name="{{ row.name }}">
+                            <span class="text-muted">…</span>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="bi bi-graph-down fs-1 text-muted d-block mb-3"></i>
-            <p class="text-muted">Keine Marktdaten verfügbar.</p>
-            <small class="text-muted">ESI Verbindung prüfen oder später erneut versuchen.</small>
+        <div id="marketEmpty" class="text-center py-4 text-muted d-none">
+            <i class="bi bi-search me-2"></i>Keine Produkte für diesen Filter.
         </div>
-        {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const TIER_ORDER = {P4: 4, P3: 3, P2: 2, P1: 1};
+let sortState = {col: 'sell', asc: false};
+let activeTier = '';
+let allRows = [...document.querySelectorAll('.market-row')];
+
+// ── Tier-Filter ───────────────────────────────────────────────────────────
+document.getElementById('tierFilter').addEventListener('click', e => {
+    const btn = e.target.closest('[data-tier]');
+    if (!btn) return;
+    activeTier = btn.dataset.tier;
+    document.querySelectorAll('[data-tier]').forEach(b => b.classList.toggle('active', b === btn));
+    applyFilters();
+});
+
+// ── Suche ─────────────────────────────────────────────────────────────────
+document.getElementById('marketSearch').addEventListener('input', function() {
+    applyFilters();
+});
+
+function applyFilters() {
+    const q = document.getElementById('marketSearch').value.trim().toLowerCase();
+    let visible = 0;
+    allRows.forEach(row => {
+        const nameMatch = !q || row.dataset.name.includes(q);
+        const tierMatch = !activeTier || row.dataset.tier === activeTier;
+        const show = nameMatch && tierMatch;
+        row.classList.toggle('d-none', !show);
+        if (show) visible++;
+    });
+    document.getElementById('rowCount').textContent = visible;
+    document.getElementById('marketEmpty').classList.toggle('d-none', visible > 0);
+}
+
+// ── Sortierung ────────────────────────────────────────────────────────────
+document.querySelector('#marketTable thead').addEventListener('click', e => {
+    const th = e.target.closest('[data-sort]');
+    if (!th) return;
+    const col = th.dataset.sort;
+    sortState.asc = sortState.col === col ? !sortState.asc : (col === 'name' || col === 'tier');
+    sortState.col = col;
+    updateSortIcons(col);
+    sortTable();
+});
+
+function updateSortIcons(activeCol) {
+    document.querySelectorAll('[data-sort]').forEach(th => {
+        const icon = th.querySelector('.eve-sort-icon');
+        if (!icon) return;
+        if (th.dataset.sort === activeCol) {
+            icon.className = sortState.asc ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
+        } else {
+            icon.className = 'bi bi-chevron-expand eve-sort-icon';
+        }
+    });
+}
+
+function sortTable() {
+    const tbody = document.getElementById('marketBody');
+    const rows = [...document.querySelectorAll('.market-row')];
+    rows.sort((a, b) => {
+        let va, vb;
+        switch (sortState.col) {
+            case 'name':   va = a.dataset.name;  vb = b.dataset.name;  return sortState.asc ? va.localeCompare(vb) : vb.localeCompare(va);
+            case 'tier':   va = TIER_ORDER[a.dataset.tier] || 0; vb = TIER_ORDER[b.dataset.tier] || 0; break;
+            case 'sell':   va = parseFloat(a.dataset.sell) || 0;   vb = parseFloat(b.dataset.sell) || 0;   break;
+            case 'buy':    va = parseFloat(a.dataset.buy) || 0;    vb = parseFloat(b.dataset.buy) || 0;    break;
+            case 'spread': va = parseFloat(a.dataset.spread) || -1; vb = parseFloat(b.dataset.spread) || -1; break;
+            default: return 0;
+        }
+        return sortState.asc ? va - vb : vb - va;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+}
+
+// ── Trends async laden ────────────────────────────────────────────────────
+async function loadTrends() {
+    try {
+        const res = await fetch('/market/trends');
+        if (!res.ok) return;
+        const data = await res.json();
+        document.querySelectorAll('.trend-1d').forEach(cell => {
+            const name = cell.dataset.name;
+            const t = data[name];
+            cell.innerHTML = trendHtml(t?.trend_1d);
+        });
+        document.querySelectorAll('.trend-7d').forEach(cell => {
+            const name = cell.dataset.name;
+            const t = data[name];
+            cell.innerHTML = trendHtml(t?.trend_7d);
+        });
+    } catch(e) {
+        document.querySelectorAll('.trend-1d, .trend-7d').forEach(cell => {
+            cell.innerHTML = '<span class="text-muted small">—</span>';
+        });
+    }
+}
+
+function trendHtml(val) {
+    if (val == null) return '<span class="text-muted small">—</span>';
+    const abs = Math.abs(val).toFixed(1);
+    if (val > 0.5)  return `<span style="color:#2dc653;">▲ ${abs}%</span>`;
+    if (val < -0.5) return `<span style="color:#e63946;">▼ ${abs}%</span>`;
+    return `<span style="color:#586e75;">→ ${abs}%</span>`;
+}
+
+// ── Admin Force-Refresh ───────────────────────────────────────────────────
+{% if account and account.is_admin %}
+let cooldownInterval = null;
+
+{% if not can_refresh and cooldown_remaining > 0 %}
+startCooldownUI({{ cooldown_remaining }});
+{% endif %}
+
+async function forceRefresh() {
+    const btn = document.getElementById('refreshBtn');
+    btn.disabled = true;
+    document.getElementById('refreshBtnText').textContent = 'Lädt…';
+    try {
+        const res = await fetch('/market/refresh', {method: 'POST'});
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleString('de-DE', {
+                day:'2-digit', month:'2-digit', year:'numeric',
+                hour:'2-digit', minute:'2-digit', timeZone:'UTC'
+            }) + ' UTC';
+            startCooldownUI(data.cooldown_remaining || 300);
+            loadTrends();
+        } else if (data.cooldown_remaining) {
+            startCooldownUI(data.cooldown_remaining);
+        } else {
+            btn.disabled = false;
+            document.getElementById('refreshBtnText').textContent = 'Aktualisieren';
+            alert('Fehler beim Aktualisieren: ' + (data.error || 'Unbekannter Fehler'));
+        }
+    } catch(e) {
+        btn.disabled = false;
+        document.getElementById('refreshBtnText').textContent = 'Aktualisieren';
+    }
+}
+
+function startCooldownUI(seconds) {
+    if (cooldownInterval) clearInterval(cooldownInterval);
+    const btn = document.getElementById('refreshBtn');
+    btn.disabled = true;
+    let remaining = seconds;
+    const updateText = () => {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        document.getElementById('refreshBtnText').textContent =
+            m > 0 ? `Sperre ${m}:${String(s).padStart(2,'0')}` : `Sperre ${s}s`;
+    };
+    updateText();
+    cooldownInterval = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(cooldownInterval);
+            cooldownInterval = null;
+            btn.disabled = false;
+            document.getElementById('refreshBtnText').textContent = 'Aktualisieren';
+        } else {
+            updateText();
+        }
+    }, 1000);
+}
+{% endif %}
+
+// Trends direkt beim Laden asynchron nachladen
+loadTrends();
+</script>
 {% endblock %}

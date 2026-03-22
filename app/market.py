@@ -14,6 +14,10 @@ from app.models import MarketCache
 
 JITA_STATION = 60003760
 CACHE_TTL_MINUTES = 15
+MARKET_FORCE_REFRESH_COOLDOWN = 300.0  # 5 Minuten Admin-Cooldown (server-weit)
+
+# Server-weiter Zustand für Admin-Force-Refresh
+_market_last_forced_refresh: float = 0.0
 
 JANICE_API_URL = "https://janice.e-351.com/api/rest/v2/pricer"
 FUZZWORK_API_URL = "https://market.fuzzwork.co.uk/aggregates/"
@@ -100,6 +104,32 @@ PI_TYPE_IDS: dict[str, int] = {
 
 # Umgekehrtes Mapping: id -> name
 PI_TYPE_NAMES: dict[int, str] = {v: k for k, v in PI_TYPE_IDS.items()}
+
+# Tier-Zuordnung pro Produkt
+PI_TIERS: dict[str, str] = {
+    "Bacteria": "P1", "Biofuels": "P1", "Biomass": "P1", "Chiral Structures": "P1",
+    "Electrolytes": "P1", "Industrial Fibers": "P1", "Oxidizing Compound": "P1",
+    "Oxygen": "P1", "Plasmoids": "P1", "Precious Metals": "P1", "Proteins": "P1",
+    "Reactive Metals": "P1", "Silicon": "P1", "Toxic Metals": "P1", "Water": "P1",
+    "Biocells": "P2", "Construction Blocks": "P2", "Consumer Electronics": "P2",
+    "Coolant": "P2", "Enriched Uranium": "P2", "Fertilizer": "P2",
+    "Genetically Enhanced Livestock": "P2", "Livestock": "P2", "Mechanical Parts": "P2",
+    "Microfiber Shielding": "P2", "Miniature Electronics": "P2", "Nanites": "P2",
+    "Oxides": "P2", "Polyaramids": "P2", "Polytextiles": "P2", "Rocket Fuel": "P2",
+    "Silicate Glass": "P2", "Superconductors": "P2", "Supertensile Plastics": "P2",
+    "Synthetic Oil": "P2", "Test Cultures": "P2", "Transmitter": "P2",
+    "Viral Agent": "P2", "Water-Cooled CPU": "P2",
+    "Biotech Research Reports": "P3", "Camera Drones": "P3", "Condensates": "P3",
+    "Cryoprotectant Solution": "P3", "Data Chips": "P3", "Gel-Matrix Biopaste": "P3",
+    "Guidance Systems": "P3", "Hazmat Detection Systems": "P3", "Hermetic Membranes": "P3",
+    "High-Tech Transmitters": "P3", "Industrial Explosives": "P3", "Neocoms": "P3",
+    "Nuclear Reactors": "P3", "Planetary Vehicles": "P3", "Robotics": "P3",
+    "Smartfab Units": "P3", "Supercomputers": "P3", "Synthetic Synapses": "P3",
+    "Transcranial Microcontrollers": "P3", "Ukomi Super Conductors": "P3", "Vaccines": "P3",
+    "Broadcast Node": "P4", "Integrity Response Drones": "P4", "Nano-Factory": "P4",
+    "Organic Mortar Applicators": "P4", "Recursive Computing Module": "P4",
+    "Self-Harmonizing Power Core": "P4", "Sterile Conduits": "P4", "Wetware Mainframe": "P4",
+}
 
 # Name → type_id für Preisabfragen (alle PI-Produkte)
 _PI_NAME_TO_ID: dict[str, int] = PI_TYPE_IDS
@@ -500,6 +530,31 @@ def get_market_trends(type_ids: list[int]) -> dict[int, dict]:
             "trend_30d": _calc_trend(history, 30),
         }
     return result
+
+
+def can_force_market_refresh() -> tuple[bool, int]:
+    """Prüft ob ein Admin-Force-Refresh erlaubt ist (server-weite 5-Min-Sperre)."""
+    import time as t
+    elapsed = t.time() - _market_last_forced_refresh
+    if elapsed >= MARKET_FORCE_REFRESH_COOLDOWN:
+        return True, 0
+    return False, int(MARKET_FORCE_REFRESH_COOLDOWN - elapsed)
+
+
+def record_force_refresh() -> None:
+    global _market_last_forced_refresh
+    import time as t
+    _market_last_forced_refresh = t.time()
+
+
+def get_market_last_updated(db: Session) -> Optional[datetime]:
+    """Gibt den Zeitpunkt des letzten Marktdaten-Updates zurück."""
+    from sqlalchemy import desc
+    cache = db.query(MarketCache).order_by(desc(MarketCache.updated_at)).first()
+    if cache and cache.updated_at:
+        ts = cache.updated_at
+        return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+    return None
 
 
 def refresh_all_pi_prices(db: Session) -> None:
