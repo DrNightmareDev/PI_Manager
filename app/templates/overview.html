@@ -221,6 +221,7 @@
                 </tbody>
             </table>
         </div>
+        <div id="overviewTablePagination"></div>
         <div id="noResultsMsg" style="display:none;" class="text-center py-4 text-muted small">
             <i class="bi bi-search me-1"></i>Keine Kolonien gefunden.
         </div>
@@ -255,6 +256,16 @@ function toggleFilter(btn, groupId, applyFn) {
     window[applyFn]();
 }
 
+const overviewPager = EvePaginate('overviewTable', {
+    pageSize:   25,
+    controlsId: 'overviewTablePagination',
+    onCount: n => {
+        document.getElementById('visibleCount').textContent = n;
+        document.getElementById('tableBadge').textContent   = n;
+        document.getElementById('noResultsMsg').style.display = n === 0 ? '' : 'none';
+    }
+});
+
 function applyOverviewFilters() {
     const char   = document.getElementById('filterChar').value.toLowerCase().trim();
     const corp   = document.getElementById('filterCorp').value.toLowerCase().trim();
@@ -263,26 +274,19 @@ function applyOverviewFilters() {
     const types  = getActive('typeToggles');
     const tiers  = getActive('tierToggles');
 
-    const rows = document.querySelectorAll('#overviewTable tbody tr');
-    let visible = 0, iskSum = 0;
+    const rows = [...document.querySelectorAll('#overviewTable tbody tr')];
+    const matched = rows.filter(row =>
+        (!char         || row.dataset.char.includes(char)) &&
+        (!corp         || row.dataset.corp.includes(corp)) &&
+        (!alli         || row.dataset.alli.includes(alli)) &&
+        (!system       || row.dataset.system.includes(system)) &&
+        (!types.length || types.includes(row.dataset.type)) &&
+        (!tiers.length || tiers.includes(row.dataset.tier))
+    );
 
-    rows.forEach(row => {
-        const match =
-            (!char            || row.dataset.char.includes(char)) &&
-            (!corp            || row.dataset.corp.includes(corp)) &&
-            (!alli            || row.dataset.alli.includes(alli)) &&
-            (!system          || row.dataset.system.includes(system)) &&
-            (!types.length    || types.includes(row.dataset.type)) &&
-            (!tiers.length    || tiers.includes(row.dataset.tier));
-
-        row.style.display = match ? '' : 'none';
-        if (match) { visible++; iskSum += parseFloat(row.dataset.isk) || 0; }
-    });
-
-    document.getElementById('visibleCount').textContent  = visible;
-    document.getElementById('visibleIsk').textContent    = formatIsk(iskSum);
-    document.getElementById('tableBadge').textContent    = visible;
-    document.getElementById('noResultsMsg').style.display = visible === 0 ? '' : 'none';
+    const iskSum = matched.reduce((s, r) => s + (parseFloat(r.dataset.isk) || 0), 0);
+    document.getElementById('visibleIsk').textContent = formatIsk(iskSum);
+    overviewPager.applyFilter(matched);
 }
 </script>
 <style>

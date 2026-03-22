@@ -214,6 +214,7 @@
                 </tbody>
             </table>
         </div>
+        <div id="corpTablePagination"></div>
         <div id="noResultsMsg" style="display:none;" class="text-center py-4 text-muted small">
             <i class="bi bi-search me-1"></i>Keine Kolonien gefunden.
         </div>
@@ -240,27 +241,29 @@ function toggleFilter(btn, groupId, applyFn) {
     window[applyFn]();
 }
 
+const corpPager = EvePaginate('corpTable', {
+    pageSize:   25,
+    controlsId: 'corpTablePagination',
+    onCount: n => {
+        document.getElementById('tableBadge').textContent = n;
+        document.getElementById('noResultsMsg').style.display = n === 0 ? '' : 'none';
+    }
+});
+
 function applyCorpFilters() {
     const char   = document.getElementById('filterChar').value.toLowerCase().trim();
     const system = document.getElementById('filterSystem').value.toLowerCase().trim();
     const types  = getActive('typeToggles');
     const tiers  = getActive('tierToggles');
 
-    const rows = document.querySelectorAll('#corpTable tbody tr');
-    let visible = 0;
-
-    rows.forEach(row => {
-        const match =
-            (!char         || row.dataset.char.includes(char)) &&
-            (!system       || row.dataset.system.includes(system)) &&
-            (!types.length || types.includes(row.dataset.type)) &&
-            (!tiers.length || tiers.includes(row.dataset.tier));
-        row.style.display = match ? '' : 'none';
-        if (match) visible++;
-    });
-
-    document.getElementById('tableBadge').textContent = visible;
-    document.getElementById('noResultsMsg').style.display = visible === 0 ? '' : 'none';
+    const rows   = [...document.querySelectorAll('#corpTable tbody tr')];
+    const matched = rows.filter(row =>
+        (!char         || row.dataset.char.includes(char)) &&
+        (!system       || row.dataset.system.includes(system)) &&
+        (!types.length || types.includes(row.dataset.type)) &&
+        (!tiers.length || tiers.includes(row.dataset.tier))
+    );
+    corpPager.applyFilter(matched);
 }
 </script>
 <style>

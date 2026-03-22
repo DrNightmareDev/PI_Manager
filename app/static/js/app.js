@@ -113,35 +113,36 @@ document.querySelectorAll('img[onerror]').forEach(img => {
     });
 });
 
-// ============ Colony Table: Sort + Filter ============
+// ============ Colony Table: Sort + Filter + Paginate ============
 document.addEventListener('DOMContentLoaded', function () {
     const table = document.getElementById('coloniesTable');
     if (!table) return;
 
     const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const rows  = Array.from(tbody.querySelectorAll('tr'));
     const badge = document.getElementById('colonyCountBadge');
     let sortCol = null, sortAsc = true;
+
+    // --- Paginator ---
+    const pager = EvePaginate('coloniesTable', {
+        pageSize:   25,
+        controlsId: 'coloniesTablePagination',
+        onCount:    n => { if (badge) badge.textContent = n; }
+    });
 
     // --- Sort ---
     table.querySelectorAll('th.eve-sortable').forEach(th => {
         th.addEventListener('click', () => {
             const col = th.dataset.col;
-            if (sortCol === col) {
-                sortAsc = !sortAsc;
-            } else {
-                sortCol = col;
-                sortAsc = true;
-            }
-            // Update icons
+            sortAsc = (sortCol === col) ? !sortAsc : true;
+            sortCol = col;
             table.querySelectorAll('th.eve-sortable').forEach(h => {
                 h.classList.remove('sort-asc', 'sort-desc');
                 h.querySelector('.eve-sort-icon').className = 'bi bi-chevron-expand eve-sort-icon';
             });
             th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
-            const icon = th.querySelector('.eve-sort-icon');
-            icon.className = sortAsc ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
-
+            th.querySelector('.eve-sort-icon').className = sortAsc
+                ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
             sortRows(col, sortAsc);
         });
     });
@@ -153,17 +154,12 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         const attr = attrMap[col];
         if (!attr) return;
-
         const sorted = [...rows].sort((a, b) => {
-            let av = a.dataset[attr] || '';
-            let bv = b.dataset[attr] || '';
-            // Numeric columns
+            let av = a.dataset[attr] || '', bv = b.dataset[attr] || '';
             if (col === 'expiry' || col === 'isk' || col === 'level') {
-                av = parseFloat(av) || 0;
-                bv = parseFloat(bv) || 0;
+                av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
                 return asc ? av - bv : bv - av;
             }
-            // Tier: P0 < P1 < P2 < P3 < P4
             if (col === 'tier') {
                 av = parseInt(av.replace('P', '')) || 0;
                 bv = parseInt(bv.replace('P', '')) || 0;
@@ -176,23 +172,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Filter ---
-    const filterSelect  = document.getElementById('charFilter');
-    const expiredCheck  = document.getElementById('expiredFilter');
+    const filterSelect = document.getElementById('charFilter');
+    const expiredCheck = document.getElementById('expiredFilter');
 
-    // Globale Funktion damit onchange-Attribute im Template funktionieren
     window.applyFilters = applyFilter;
 
     function applyFilter() {
-        const charVal    = filterSelect ? filterSelect.value : '';
+        const charVal     = filterSelect ? filterSelect.value : '';
         const onlyExpired = expiredCheck ? expiredCheck.checked : false;
-        let visible = 0;
-        tbody.querySelectorAll('tr').forEach(r => {
-            const charMatch    = !charVal || r.dataset.char === charVal;
-            const expiredMatch = !onlyExpired || r.dataset.expired === '1';
-            const show = charMatch && expiredMatch;
-            r.style.display = show ? '' : 'none';
-            if (show) visible++;
+        const matched = rows.filter(r => {
+            const charOk    = !charVal     || r.dataset.char    === charVal;
+            const expiredOk = !onlyExpired || r.dataset.expired === '1';
+            return charOk && expiredOk;
         });
-        if (badge) badge.textContent = visible;
+        pager.applyFilter(matched);
     }
 });
