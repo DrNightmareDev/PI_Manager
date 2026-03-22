@@ -262,7 +262,7 @@ function renderFavoritesBlock() {
     const favList = [...favorites]
         .map(name => {
             const p = ALL_PRODUCTS.find(x => x.name === name);
-            return p || {name, tier: 'P2'};
+            return p || {name, tier: getTier(name) || 'P1'};
         })
         .sort((a, b) => (TIER_SORT[b.tier] - TIER_SORT[a.tier]) || a.name.localeCompare(b.name));
 
@@ -363,7 +363,10 @@ function clearSelection() {
 // ── Graph ─────────────────────────────────────────────────────────────────────
 function renderGraph(product) {
     const NODE_W = 152, NODE_H = 32, GAP_Y = 12;
-    const COL_SPACING = 210, TIER_H = 24, PAD_V = 16, PAD_H = 20, P0_ZONE = 20;
+    const COL_SPACING = 210, TIER_H = 24, PAD_V = 16, PAD_H = 20;
+    // Planet column is narrower
+    const PLANET_W = 110;
+    const GRAPH_TIERS = ['PLANET', 'P1', 'P2', 'P3', 'P4'];
 
     // Build nodes and edges
     const nodes  = new Map();   // name → {name, tier, isSelected, p0s:[]}
@@ -394,6 +397,19 @@ function renderGraph(product) {
         }
     })(product.name, product.tier, 0);
 
+    // ── Planetenspalte: für jeden P1-Knoten Planetentypen hinzufügen ─────────
+    for (const [, node] of nodes) {
+        if (node.tier !== 'P1') continue;
+        for (const p0 of node.p0s) {
+            for (const [pt, res] of Object.entries(PLANET_RESOURCES)) {
+                if (res.includes(p0)) {
+                    if (!nodes.has(pt)) nodes.set(pt, {name: pt, tier: 'PLANET', isSelected: false, p0s: []});
+                    addEdge(pt, node.name);
+                }
+            }
+        }
+    }
+
     // ── Outputs (rechts vom gewählten Produkt) ────────────────────────────────
     (function addOutputs(name, tier, depth) {
         if (depth > 3) return;
@@ -406,23 +422,39 @@ function renderGraph(product) {
 
     // Group and sort nodes by tier
     const byTier = {};
-    TIER_ORDER.forEach(t => byTier[t] = []);
+    GRAPH_TIERS.forEach(t => byTier[t] = []);
     for (const n of nodes.values()) if (byTier[n.tier]) byTier[n.tier].push(n);
-    for (const t of TIER_ORDER)
+    // Planets sorted by name; PI nodes: selected first then alpha
+    byTier['PLANET'].sort((a, b) => a.name.localeCompare(b.name));
+    for (const t of ['P1','P2','P3','P4'])
         byTier[t].sort((a, b) => (b.isSelected - a.isSelected) || a.name.localeCompare(b.name));
 
-    const activeTiers = TIER_ORDER.filter(t => byTier[t].length > 0);
+    const activeTiers = GRAPH_TIERS.filter(t => byTier[t].length > 0);
     if (!activeTiers.length) return;
 
-    // Dimensions
+    // ── Dimensions ───────────────────────────────────────────────────────────
+    // Planet column width differs from PI columns
+    const colW = t => t === 'PLANET' ? PLANET_W : NODE_W;
     const maxNodes = Math.max(...activeTiers.map(t => byTier[t].length));
     const colH  = maxNodes * (NODE_H + GAP_Y) - GAP_Y;
-    const svgH  = TIER_H + PAD_V + colH + PAD_V + P0_ZONE;
-    const svgW  = PAD_H * 2 + NODE_W + (activeTiers.length - 1) * COL_SPACING;
+    const svgH  = TIER_H + PAD_V + colH + PAD_V;
 
-    // Column X positions
+    // X positions: accumulate column widths + spacings
     const tierX = {};
-    activeTiers.forEach((t, i) => { tierX[t] = PAD_H + NODE_W / 2 + i * COL_SPACING; });
+    let curX = PAD_H;
+    for (const t of activeTiers) {
+        tierX[t] = curX + colW(t) / 2;
+        curX += colW(t) + COL_SPACING - NODE_W; // spacing between columns
+    }
+    // Recalculate with proper fixed COL_SPACING between column CENTERS
+    // Simpler: equal COL_SPACING between centers, but planet col shifted
+    curX = PAD_H + colW(activeTiers[0]) / 2;
+    activeTiers.forEach((t, i) => {
+        if (i === 0) { tierX[t] = curX; return; }
+        const prevT = activeTiers[i - 1];
+        tierX[t] = tierX[prevT] + colW(prevT) / 2 + COL_SPACING - NODE_W / 2 + colW(t) / 2;
+    });
+    const svgW = tierX[activeTiers[activeTiers.length - 1]] + colW(activeTiers[activeTiers.length - 1]) / 2 + PAD_H;
 
     // Node Y positions (vertically centered per column)
     for (const tier of activeTiers) {
@@ -435,7 +467,8 @@ function renderGraph(product) {
     const edges = [...edgeSet].map(e => { const [f, t] = e.split('||'); return {from: f, to: t}; });
 
     // ── SVG content ──────────────────────────────────────────────────────────
-    let s = `<defs>
+    let s = `<style>#arr path{fill:#7a9ab5;}</style>
+<defs>
   <filter id="glow-sel" x="-50%" y="-50%" width="200%" height="200%">
     <feGaussianBlur stdDeviation="6" result="b"/>
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -445,33 +478,37 @@ function renderGraph(product) {
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
   <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-    <path d="M0,1 L6,3.5 L0,6 Z" fill-opacity="0.4"/>
+    <path d="M0,1 L6,3.5 L0,6 Z" fill-opacity="0.45"/>
   </marker>
 </defs>`;
 
-    // Subtle column strip + tier label
+    // Column backgrounds + labels
     for (const tier of activeTiers) {
-        const tc = TIER_COLORS[tier];
         const cx = tierX[tier];
-        s += `<rect x="${r(cx - NODE_W/2 - 8)}" y="0" width="${NODE_W + 16}" height="${svgH}"
-                    fill="${tc}" fill-opacity="0.03" rx="6"/>
-              <line x1="${r(cx - NODE_W/2 - 8)}" y1="${TIER_H}" x2="${r(cx + NODE_W/2 + 8)}" y2="${TIER_H}"
-                    stroke="${tc}" stroke-opacity="0.12" stroke-width="1"/>
+        const cw = colW(tier);
+        const isPlanet = tier === 'PLANET';
+        const tc = isPlanet ? '#4a7a5a' : (TIER_COLORS[tier] || '#586e75');
+        const label = isPlanet ? 'PLANETS' : tier;
+        s += `<rect x="${r(cx - cw/2 - 8)}" y="0" width="${cw + 16}" height="${svgH}"
+                    fill="${tc}" fill-opacity="${isPlanet ? 0.05 : 0.03}" rx="6"/>
+              <line x1="${r(cx - cw/2 - 8)}" y1="${TIER_H}" x2="${r(cx + cw/2 + 8)}" y2="${TIER_H}"
+                    stroke="${tc}" stroke-opacity="0.15" stroke-width="1"/>
               <text x="${r(cx)}" y="${TIER_H - 7}" text-anchor="middle"
-                    fill="${tc}" fill-opacity="0.5" font-size="9.5" font-weight="700"
-                    font-family="monospace" letter-spacing="2.5">${tier}</text>`;
+                    fill="${tc}" fill-opacity="0.55" font-size="9" font-weight="700"
+                    font-family="monospace" letter-spacing="2">${label}</text>`;
     }
 
-    // Separator line between input and output side (right edge of selected tier column)
-    const selTier = product.tier;
-    if (tierX[selTier] !== undefined) {
-        const sepX = r(tierX[selTier] + NODE_W / 2 + 8);
-        // Only draw if there are tiers on both sides
-        const hasLeft  = activeTiers.some(t => TIER_ORDER.indexOf(t) < TIER_ORDER.indexOf(selTier));
-        const hasRight = activeTiers.some(t => TIER_ORDER.indexOf(t) > TIER_ORDER.indexOf(selTier));
+    // Separator line between input and output side
+    const selTierIdx = GRAPH_TIERS.indexOf(product.tier);
+    if (tierX[product.tier] !== undefined) {
+        const hasLeft  = activeTiers.some(t => GRAPH_TIERS.indexOf(t) < selTierIdx);
+        const hasRight = activeTiers.some(t => GRAPH_TIERS.indexOf(t) > selTierIdx);
         if (hasLeft && hasRight) {
-            s += `<line x1="${r(tierX[selTier] + NODE_W/2 + (COL_SPACING - NODE_W)/2)}" y1="${TIER_H + 4}"
-                        x2="${r(tierX[selTier] + NODE_W/2 + (COL_SPACING - NODE_W)/2)}" y2="${svgH - 4}"
+            const nextTier = activeTiers[activeTiers.indexOf(product.tier) + 1];
+            const sepX = nextTier
+                ? r((tierX[product.tier] + colW(product.tier)/2 + tierX[nextTier] - colW(nextTier)/2) / 2)
+                : r(tierX[product.tier] + colW(product.tier)/2 + 20);
+            s += `<line x1="${sepX}" y1="${TIER_H + 4}" x2="${sepX}" y2="${svgH - 4}"
                         stroke="#2a4a5e" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.5"/>`;
         }
     }
@@ -480,95 +517,77 @@ function renderGraph(product) {
     for (const {from, to} of edges) {
         const fn = nodes.get(from), tn = nodes.get(to);
         if (!fn || !tn) continue;
-
-        const sx = r(fn.x + NODE_W / 2), sy = r(fn.y + NODE_H / 2);
-        const tx = r(tn.x - NODE_W / 2), ty = r(tn.y + NODE_H / 2);
+        const fnW = colW(fn.tier), tnW = colW(tn.tier);
+        const sx = r(fn.x + fnW / 2), sy = r(fn.y + NODE_H / 2);
+        const tx = r(tn.x - tnW / 2), ty = r(tn.y + NODE_H / 2);
         const mx = r((sx + tx) / 2);
-        const ec = TIER_COLORS[tn.tier] || '#586e75';
+        const isPlanetEdge = fn.tier === 'PLANET';
+        const ec = isPlanetEdge ? (PLANET_COLORS[fn.name] || '#4a7a5a') : (TIER_COLORS[tn.tier] || '#586e75');
         const connected = fn.isSelected || tn.isSelected;
-
         s += `<path d="M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty}"
                    fill="none" stroke="${ec}"
-                   stroke-opacity="${connected ? 0.6 : 0.2}"
+                   stroke-opacity="${connected ? 0.55 : 0.18}"
                    stroke-width="${connected ? 2 : 1.5}"
                    ${connected ? 'filter="url(#glow-edge)"' : ''}
                    marker-end="url(#arr)"/>`;
-        // Color the arrowhead marker via fill on the path's marker (use a group trick)
-        // Simple approach: just let the marker inherit color via currentColor not possible here
-        // Instead inject a colored marker per edge — too complex, skip arrowhead coloring
     }
 
     // Nodes
     for (const node of nodes.values()) {
-        const tc  = TIER_COLORS[node.tier] || '#586e75';
-        const nx  = r(node.x - NODE_W / 2);
+        const isPlanet = node.tier === 'PLANET';
+        const tc  = isPlanet ? (PLANET_COLORS[node.name] || '#4a7a5a') : (TIER_COLORS[node.tier] || '#586e75');
+        const nw  = colW(node.tier);
+        const nx  = r(node.x - nw / 2);
         const ny  = r(node.y);
         const sel = node.isSelected;
-        const label = node.name.length > 18 ? node.name.slice(0, 16) + '…' : node.name;
+
+        if (isPlanet) {
+            // Planet node: pill shape with dashed border, non-clickable
+            s += `<g style="cursor:default;">
+              <title>${node.name}</title>
+              <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="${NODE_H/2}"
+                    fill="${tc}" fill-opacity="0.1"
+                    stroke="${tc}" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="3 2"/>
+              <text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
+                    fill="${tc}" fill-opacity="0.9" font-size="10" font-weight="500"
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${node.name}</text>
+            </g>`;
+            continue;
+        }
+
+        const label  = node.name.length > 18 ? node.name.slice(0, 16) + '…' : node.name;
         const safeN  = node.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         const clickAttr = sel
             ? `style="cursor:default;"`
             : `style="cursor:pointer;" onclick="selectProduct({name:'${safeN}',tier:'${node.tier}'})"`;
 
         s += `<g ${clickAttr} ${sel ? 'filter="url(#glow-sel)"' : ''}>
-          <title>${node.name} · ${node.tier}</title>`;
-
-        // Node background
-        s += `<rect x="${nx}" y="${ny}" width="${NODE_W}" height="${NODE_H}" rx="5"
-                    fill="${tc}" fill-opacity="${sel ? 0.22 : 0.07}"
-                    stroke="${tc}" stroke-opacity="${sel ? 1 : 0.3}"
-                    stroke-width="${sel ? 2 : 1}"/>`;
-
-        // Selected: second inner rim for depth
+          <title>${node.name} · ${node.tier}</title>
+          <rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
+                fill="${tc}" fill-opacity="${sel ? 0.22 : 0.07}"
+                stroke="${tc}" stroke-opacity="${sel ? 1 : 0.3}"
+                stroke-width="${sel ? 2 : 1}"/>`;
         if (sel) {
-            s += `<rect x="${r(nx+2)}" y="${r(ny+2)}" width="${NODE_W-4}" height="${NODE_H-4}" rx="4"
+            s += `<rect x="${r(nx+2)}" y="${r(ny+2)}" width="${nw-4}" height="${NODE_H-4}" rx="4"
                         fill="${tc}" fill-opacity="0.1" stroke="${tc}" stroke-opacity="0.4" stroke-width="0.5"/>`;
         }
-
-        // Hover rect (transparent, catches pointer events, changes fill via JS)
         if (!sel) {
-            s += `<rect x="${nx}" y="${ny}" width="${NODE_W}" height="${NODE_H}" rx="5"
+            s += `<rect x="${nx}" y="${ny}" width="${nw}" height="${NODE_H}" rx="5"
                         fill="transparent" stroke="none"
                         onmouseenter="this.previousElementSibling.setAttribute('fill-opacity','0.18')"
                         onmouseleave="this.previousElementSibling.setAttribute('fill-opacity','0.07')"/>`;
         }
-
-        // Label
         s += `<text x="${r(node.x)}" y="${r(ny + NODE_H * 0.645)}" text-anchor="middle"
                     fill="${tc}" fill-opacity="${sel ? 1 : 0.85}"
                     font-size="${sel ? 11.5 : 10.5}" font-weight="${sel ? 700 : 400}"
-                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${label}</text>`;
-
-        s += `</g>`;
-
-        // P0 resource dots below P1 nodes
-        if (node.p0s && node.p0s.length > 0) {
-            const dotR = 3.5, dotGap = 9;
-            const totalDW   = node.p0s.length * (dotR * 2 + dotGap) - dotGap;
-            const dotStartX = node.x - totalDW / 2 + dotR;
-            const dotY      = ny + NODE_H + 9;
-            node.p0s.forEach((p0, i) => {
-                const pl = Object.entries(PLANET_RESOURCES).filter(([, res]) => res.includes(p0));
-                const dc = pl.length ? (PLANET_COLORS[pl[0][0]] || '#586e75') : '#586e75';
-                s += `<circle cx="${r(dotStartX + i * (dotR * 2 + dotGap))}" cy="${dotY}"
-                               r="${dotR}" fill="${dc}" fill-opacity="0.75" style="cursor:default;">
-                          <title>${p0}</title>
-                      </circle>`;
-            });
-        }
+                    font-family="system-ui,-apple-system,sans-serif" pointer-events="none">${label}</text>
+        </g>`;
     }
-
-    // Update arrowhead color globally (all black/white — inherits stroke is not possible per edge)
-    // Fix: inject the marker fill to match via a style block
-    s = `<style>
-  #arr path { fill: #7a9ab5; }
-  .graph-node rect { transition: fill-opacity .12s; }
-</style>` + s;
 
     const svgEl = document.getElementById('chainGraph');
     svgEl.setAttribute('viewBox', `0 0 ${r(svgW)} ${svgH}`);
     svgEl.setAttribute('height', svgH);
-    svgEl.style.minWidth = svgW + 'px';
+    svgEl.style.minWidth = r(svgW) + 'px';
     svgEl.innerHTML = s;
 }
 
