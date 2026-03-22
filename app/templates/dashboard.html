@@ -220,6 +220,7 @@
                                 <th class="eve-sortable" data-col="isk">
                                     ISK/Tag <i class="bi bi-chevron-expand eve-sort-icon"></i>
                                 </th>
+                                <th>Lager</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -282,9 +283,33 @@
                                 </td>
                                 <td class="small">{{ colony.isk_day | format_isk }}</td>
                                 <td>
+                                    {% if colony.storage %}
+                                        {% set max_pct = colony.storage | map(attribute='fill_pct') | max %}
+                                        {% set total_used = colony.storage | map(attribute='used_m3') | sum %}
+                                        {% if max_pct > 85 %}
+                                            {% set bar_color = '#e74c3c' %}
+                                        {% elif max_pct > 60 %}
+                                            {% set bar_color = '#f4a300' %}
+                                        {% else %}
+                                            {% set bar_color = '#2dc653' %}
+                                        {% endif %}
+                                        <div style="min-width:70px;" title="{{ colony.storage | length }} Lager – {{ max_pct }}% voll">
+                                            <div class="d-flex justify-content-between" style="font-size:.7rem;color:#7a8a9a;margin-bottom:2px;">
+                                                <span>{{ colony.storage | length }}×</span>
+                                                <span>{{ max_pct }}%</span>
+                                            </div>
+                                            <div style="height:5px;background:#1a2d3d;border-radius:3px;overflow:hidden;">
+                                                <div style="height:100%;width:{{ max_pct }}%;background:{{ bar_color }};border-radius:3px;transition:width .3s;"></div>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
                                     <button class="btn btn-sm eve-btn-outline"
                                             onclick="openColonyDetail({{ loop.index0 }})"
-                                            title="Fabriken anzeigen">
+                                            title="Details anzeigen">
                                         <i class="bi bi-eye"></i>
                                     </button>
                                 </td>
