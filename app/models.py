@@ -13,6 +13,7 @@ class Account(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_admin = Column(Boolean, default=False, nullable=False)
+    is_owner = Column(Boolean, default=False, nullable=False)
     main_character_id = Column(Integer, ForeignKey("characters.id", use_alter=True, name="fk_account_main_char"), nullable=True)
 
     characters = relationship(
@@ -88,3 +89,13 @@ class MarketCache(Base):
     best_sell = Column(String(50), nullable=True)
     avg_volume = Column(String(50), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class IskSnapshot(Base):
+    __tablename__ = "isk_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+    isk_day = Column(String(50), nullable=False)
+    colony_count = Column(Integer, nullable=False, default=0)

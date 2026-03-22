@@ -5,7 +5,7 @@ from app.dependencies import require_account
 from app.esi import get_system_info, get_planet_info
 from app.market import get_prices_by_names, get_market_trends, PI_TYPE_IDS
 from app.pi_analyzer import analyze_system
-from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES
+from app.pi_data import PLANET_TYPE_COLORS, PLANET_RESOURCES, P0_TO_P1
 from app import sde
 from app.sde import search_systems_local
 from app.templates_env import templates
@@ -34,6 +34,8 @@ def system_analyzer(
         "request": request,
         "account": account,
         "planet_type_colors": PLANET_TYPE_COLORS,
+        "planet_resources": PLANET_RESOURCES,
+        "p0_to_p1": P0_TO_P1,
     })
 
 
@@ -161,6 +163,18 @@ def analyze(system_id: int, account=Depends(require_account)):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+@router.get("/compare", response_class=HTMLResponse)
+def compare_page(
+    request: Request,
+    account=Depends(require_account),
+):
+    return templates.TemplateResponse("compare.html", {
+        "request": request,
+        "account": account,
+        "planet_type_colors": PLANET_TYPE_COLORS,
+    })
+
+
 @router.get("/{system_query}", response_class=HTMLResponse)
 def system_analyzer_direct(
     request: Request,
@@ -174,6 +188,8 @@ def system_analyzer_direct(
         "request": request,
         "account": account,
         "planet_type_colors": PLANET_TYPE_COLORS,
+        "planet_resources": PLANET_RESOURCES,
+        "p0_to_p1": P0_TO_P1,
         "preset_system": preset_system,
         "preset_error": preset_error,
     })

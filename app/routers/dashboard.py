@@ -1,14 +1,17 @@
 import logging
-from datetime import datetime, timezone
+import time as _time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone, timedelta
+
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic
 from app.market import get_sell_prices_by_names
-from app.models import Character
+from app.models import Character, IskSnapshot
 from app.pi_data import PLANET_TYPE_COLORS
 from app.templates_env import templates
 
@@ -27,213 +30,315 @@ PLANET_TYPE_NAMES = {
     "plasma": "Plasma",
 }
 
+# ── Cache ──────────────────────────────────────────────────────────────────────
+_dashboard_cache: dict[int, dict] = {}    # account_id -> {fetched_at, payload}
+_refresh_cooldown: dict[int, float] = {}  # account_id -> timestamp of last force refresh
+
+DASHBOARD_CACHE_TTL = 900.0   # 15 Minuten
+REFRESH_COOLDOWN_SEC = 60.0   # 60 Sekunden
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+_CYCLE_QTY_FALLBACK: dict[int, int] = {1800: 20, 3600: 5, 9000: 3}
+
 
 def _parse_expiry(expiry_str: str) -> datetime | None:
-    """Parst einen ISO-Datetime-String, handhabt 'Z'-Suffix."""
     if not expiry_str:
         return None
     try:
-        s = expiry_str.replace("Z", "+00:00")
-        return datetime.fromisoformat(s)
+        return datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
     except Exception:
         return None
 
 
 def _hours_until(dt: datetime | None) -> float | None:
-    """Gibt Stunden bis zu einem Zeitpunkt zurück (negativ = abgelaufen)."""
     if dt is None:
         return None
     now = datetime.now(timezone.utc)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    delta = dt - now
-    return delta.total_seconds() / 3600.0
+    return (dt - now).total_seconds() / 3600.0
 
 
-# Fallback-Output-Mengen falls SDE nicht verfügbar
-_CYCLE_QTY_FALLBACK: dict[int, int] = {1800: 20, 3600: 5, 9000: 3}
-
-
-def _compute_colony_stats(pins: list, db) -> tuple[float, str | None]:
+def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str, int], str | None]:
+    """Gibt (productions, prod_tiers, highest_tier_label) zurück.
+    prod_tiers: product_name -> tier_num (1–4).
     """
-    Berechnet ISK/Tag und höchsten PI-Tier.
-    Nutzt SDE-Daten (exakte Mengen + Type-IDs), ESI als Fallback.
-    Returns: (isk_day, highest_tier)
-    """
-    productions: dict[str, float] = {}  # product_name -> units_per_day
+    productions: dict[str, float] = {}
+    prod_tiers: dict[str, int] = {}
     highest_tier_num = 0
-
     for pin in pins:
-        # Schematic-ID: erst factory_details, dann top-level
         factory = pin.get("factory_details") or {}
         schematic_id = factory.get("schematic_id") or pin.get("schematic_id")
         if not schematic_id:
             continue
-
         try:
             schematic = get_schematic(int(schematic_id))
         except Exception:
             continue
-
         cycle_time = schematic.get("cycle_time", 0)
         product_name = schematic.get("schematic_name", "")
         if not cycle_time or not product_name:
             continue
-
-        # Tier bestimmen
-        if cycle_time <= 1800:
-            tier = 1
-        elif cycle_time <= 3600:
-            tier = 2
-        elif cycle_time <= 9000:
-            tier = 3
-        else:
-            tier = 4
-        highest_tier_num = max(highest_tier_num, tier)
-
-        # Exakte Menge aus SDE, Fallback auf bekannte Standardwerte
+        tier_num = 1 if cycle_time <= 1800 else 2 if cycle_time <= 3600 else 3 if cycle_time <= 9000 else 4
+        highest_tier_num = max(highest_tier_num, tier_num)
         qty_per_cycle = schematic.get("output_quantity") or _CYCLE_QTY_FALLBACK.get(cycle_time, 1)
-        cycles_per_day = 86400.0 / float(cycle_time)
-        productions[product_name] = productions.get(product_name, 0.0) + qty_per_cycle * cycles_per_day
+        productions[product_name] = (
+            productions.get(product_name, 0.0) + qty_per_cycle * (86400.0 / float(cycle_time))
+        )
+        prod_tiers[product_name] = tier_num
+    return productions, prod_tiers, (f"P{highest_tier_num}" if highest_tier_num > 0 else None)
 
-    highest_tier = f"P{highest_tier_num}" if highest_tier_num > 0 else None
 
-    if not productions:
-        return 0.0, highest_tier
+def _get_colony_expiry(pins: list) -> datetime | None:
+    expiry: datetime | None = None
+    for pin in pins:
+        if pin.get("extractor_details") is None:
+            continue
+        exp_dt = _parse_expiry(pin.get("expiry_time", ""))
+        if exp_dt is not None and (expiry is None or exp_dt < expiry):
+            expiry = exp_dt
+    return expiry
 
-    prices = get_sell_prices_by_names(list(productions.keys()))
-    isk_day = sum(qty * prices.get(name, 0.0) for name, qty in productions.items())
-    logger.info(f"ISK/Tag: {isk_day:,.0f} ISK aus {productions}")
-    return isk_day, highest_tier
 
+def _compute_factories(pins: list, prices: dict) -> list:
+    """Liste aktiver Fabriken mit Produkt, Tier, Menge/Tag und ISK/Tag."""
+    tier_labels = {1: "P1", 2: "P2", 3: "P3", 4: "P4"}
+    factories = []
+    for pin in pins:
+        factory = pin.get("factory_details") or {}
+        schematic_id = factory.get("schematic_id") or pin.get("schematic_id")
+        if not schematic_id:
+            continue
+        try:
+            schematic = get_schematic(int(schematic_id))
+        except Exception:
+            continue
+        cycle_time = schematic.get("cycle_time", 0)
+        product_name = schematic.get("schematic_name", "")
+        if not cycle_time or not product_name:
+            continue
+        tier_num = 1 if cycle_time <= 1800 else 2 if cycle_time <= 3600 else 3 if cycle_time <= 9000 else 4
+        qty_per_cycle = schematic.get("output_quantity") or _CYCLE_QTY_FALLBACK.get(cycle_time, 1)
+        qty_per_day = qty_per_cycle * (86400.0 / float(cycle_time))
+        factories.append({
+            "name": product_name,
+            "tier": tier_labels[tier_num],
+            "qty_per_day": round(qty_per_day, 1),
+            "isk_per_day": round(qty_per_day * prices.get(product_name, 0.0)),
+        })
+    return factories
+
+
+def _record_isk_snapshot(account_id: int, isk_day: float, colony_count: int, db: Session) -> None:
+    """Speichert maximal einen ISK-Snapshot pro Tag und Account."""
+    try:
+        now_utc = datetime.now(timezone.utc)
+        start_of_day = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+        existing = db.query(IskSnapshot).filter(
+            IskSnapshot.account_id == account_id,
+            IskSnapshot.recorded_at >= start_of_day,
+            IskSnapshot.recorded_at < end_of_day,
+        ).first()
+        if existing:
+            existing.isk_day = str(round(isk_day))
+            existing.colony_count = colony_count
+        else:
+            db.add(IskSnapshot(
+                account_id=account_id,
+                isk_day=str(round(isk_day)),
+                colony_count=colony_count,
+            ))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"ISK Snapshot fehlgeschlagen: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
+    """Holt alle ESI/Markt-Daten frisch und gibt den vollständigen Payload zurück."""
+
+    # Schritt 1: Alle (char, colony, access_token) sammeln
+    char_colony_token: list[tuple] = []
+    for char in characters:
+        access_token = ensure_valid_token(char, db)
+        raw_colonies = get_character_planets(char.eve_character_id, access_token or "")
+        for colony in raw_colonies:
+            char_colony_token.append((char, colony, access_token))
+
+    # Schritt 2: planet_info + planet_detail parallel abrufen
+    def _fetch_planet(args):
+        char, colony, token = args
+        planet_id = colony.get("planet_id")
+        info = get_planet_info(planet_id) if planet_id else {}
+        detail = {}
+        if token and planet_id:
+            try:
+                detail = get_planet_detail(char.eve_character_id, planet_id, token)
+            except Exception as e:
+                logger.warning(f"Fehler bei Planet {planet_id}: {e}")
+        return info, detail
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        planet_data = list(ex.map(_fetch_planet, char_colony_token))
+
+    # Schritt 3: Produktionen berechnen — ohne Preisabfrage
+    colony_prods: list[tuple] = []
+    all_product_names: set[str] = set()
+    for info, detail in planet_data:
+        pins = detail.get("pins", [])
+        productions, prod_tiers, highest_tier = _compute_colony_productions(pins)
+        expiry_time = _get_colony_expiry(pins)
+        colony_prods.append((productions, prod_tiers, highest_tier, expiry_time, pins))
+        all_product_names.update(productions.keys())
+
+    # Schritt 4: Eine einzige Batch-Preisabfrage
+    prices = get_sell_prices_by_names(list(all_product_names)) if all_product_names else {}
+
+    # Schritt 5: Kolonien-Liste aufbauen
+    colonies = []
+    total_isk_day = 0.0
+    next_expiry: datetime | None = None
+    next_expiry_char: str | None = None
+
+    for (char, colony, _), (info, _detail), (productions, prod_tiers, highest_tier, expiry_time, pins) in zip(
+        char_colony_token, planet_data, colony_prods
+    ):
+        planet_id = colony.get("planet_id")
+        planet_type = colony.get("planet_type", "unknown").capitalize()
+        planet_name = info.get("name") or f"Planet {planet_id}"
+        # Nur das höchste Tier zählt — Vorprodukte werden intern verbraucht
+        highest_tier_num = int(highest_tier[1]) if highest_tier else 0
+        isk_day = sum(
+            qty * prices.get(name, 0.0)
+            for name, qty in productions.items()
+            if prod_tiers.get(name, 0) == highest_tier_num
+        )
+        expiry_hours = _hours_until(expiry_time)
+        total_isk_day += isk_day
+
+        if expiry_time is not None and (next_expiry is None or expiry_time < next_expiry):
+            next_expiry = expiry_time
+            next_expiry_char = char.character_name
+
+        colonies.append({
+            "planet_id": planet_id,
+            "planet_name": planet_name,
+            "planet_type": planet_type,
+            "upgrade_level": colony.get("upgrade_level", 0),
+            "num_pins": colony.get("num_pins", 0),
+            "last_update": colony.get("last_update", "—"),
+            "solar_system_id": colony.get("solar_system_id"),
+            "color": PLANET_TYPE_COLORS.get(planet_type, "#586e75"),
+            "character_name": char.character_name,
+            "character_portrait": char.portrait_url,
+            "expiry_hours": expiry_hours,
+            "isk_day": isk_day,
+            "highest_tier": highest_tier,
+            "factories": _compute_factories(pins, prices),
+        })
+
+    colony_count = len(colonies)
+    _record_isk_snapshot(account.id, total_isk_day, colony_count, db)
+
+    return {
+        "colonies": colonies,
+        "total_isk_day": total_isk_day,
+        "next_expiry": next_expiry,
+        "next_expiry_hours": _hours_until(next_expiry),
+        "next_expiry_char": next_expiry_char,
+        "char_count": len(characters),
+        "colony_count": colony_count,
+        "fetched_at": _time.time(),
+    }
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def dashboard(
     request: Request,
     account=Depends(require_account),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     db.refresh(account)
 
     main_char = None
-    colonies = []
-    planet_type_colors = PLANET_TYPE_COLORS
-
     if account.main_character_id:
-        main_char = db.query(Character).filter(
-            Character.id == account.main_character_id
-        ).first()
+        main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
 
-    characters = db.query(Character).filter(
-        Character.account_id == account.id
-    ).all()
+    characters = db.query(Character).filter(Character.account_id == account.id).all()
 
-    total_isk_day = 0.0
-    next_expiry: datetime | None = None
-    next_expiry_char: str | None = None
+    # Cache prüfen
+    now = _time.time()
+    cached = _dashboard_cache.get(account.id)
+    if cached and (now - cached["fetched_at"]) < DASHBOARD_CACHE_TTL:
+        payload = cached
+    else:
+        payload = _build_dashboard_payload(account, characters, db)
+        _dashboard_cache[account.id] = payload
 
-    # Kolonien von ALLEN Charakteren des Accounts abrufen
-    for char in characters:
-        access_token = ensure_valid_token(char, db)
-        raw_colonies = get_character_planets(char.eve_character_id, access_token or "")
+    # ISK-Historie (immer frisch aus DB — billig)
+    snapshots = (
+        db.query(IskSnapshot)
+        .filter(IskSnapshot.account_id == account.id)
+        .order_by(IskSnapshot.recorded_at)
+        .limit(60)
+        .all()
+    )
+    isk_history = [
+        {"date": s.recorded_at.strftime("%d.%m"), "isk": float(s.isk_day or 0)}
+        for s in snapshots
+    ]
 
-        for colony in raw_colonies:
-            planet_id = colony.get("planet_id")
-            planet_type = colony.get("planet_type", "unknown").capitalize()
-
-            # Planetenname von ESI holen (gecacht)
-            planet_name = f"Planet {planet_id}"
-            if planet_id:
-                info = get_planet_info(planet_id)
-                if info.get("name"):
-                    planet_name = info["name"]
-
-            # Planet-Detail holen (gecacht)
-            expiry_time: datetime | None = None
-            isk_day = 0.0
-            highest_tier = None
-
-            try:
-                if access_token and planet_id:
-                    detail = get_planet_detail(char.eve_character_id, planet_id, access_token)
-                    pins = detail.get("pins", [])
-
-                    # Früheste Extractor-Expiry ermitteln
-                    for pin in pins:
-                        ext = pin.get("extractor_details")
-                        if ext is None:
-                            continue
-                        exp_str = pin.get("expiry_time")
-                        if not exp_str:
-                            continue
-                        exp_dt = _parse_expiry(exp_str)
-                        if exp_dt is not None:
-                            if expiry_time is None or exp_dt < expiry_time:
-                                expiry_time = exp_dt
-
-                    # ISK/Tag und höchsten Tier berechnen
-                    isk_day, highest_tier = _compute_colony_stats(pins, None)
-            except Exception as e:
-                logger.warning(f"Fehler bei Planet {planet_id}: {e}")
-
-            expiry_hours = _hours_until(expiry_time)
-            total_isk_day += isk_day
-
-            # Nächste globale Expiry
-            if expiry_time is not None:
-                if next_expiry is None or expiry_time < next_expiry:
-                    next_expiry = expiry_time
-                    next_expiry_char = char.character_name
-
-            colonies.append({
-                "planet_id": planet_id,
-                "planet_name": planet_name,
-                "planet_type": planet_type,
-                "upgrade_level": colony.get("upgrade_level", 0),
-                "num_pins": colony.get("num_pins", 0),
-                "last_update": colony.get("last_update", "—"),
-                "solar_system_id": colony.get("solar_system_id"),
-                "color": PLANET_TYPE_COLORS.get(planet_type, "#586e75"),
-                "character_name": char.character_name,
-                "character_portrait": char.portrait_url,
-                "expiry_time": expiry_time,
-                "expiry_hours": expiry_hours,
-                "isk_day": isk_day,
-                "highest_tier": highest_tier,
-            })
-
-    next_expiry_hours = _hours_until(next_expiry)
-    char_count = len(characters)
-    colony_count = len(colonies)
+    cache_age_sec = int(now - payload["fetched_at"])
+    cooldown_remaining = max(0, int(REFRESH_COOLDOWN_SEC - (now - _refresh_cooldown.get(account.id, 0))))
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "account": account,
         "main_char": main_char,
         "characters": characters,
-        "char_count": char_count,
-        "colonies": colonies,
-        "colony_count": colony_count,
-        "planet_type_colors": planet_type_colors,
-        "total_isk_day": total_isk_day,
-        "next_expiry": next_expiry,
-        "next_expiry_hours": next_expiry_hours,
-        "next_expiry_char": next_expiry_char,
+        "char_count": payload["char_count"],
+        "colonies": payload["colonies"],
+        "colony_count": payload["colony_count"],
+        "planet_type_colors": PLANET_TYPE_COLORS,
+        "total_isk_day": payload["total_isk_day"],
+        "next_expiry": payload["next_expiry"],
+        "next_expiry_hours": payload["next_expiry_hours"],
+        "next_expiry_char": payload["next_expiry_char"],
+        "cache_age_sec": cache_age_sec,
+        "cooldown_remaining": cooldown_remaining,
+        "isk_history": isk_history,
     })
+
+
+@router.post("/refresh")
+def force_refresh(account=Depends(require_account)):
+    """Cache für diesen Account invalidieren — max. 1× pro 60 Sekunden."""
+    now = _time.time()
+    last = _refresh_cooldown.get(account.id, 0)
+    wait = int(REFRESH_COOLDOWN_SEC - (now - last)) + 1
+    if wait > 0 and (now - last) < REFRESH_COOLDOWN_SEC:
+        return JSONResponse({"ok": False, "wait": wait})
+    _dashboard_cache.pop(account.id, None)
+    _refresh_cooldown[account.id] = now
+    return JSONResponse({"ok": True})
 
 
 @router.get("/characters", response_class=HTMLResponse)
 def characters_page(
     request: Request,
     account=Depends(require_account),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     db.refresh(account)
-    characters = db.query(Character).filter(
-        Character.account_id == account.id
-    ).all()
-
+    characters = db.query(Character).filter(Character.account_id == account.id).all()
     return templates.TemplateResponse("characters.html", {
         "request": request,
         "account": account,

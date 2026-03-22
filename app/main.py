@@ -11,7 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from app.config import get_settings
 from app.database import engine, SessionLocal
 from app.models import SSOState
-from app.routers import auth, dashboard, admin, pi, market, system
+from app.routers import auth, dashboard, admin, pi, market, system, planner
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -49,7 +49,7 @@ def refresh_market_prices():
 
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(refresh_market_prices, 'interval', hours=1)
+scheduler.add_job(refresh_market_prices, 'interval', minutes=15)
 
 
 @asynccontextmanager
@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     sde.init()
     cleanup_old_sso_states()
     scheduler.start()
-    logger.info("APScheduler gestartet (stündlicher Marktpreis-Refresh).")
+    logger.info("APScheduler gestartet (15-min Marktpreis-Refresh).")
     yield
     # Shutdown
     scheduler.shutdown(wait=False)
@@ -84,6 +84,7 @@ app.include_router(admin.router)
 app.include_router(pi.router)
 app.include_router(market.router)
 app.include_router(system.router)
+app.include_router(planner.router)
 
 
 @app.get("/", response_class=HTMLResponse)

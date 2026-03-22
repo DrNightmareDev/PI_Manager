@@ -12,12 +12,18 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 |---|---|
 | **PI Kolonien** | Übersicht aller Planeten-Kolonien für Main + Alts |
 | **ISK/Tag Berechnung** | Echtzeit-Preise via Fuzzwork Jita 4-4 |
+| **Dashboard Cache** | Daten 15 min gecacht, Force-Refresh max. 1×/60 s (API-Schutz) |
+| **Kolonie-Detail** | Fabrik-Übersicht pro Kolonie (Tier, Stück/Tag, ISK/Tag) |
+| **ISK/Tag Verlauf** | Tägliche Snapshots mit Chart.js Verlaufsgraph |
 | **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem |
+| **PI Chain Planner** | Vollständige P2–P4 Produktionsketten mit Planeten- und P0-Bedarf |
 | **System Analyzer** | PI-Potential eines Systems analysieren (P0→P4 Ketten) |
-| **Jita Marktpreise** | Live-Preise für alle PI-Produkte P1–P4 |
+| **System Vergleich** | Bis zu 4 Systeme nebeneinander vergleichen (localStorage) |
 | **Multi-Charakter** | Main + beliebig viele Alts unter einem Account |
 | **EVE SSO** | Login via EVE Online OAuth2, kein eigenes Passwort |
-| **Admin Panel** | Account-Verwaltung |
+| **Admin Panel** | Account-Verwaltung, Charakter-Suche, Admin-Filter |
+| **Owner-System** | Erster Account = Besitzer, geschützt vor Löschung/Entfernung |
+| **Jita Marktpreise** | Live-Preise P1–P4, Tier-Filter, Sortierung, 24h/7T Trends |
 | **EveRef SDE** | Statische Spieldaten lokal (Schematics, Types) – kein ESI-Overhead |
 
 ---
@@ -39,7 +45,45 @@ Client ID und Client Secret notieren.
 
 ---
 
-### 2. Proxmox LXC erstellen (empfohlen)
+### 2. Installation wählen
+
+Es gibt zwei Wege: **Docker Compose** (einfacher, überall lauffähig) oder **Proxmox LXC** (nativ, ressourcenschonend).
+
+---
+
+#### Option A: Docker Compose
+
+**Voraussetzungen:** Docker + Docker Compose Plugin
+
+```bash
+git clone https://github.com/DrNightmareDev/PI_Manager.git
+cd PI_Manager
+
+cp .env.example .env
+nano .env   # EVE_CLIENT_ID, EVE_CLIENT_SECRET, EVE_CALLBACK_URL, SECRET_KEY, DB_PASSWORD eintragen
+
+docker compose up -d
+```
+
+Browser öffnen: `http://DEINE-IP`
+
+```bash
+# Logs
+docker compose logs -f app
+
+# Stoppen
+docker compose down
+
+# Update
+git pull && docker compose up -d --build
+```
+
+> **Hinweis:** `EVE_CALLBACK_URL` muss auf den Docker-Host zeigen, z.B. `http://192.168.2.44/auth/callback`.
+> `DATABASE_URL` in `.env` wird vom Compose-File automatisch auf den internen `db`-Service gesetzt — nur `DB_PASSWORD` ist nötig.
+
+---
+
+#### Option B: Proxmox LXC erstellen
 
 | Einstellung | Wert |
 |---|---|
@@ -51,7 +95,7 @@ Client ID und Client Secret notieren.
 
 ---
 
-### 3. Setup-Skript ausführen
+### 3. LXC Setup-Skript ausführen
 
 ```bash
 # Repository klonen
@@ -72,7 +116,7 @@ Das Skript installiert und konfiguriert automatisch:
 
 ---
 
-### 4. `.env` konfigurieren
+### 4. `.env` konfigurieren (LXC)
 
 ```bash
 cp .env.example .env
@@ -89,7 +133,7 @@ DATABASE_URL=postgresql://evepi:PASSWORT@localhost/evepi
 
 ---
 
-### 5. Service starten
+### 5. Service starten (LXC)
 
 ```bash
 systemctl enable --now eve-pi-manager
@@ -97,7 +141,7 @@ systemctl enable --now eve-pi-manager
 
 Browser öffnen: `http://DEINE-IP`
 
-Der **erste Account** erhält automatisch Admin-Rechte.
+Der **erste Account** erhält automatisch Admin- und Besitzer-Rechte.
 
 ---
 
@@ -155,30 +199,36 @@ eve-pi-manager/
 │   ├── main.py             # FastAPI App, Startup-Logik, APScheduler
 │   ├── config.py           # Pydantic-Settings, .env
 │   ├── database.py         # SQLAlchemy Engine + Session
-│   ├── models.py           # Account, Character, SSOState, MarketCache
+│   ├── models.py           # Account, Character, SSOState, MarketCache, IskSnapshot
 │   ├── session.py          # Signed Cookie Sessions (itsdangerous)
 │   ├── esi.py              # EVE ESI + SSO API
 │   ├── sde.py              # Static Data Engine (EveRef – Schematics, Types)
 │   ├── dependencies.py     # FastAPI Dependency Injection
 │   ├── pi_data.py          # PI Produktionsdaten P0–P4
 │   ├── pi_analyzer.py      # System-Analyzer Logik
-│   ├── market.py           # Jita Marktdaten (Fuzzwork/Janice) mit Cache
+│   ├── market.py           # Jita Marktdaten (Fuzzwork) mit Cache + Trends
 │   ├── templates_env.py    # Jinja2 Templates + Custom Filter
 │   ├── routers/
-│   │   ├── auth.py         # SSO Login / Callback / Logout
-│   │   ├── dashboard.py    # PI Kolonien Dashboard
-│   │   ├── admin.py        # Admin Panel
-│   │   ├── market.py       # Marktpreise
-│   │   └── system.py       # System Analyzer
+│   │   ├── auth.py         # SSO Login / Callback / Logout / Owner-System
+│   │   ├── dashboard.py    # PI Kolonien Dashboard (Cache, ISK-Snapshots)
+│   │   ├── admin.py        # Admin Panel (Account-Verwaltung, Colony-Count)
+│   │   ├── market.py       # Marktpreise + Trends + Admin-Refresh
+│   │   ├── system.py       # System Analyzer + System-Vergleich
+│   │   └── planner.py      # PI Chain Planner
 │   ├── templates/          # Jinja2 HTML Templates
 │   └── static/             # CSS (EVE Dark Theme), JS, SVG
 ├── alembic/                # Datenbank-Migrationen
+├── docker/
+│   ├── entrypoint.sh       # Docker Entrypoint (DB-Wait → Migrations → Start)
+│   └── nginx.conf          # Nginx Konfiguration für Docker
 ├── scripts/
 │   ├── setup_lxc.sh        # Vollautomatisches LXC-Setup
 │   ├── start.sh            # Entwicklungsserver
 │   ├── eve-pi-manager.service   # systemd Unit
-│   └── nginx-eve-pi.conf        # Nginx Konfiguration
+│   └── nginx-eve-pi.conf        # Nginx Konfiguration für LXC
 ├── data/                   # SDE-Daten (auto-generiert beim Start, nicht committet)
+├── Dockerfile
+├── docker-compose.yml
 ├── requirements.txt
 ├── alembic.ini
 ├── .env.example
@@ -230,7 +280,8 @@ Die ESI API wird weiterhin für **Echtzeit-Daten** genutzt (Charakter-Kolonien, 
 | Sessions | itsdangerous (signed cookies) |
 | Marktdaten | Fuzzwork / Janice API |
 | Spieldaten | EveRef Static Data Export |
-| Deployment | systemd + Nginx auf Proxmox LXC |
+| Scheduler | APScheduler (Marktpreise alle 15 min) |
+| Deployment | Docker Compose **oder** systemd + Nginx auf Proxmox LXC |
 
 ---
 

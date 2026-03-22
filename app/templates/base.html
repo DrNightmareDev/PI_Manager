@@ -40,15 +40,21 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <span class="nav-link eve-disabled" title="In Entwicklung">
-                        <i class="bi bi-diagram-3 me-1"></i>PI Chains
-                        <span class="badge eve-badge-wip ms-1">Bald</span>
-                    </span>
+                    <a class="nav-link {% if request.url.path.startswith('/planner') %}active{% endif %}"
+                       href="/planner">
+                        <i class="bi bi-diagram-3 me-1"></i>PI Planner
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/system') %}active{% endif %}"
+                    <a class="nav-link {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') %}active{% endif %}"
                        href="/system">
                         <i class="bi bi-globe2 me-1"></i>System Analyzer
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/system/compare') %}active{% endif %}"
+                       href="/system/compare">
+                        <i class="bi bi-layout-split me-1"></i>Vergleich
                     </a>
                 </li>
                 <li class="nav-item">
@@ -62,6 +68,14 @@
                     <a class="nav-link eve-admin-link {% if request.url.path.startswith('/admin') %}active{% endif %}"
                        href="/admin">
                         <i class="bi bi-shield-fill me-1"></i>Admin
+                    </a>
+                </li>
+                {% endif %}
+                {% if account and account.is_owner and not account.is_admin %}
+                <li class="nav-item">
+                    <a class="nav-link" href="/auth/become-admin" style="color:#f4a300;"
+                       title="Admin-Rechte wiederherstellen (Besitzer-Notfall)">
+                        <i class="bi bi-star-fill me-1"></i>Admin werden
                     </a>
                 </li>
                 {% endif %}
@@ -118,6 +132,13 @@
                             <i class="bi bi-person-plus me-2"></i>Alt hinzufügen
                         </a>
                     </li>
+                    {% if account.is_owner and not account.is_admin %}
+                    <li>
+                        <a class="dropdown-item" href="/auth/become-admin" style="color:#f4a300;">
+                            <i class="bi bi-star-fill me-2"></i>Zum Admin werden
+                        </a>
+                    </li>
+                    {% endif %}
                     <li>
                         <a class="dropdown-item text-danger" href="/auth/logout">
                             <i class="bi bi-box-arrow-right me-2"></i>Abmelden

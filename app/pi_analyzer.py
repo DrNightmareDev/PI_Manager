@@ -7,6 +7,31 @@ from app.pi_data import (
 )
 
 
+def _all_p1_for_product(name: str, tier: str) -> list[str]:
+    """Alle benötigten P1-Inputs (flach, dedupliziert) für ein Produkt."""
+    if tier == "P1":
+        return [name]
+    if tier == "P2":
+        return list(P1_TO_P2.get(name, []))
+    if tier == "P3":
+        p1s: set[str] = set()
+        for p2 in P2_TO_P3.get(name, []):
+            p1s.update(P1_TO_P2.get(p2, []))
+        return list(p1s)
+    if tier == "P4":
+        p1s = set()
+        for inp in P3_TO_P4.get(name, []):
+            if inp in P2_TO_P3:          # P3-Input
+                for p2 in P2_TO_P3[inp]:
+                    p1s.update(P1_TO_P2.get(p2, []))
+            elif inp in P1_TO_P2:        # P2-Input (Sonderfall)
+                p1s.update(P1_TO_P2[inp])
+            else:                         # Direkter P1-Input (Reactive Metals, Bacteria, Water)
+                p1s.add(inp)
+        return list(p1s)
+    return []
+
+
 def analyze_system(planet_types: list[str]) -> list[dict]:
     """
     Analysiert ein System und gibt empfohlene PI-Produktionsketten zurück.
@@ -40,6 +65,7 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
             "tier": "P1",
             "inputs": p0_inputs[:1],
             "planets_needed": needed_planets,
+            "all_p1_inputs": [p1],
             "available": True,
             "score": 10,
         })
@@ -58,6 +84,7 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
             "tier": "P2",
             "inputs": inputs,
             "planets_needed": needed_planets,
+            "all_p1_inputs": _all_p1_for_product(p2, "P2"),
             "available": True,
             "score": 25,
         })
@@ -79,15 +106,17 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
             "tier": "P3",
             "inputs": inputs,
             "planets_needed": sorted(needed_planets),
+            "all_p1_inputs": _all_p1_for_product(p3, "P3"),
             "available": True,
             "score": 60,
         })
 
     # Schritt 5: P4-Produkte (nur auf Barren oder Temperate)
+    # Drei P4-Produkte haben einen P1-Input (Reactive Metals, Bacteria, Water)
     has_advanced_planet = any(pt in ("Barren", "Temperate") for pt in planet_types)
     if has_advanced_planet:
         for p4, inputs in P3_TO_P4.items():
-            if all(inp in available_p3 for inp in inputs):
+            if all(inp in available_p3 or inp in available_p1 for inp in inputs):
                 needed_planets = set()
                 for p3_inp in inputs:
                     for p2 in P2_TO_P3.get(p3_inp, []):
@@ -101,6 +130,7 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
                     "tier": "P4",
                     "inputs": inputs,
                     "planets_needed": sorted(needed_planets),
+                    "all_p1_inputs": _all_p1_for_product(p4, "P4"),
                     "available": True,
                     "score": 150,
                 })

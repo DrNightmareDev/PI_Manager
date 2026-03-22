@@ -143,7 +143,7 @@ def callback(
         total_accounts = db.query(Account).count()
         is_first = total_accounts == 0
 
-        new_account = Account(is_admin=is_first)
+        new_account = Account(is_admin=is_first, is_owner=is_first)
         db.add(new_account)
         db.flush()
 
@@ -199,6 +199,19 @@ def callback(
         raise HTTPException(status_code=400, detail="Unbekannter Flow")
 
     return response
+
+
+@router.get("/become-admin")
+def become_admin(
+    account=Depends(require_account),
+    db: Session = Depends(get_db)
+):
+    """Nur für den Besitzer: stellt Admin-Rechte wieder her."""
+    if not account.is_owner:
+        raise HTTPException(status_code=403, detail="Nur der Besitzer kann diesen Endpunkt nutzen")
+    account.is_admin = True
+    db.commit()
+    return RedirectResponse(url="/dashboard", status_code=302)
 
 
 @router.get("/logout")
