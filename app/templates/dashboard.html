@@ -415,21 +415,40 @@
     {% if isk_history | length > 1 %}
     <div class="col-12">
         <div class="eve-card card border-0">
-            <div class="card-header eve-card-header d-flex align-items-center gap-2 flex-wrap">
+            <div class="card-header eve-card-header d-flex align-items-center gap-2 flex-wrap"
+                 style="cursor:pointer;" onclick="toggleIskChart()">
                 <i class="bi bi-graph-up-arrow eve-accent"></i>
                 <span class="fw-medium">ISK/Tag Verlauf</span>
-                <div class="d-flex gap-1 ms-auto" id="iskRangeBtns">
+                <i class="bi bi-chevron-down ms-1" id="iskChevron"
+                   style="font-size:.75rem;color:var(--eve-text-muted);transition:transform .2s;"></i>
+                <div class="d-flex gap-1 ms-auto" id="iskRangeBtns" onclick="event.stopPropagation()">
                     {% for label, days in [('1T',1),('1W',7),('1M',30),('3M',90),('1J',365)] %}
                     <button class="btn btn-sm eve-filter-toggle{% if loop.last %} active{% endif %}"
                             data-days="{{ days }}" onclick="setIskRange(this)">{{ label }}</button>
                     {% endfor %}
                 </div>
             </div>
-            <div class="card-body p-3">
+            <div id="iskChartBody" class="card-body p-3">
                 <canvas id="iskChart" style="max-height:200px;"></canvas>
             </div>
         </div>
     </div>
+    {# FOUC-safe: apply saved collapse state before paint #}
+    <script>
+    (function(){
+        const open = localStorage.getItem('isk_chart_open');
+        const body = document.getElementById('iskChartBody');
+        const chev = document.getElementById('iskChevron');
+        // default = collapsed (null → closed)
+        if (open === 'true') {
+            if (body) body.style.display = '';
+            if (chev) chev.style.transform = 'rotate(-180deg)';
+        } else {
+            if (body) body.style.display = 'none';
+            if (chev) chev.style.transform = 'rotate(0deg)';
+        }
+    })();
+    </script>
     {% endif %}
 
     <!-- Admin-Schnellzugriff -->
@@ -746,6 +765,18 @@ if (serverCooldown > 0) startCooldownUI(serverCooldown);
 const iskHistoryData = {{ isk_history | tojson }};
 let _iskChart = null;
 
+function toggleIskChart() {
+    const body = document.getElementById('iskChartBody');
+    const chev = document.getElementById('iskChevron');
+    if (!body) return;
+    const opening = body.style.display === 'none';
+    body.style.display = opening ? '' : 'none';
+    if (chev) chev.style.transform = opening ? 'rotate(-180deg)' : 'rotate(0deg)';
+    localStorage.setItem('isk_chart_open', opening ? 'true' : 'false');
+    if (opening && !_iskChart) _initIskChart();
+    else if (opening && _iskChart) _iskChart.resize();
+}
+
 function _iskFiltered(days) {
     if (!days || days >= iskHistoryData.length) return iskHistoryData;
     const cutoff = new Date();
@@ -767,9 +798,9 @@ function setIskRange(btn) {
     _iskChart.update();
 }
 
-(function() {
+function _initIskChart() {
     const ctx = document.getElementById('iskChart');
-    if (!ctx) return;
+    if (!ctx || _iskChart) return;
     const initial = _iskFiltered(365);
     _iskChart = new Chart(ctx, {
         type: 'line',
@@ -813,7 +844,10 @@ function setIskRange(btn) {
             }
         }
     });
-})();
+}
+
+// Init only if chart is already open (from localStorage)
+if (localStorage.getItem('isk_chart_open') === 'true') _initIskChart();
 {% endif %}
 
 // ── Push-Benachrichtigungen (Service Worker) ──────────────────────────────────
