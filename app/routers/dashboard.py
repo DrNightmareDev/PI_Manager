@@ -93,6 +93,23 @@ _STORAGE_TYPE_IDS: dict[int, tuple[str, float]] = {
 # PI Produktvolumen m³ nach Tier
 _PI_VOLUMES: dict[str, float] = {}  # befüllt lazy
 
+# PI Produktname → Tier-Nummer (0–4), befüllt lazy
+_PRODUCT_TIERS: dict[str, int] = {}
+
+def _get_product_tiers() -> dict[str, int]:
+    global _PRODUCT_TIERS
+    if _PRODUCT_TIERS:
+        return _PRODUCT_TIERS
+    from app.pi_data import P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4
+    t: dict[str, int] = {}
+    for n in P0_TO_P1:           t[n] = 0  # P0 Rohstoffe
+    for n in P0_TO_P1.values():  t[n] = 1  # P1
+    for n in P1_TO_P2:           t[n] = 2  # P2 (keys = P2-Outputs)
+    for n in P2_TO_P3:           t[n] = 3  # P3
+    for n in P3_TO_P4:           t[n] = 4  # P4
+    _PRODUCT_TIERS = t
+    return t
+
 def _get_pi_volumes() -> dict[str, float]:
     global _PI_VOLUMES
     if _PI_VOLUMES:
@@ -198,7 +215,10 @@ def _get_extractor_status(pins: list) -> dict:
 def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str, int], str | None]:
     """Gibt (productions, prod_tiers, highest_tier_label) zurück.
     prod_tiers: product_name -> tier_num (1–4).
+    Fallback: wenn keine Fabrik konfiguriert ist, wird der höchste Tier aus den
+    Storage/Launchpad-Inhalten ermittelt.
     """
+    from app.sde import get_type_name
     productions: dict[str, float] = {}
     prod_tiers: dict[str, int] = {}
     highest_tier_num = 0
@@ -222,6 +242,17 @@ def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str,
             productions.get(product_name, 0.0) + qty_per_cycle * (86400.0 / float(cycle_time))
         )
         prod_tiers[product_name] = tier_num
+
+    # Fallback: keine Fabrik konfiguriert → höchsten Tier aus Storage/Launchpad-Inhalten ableiten
+    if highest_tier_num == 0:
+        product_tiers = _get_product_tiers()
+        for pin in pins:
+            for item in (pin.get("contents") or []):
+                name = get_type_name(item.get("type_id")) or ""
+                t = product_tiers.get(name, -1)
+                if t > highest_tier_num:
+                    highest_tier_num = t
+
     return productions, prod_tiers, (f"P{highest_tier_num}" if highest_tier_num > 0 else None)
 
 
