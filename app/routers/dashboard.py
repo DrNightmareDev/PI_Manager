@@ -152,10 +152,14 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
                 return
             pm = getattr(account, "price_mode", "sell")
             payload = _build_dashboard_payload(account, chars, newdb, price_mode=pm)
-            _save_colony_cache(account_id, payload, newdb)
-            _dashboard_cache[account_id] = {**payload, "price_mode": pm}
+            colony_count = payload.get("colony_count", 0)
+            if colony_count > 0:
+                _save_colony_cache(account_id, payload, newdb)
+                _dashboard_cache[account_id] = {**payload, "price_mode": pm}
+                logger.info(f"BG-Refresh account {account_id}: {colony_count} Kolonien gespeichert")
+            else:
+                logger.warning(f"BG-Refresh account {account_id}: ESI lieferte 0 Kolonien – DB-Cache nicht überschrieben")
             _bg_refresh_done[account_id] = True
-            logger.info(f"BG-Refresh account {account_id}: {payload.get('colony_count', 0)} Kolonien")
         except Exception as e:
             logger.error(f"BG-Refresh account {account_id} fehlgeschlagen: {e}")
             _bg_refresh_done[account_id] = True
