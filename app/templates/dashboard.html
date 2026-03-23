@@ -178,6 +178,18 @@
                             onclick="toggleNotifications()" title="Extractor-Benachrichtigungen">
                         <i class="bi bi-bell" id="notifyIcon"></i>
                     </button>
+                    <!-- Hintergrund-Refresh-Indikator -->
+                    {% if refreshing %}
+                    <span class="d-flex align-items-center gap-1 text-muted small" id="bgRefreshBadge" style="white-space:nowrap">
+                        <span class="spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;color:var(--eve-accent);"></span>
+                        <span style="color:var(--eve-accent);">Aktualisierung läuft…</span>
+                    </span>
+                    {% else %}
+                    <span id="bgRefreshBadge" style="display:none;white-space:nowrap" class="d-flex align-items-center gap-1 text-muted small">
+                        <span class="spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;color:var(--eve-accent);"></span>
+                        <span style="color:var(--eve-accent);">Aktualisierung läuft…</span>
+                    </span>
+                    {% endif %}
                     <!-- Cache-Alter + Refresh-Button -->
                     <div class="d-flex align-items-center gap-1" style="min-width:9rem;justify-content:flex-end">
                         <span class="text-muted small" id="cacheAgeText" style="min-width:6.5rem;text-align:right;white-space:nowrap">
@@ -854,41 +866,47 @@ if (localStorage.getItem('isk_chart_open') === 'true') _initIskChart();
 
 // ── Preis-Modus (Sell / Buy / Split) ─────────────────────────────────────────
 function setPriceMode(mode) {
-    _showPriceLoading(mode);
+    // Sofort aktiven Button setzen für Instant-Feedback
+    document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('onclick').includes("'" + mode + "'"));
+        b.disabled = true;
+    });
     fetch('/dashboard/price-mode', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({mode})
     }).then(r => r.json()).then(d => {
         if (d.ok) window.location.reload();
-    }).catch(() => _hidePriceLoading());
+    }).catch(() => {
+        document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => b.disabled = false);
+    });
 }
 
-function _showPriceLoading(mode) {
-    document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => b.disabled = true);
-    let ov = document.getElementById('_priceLoadOv');
-    if (!ov) {
-        ov = document.createElement('div');
-        ov.id = '_priceLoadOv';
-        ov.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;';
-        ov.innerHTML = '<div style="width:36px;height:36px;border:3px solid rgba(0,180,216,.2);border-top-color:var(--eve-accent);border-radius:50%;animation:_spin .7s linear infinite;"></div>'
-                     + '<span style="color:var(--eve-accent);font-size:.85rem;letter-spacing:.05em;">Preise werden aktualisiert…</span>';
-        document.body.appendChild(ov);
-        if (!document.getElementById('_priceLoadStyle')) {
-            const s = document.createElement('style');
-            s.id = '_priceLoadStyle';
-            s.textContent = '@keyframes _spin{to{transform:rotate(360deg)}}';
-            document.head.appendChild(s);
-        }
+// ── Hintergrund-Refresh Polling ───────────────────────────────────────────────
+{% if refreshing %}
+(function pollBgRefresh() {
+    const badge = document.getElementById('bgRefreshBadge');
+    function poll() {
+        fetch('/dashboard/refresh-status')
+        .then(r => r.json())
+        .then(d => {
+            if (d.done) {
+                if (badge) {
+                    badge.innerHTML = '<i class="bi bi-check-circle me-1" style="color:var(--eve-green);"></i><span style="color:var(--eve-green);">Aktualisiert</span>';
+                }
+                setTimeout(() => window.location.reload(), 1500);
+            } else if (d.running) {
+                setTimeout(poll, 3000);
+            } else {
+                // Nicht mehr running aber auch nicht done → abgebrochen
+                if (badge) badge.style.display = 'none';
+            }
+        })
+        .catch(() => setTimeout(poll, 5000));
     }
-    ov.style.display = 'flex';
-}
-
-function _hidePriceLoading() {
-    const ov = document.getElementById('_priceLoadOv');
-    if (ov) ov.style.display = 'none';
-    document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => b.disabled = false);
-}
+    setTimeout(poll, 3000);
+})();
+{% endif %}
 
 // ── Push-Benachrichtigungen (Service Worker) ──────────────────────────────────
 const COLONY_EXPIRIES = [

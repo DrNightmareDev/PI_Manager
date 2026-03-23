@@ -92,6 +92,16 @@ class MarketCache(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class DashboardCache(Base):
+    """Persistenter Colony-Cache pro Account — überlebt Server-Neustarts."""
+    __tablename__ = "dashboard_cache_db"
+
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    colonies_json = Column(Text, nullable=False, default="[]")
+    meta_json = Column(Text, nullable=False, default="{}")
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class IskSnapshot(Base):
     __tablename__ = "isk_snapshots"
 

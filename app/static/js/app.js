@@ -143,6 +143,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const badge = document.getElementById('colonyCountBadge');
     let sortCol = null, sortAsc = true;
 
+    const FILTER_KEY = 'eve_pi_colony_filter';
+
     // --- Paginator ---
     const pager = EvePaginate('coloniesTable', {
         pageSize:   6,
@@ -194,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Filter ---
     const filterSelect = document.getElementById('charFilter');
-    const expiredCheck = document.getElementById('expiredFilter'); // now a button with class 'active'
+    const expiredCheck = document.getElementById('expiredFilter');
 
     window.applyFilters = applyFilter;
 
@@ -207,5 +209,46 @@ document.addEventListener('DOMContentLoaded', function () {
             return charOk && expiredOk;
         });
         pager.applyFilter(matched);
+        _saveFilterState();
     }
+
+    // --- Persistenz: Filter + Sort in localStorage ---
+    function _saveFilterState() {
+        try {
+            localStorage.setItem(FILTER_KEY, JSON.stringify({
+                char: filterSelect ? filterSelect.value : '',
+                expired: expiredCheck ? expiredCheck.classList.contains('active') : false,
+                sortCol: sortCol,
+                sortAsc: sortAsc,
+            }));
+        } catch(e) {}
+    }
+
+    function _restoreFilterState() {
+        try {
+            const s = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+            if (s.char && filterSelect) filterSelect.value = s.char;
+            if (s.expired && expiredCheck) expiredCheck.classList.add('active');
+            if (s.sortCol) {
+                sortCol = s.sortCol;
+                sortAsc = s.sortAsc !== false;
+                const th = table.querySelector(`th[data-col="${sortCol}"]`);
+                if (th) {
+                    table.querySelectorAll('th.eve-sortable').forEach(h => {
+                        h.classList.remove('sort-asc', 'sort-desc');
+                        const icon = h.querySelector('.eve-sort-icon');
+                        if (icon) icon.className = 'bi bi-chevron-expand eve-sort-icon';
+                    });
+                    th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+                    const icon = th.querySelector('.eve-sort-icon');
+                    if (icon) icon.className = sortAsc ? 'bi bi-chevron-up eve-sort-icon' : 'bi bi-chevron-down eve-sort-icon';
+                    sortRows(sortCol, sortAsc);
+                    return; // sortRows calls applyFilter internally
+                }
+            }
+        } catch(e) {}
+        applyFilter();
+    }
+
+    _restoreFilterState();
 });

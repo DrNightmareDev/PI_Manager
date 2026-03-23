@@ -445,9 +445,10 @@ def get_sell_prices_by_names(names: list[str]) -> dict[str, float]:
         return {}
 
 
-def get_prices_by_mode(names: list[str], mode: str) -> dict[str, float]:
+def get_prices_by_mode(names: list[str], mode: str, db=None) -> dict[str, float]:
     """
     Holt Preise für Item-Namen je nach Modus: 'sell', 'buy' oder 'split' (Mittelwert).
+    Nutzt DB-Cache (via get_prices_by_type_ids) wenn db übergeben wird.
     Returns: dict von name -> price (ISK)
     """
     if not names:
@@ -456,19 +457,36 @@ def get_prices_by_mode(names: list[str], mode: str) -> dict[str, float]:
     if not name_to_id:
         return {}
     try:
-        fuzz = _fetch_fuzzwork_prices(list(name_to_id.values()))
-        result = {}
-        for name, tid in name_to_id.items():
-            d = fuzz.get(tid, {})
-            sell = d.get("sell", 0.0)
-            buy = d.get("buy", 0.0)
-            if mode == "buy":
-                result[name] = buy
-            elif mode == "split":
-                result[name] = (sell + buy) / 2.0 if (sell or buy) else 0.0
-            else:
-                result[name] = sell
-        return result
+        if db is not None:
+            # DB-Cache-Pfad: nutzt MarketCache (15-min TTL, via APScheduler frisch gehalten)
+            type_id_data = get_prices_by_type_ids(list(name_to_id.values()), db)
+            result = {}
+            for name, tid in name_to_id.items():
+                d = type_id_data.get(tid, {})
+                sell = float(d.get("best_sell") or 0)
+                buy = float(d.get("best_buy") or 0)
+                if mode == "buy":
+                    result[name] = buy
+                elif mode == "split":
+                    result[name] = (sell + buy) / 2.0 if (sell or buy) else 0.0
+                else:
+                    result[name] = sell
+            return result
+        else:
+            # Fallback ohne DB: direkte Fuzzwork-Abfrage
+            fuzz = _fetch_fuzzwork_prices(list(name_to_id.values()))
+            result = {}
+            for name, tid in name_to_id.items():
+                d = fuzz.get(tid, {})
+                sell = d.get("sell", 0.0)
+                buy = d.get("buy", 0.0)
+                if mode == "buy":
+                    result[name] = buy
+                elif mode == "split":
+                    result[name] = (sell + buy) / 2.0 if (sell or buy) else 0.0
+                else:
+                    result[name] = sell
+            return result
     except Exception:
         return {}
 

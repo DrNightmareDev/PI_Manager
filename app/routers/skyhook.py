@@ -91,7 +91,7 @@ def skyhook_page(
     # Prices for all products in current inventory
     price_mode = getattr(account, "price_mode", "sell")
     all_products = {it["product_name"] for items in latest.values() for it in items}
-    prices = get_prices_by_mode(list(all_products), price_mode) if all_products else {}
+    prices = get_prices_by_mode(list(all_products), price_mode, db) if all_products else {}
 
     # Per-planet ISK value
     values: dict[int, float] = {

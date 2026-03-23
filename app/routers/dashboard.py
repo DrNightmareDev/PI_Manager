@@ -1,4 +1,6 @@
+import json as _json
 import logging
+import threading as _threading
 import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
@@ -11,7 +13,7 @@ from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache
 from app.market import get_sell_prices_by_names, get_prices_by_mode
-from app.models import Account, Character, IskSnapshot, SkyhookEntry, SkyhookItem
+from app.models import Account, Character, DashboardCache, IskSnapshot, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import joinedload as _joinedload
 from app.pi_data import PLANET_TYPE_COLORS
@@ -36,11 +38,131 @@ PLANET_TYPE_NAMES = {
 # ── Cache ──────────────────────────────────────────────────────────────────────
 _dashboard_cache: dict[int, dict] = {}    # account_id -> {fetched_at, payload}
 _refresh_cooldown: dict[int, float] = {}  # account_id -> timestamp of last force refresh
+_bg_refresh_running: dict[int, bool] = {} # account_id -> True wenn Hintergrund-Refresh läuft
+_bg_refresh_done: dict[int, bool] = {}    # account_id -> True wenn gerade fertig geworden
 
 
 def invalidate_dashboard_cache(account_id: int) -> None:
-    """Cache für einen Account sofort verwerfen (z.B. nach Char-Hinzufügen)."""
+    """Cache für einen Account sofort verwerfen (in-memory + DB)."""
     _dashboard_cache.pop(account_id, None)
+
+
+def _save_colony_cache(account_id: int, payload: dict, db: Session) -> None:
+    """Speichert Colony-ESI-Daten persistent in DB."""
+    next_expiry = payload.get("next_expiry")
+    meta = {
+        "char_count": payload.get("char_count", 0),
+        "colony_count": payload.get("colony_count", 0),
+        "total_isk_day": payload.get("total_isk_day", 0.0),
+        "next_expiry_iso": next_expiry.isoformat() if next_expiry else None,
+        "next_expiry_char": payload.get("next_expiry_char"),
+    }
+    try:
+        colonies_json = _json.dumps(payload["colonies"], default=str)
+        meta_json = _json.dumps(meta)
+    except Exception as e:
+        logger.warning(f"Colony-Cache serialize error: {e}")
+        return
+    try:
+        row = db.query(DashboardCache).filter(DashboardCache.account_id == account_id).first()
+        if row:
+            row.colonies_json = colonies_json
+            row.meta_json = meta_json
+            row.fetched_at = datetime.now(timezone.utc)
+        else:
+            db.add(DashboardCache(
+                account_id=account_id,
+                colonies_json=colonies_json,
+                meta_json=meta_json,
+                fetched_at=datetime.now(timezone.utc),
+            ))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Colony-Cache save error: {e}")
+        db.rollback()
+
+
+def _load_colony_cache(account_id: int, db: Session) -> dict | None:
+    """Lädt Colony-Cache aus DB. Returns dict mit colonies/meta/fetched_at oder None."""
+    try:
+        row = db.query(DashboardCache).filter(DashboardCache.account_id == account_id).first()
+        if not row:
+            return None
+        return {
+            "colonies": _json.loads(row.colonies_json),
+            "meta": _json.loads(row.meta_json),
+            "fetched_at": row.fetched_at.timestamp() if row.fetched_at else 0.0,
+        }
+    except Exception as e:
+        logger.warning(f"Colony-Cache load error: {e}")
+        return None
+
+
+def _recompute_expiry(colonies: list) -> tuple[datetime | None, str | None]:
+    """Aktualisiert expiry_hours aus expiry_iso (relativ zur jetzigen Zeit)."""
+    next_expiry: datetime | None = None
+    next_expiry_char: str | None = None
+    for c in colonies:
+        expiry_iso = c.get("expiry_iso")
+        if expiry_iso:
+            expiry_dt = _parse_expiry(expiry_iso)
+            if expiry_dt:
+                c["expiry_hours"] = _hours_until(expiry_dt)
+                c["is_active"] = c["expiry_hours"] is not None and c["expiry_hours"] > 0
+                if next_expiry is None or expiry_dt < next_expiry:
+                    next_expiry = expiry_dt
+                    next_expiry_char = c.get("character_name")
+    return next_expiry, next_expiry_char
+
+
+def _recompute_isk(colonies: list, price_mode: str, db: Session) -> tuple[list, float]:
+    """Recomputes isk_day für jede Kolonie aus DB-gecachten Preisen (schnell!)."""
+    all_names = {name for c in colonies for name in (c.get("productions") or {})}
+    prices = get_prices_by_mode(list(all_names), price_mode, db) if all_names else {}
+    total = 0.0
+    for c in colonies:
+        prods = c.get("productions") or {}
+        tiers = c.get("prod_tiers") or {}
+        max_tier = c.get("highest_tier_num") or 0
+        c["isk_day"] = sum(
+            qty * prices.get(name, 0.0)
+            for name, qty in prods.items()
+            if tiers.get(name, 0) == max_tier
+        )
+        if c.get("is_active"):
+            total += c["isk_day"]
+    return colonies, total
+
+
+def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> None:
+    """Startet ESI-Refresh im Hintergrund-Thread. Aktualisiert DB-Cache wenn fertig."""
+    if account_id in _bg_refresh_running:
+        return
+    _bg_refresh_running[account_id] = True
+    _bg_refresh_done[account_id] = False
+
+    def _worker():
+        from app.database import SessionLocal
+        newdb = SessionLocal()
+        try:
+            account = newdb.query(Account).filter(Account.id == account_id).first()
+            chars = newdb.query(Character).filter(Character.id.in_(char_ids)).all()
+            if not account or not chars:
+                return
+            pm = getattr(account, "price_mode", "sell")
+            payload = _build_dashboard_payload(account, chars, newdb, price_mode=pm)
+            _save_colony_cache(account_id, payload, newdb)
+            _dashboard_cache[account_id] = {**payload, "price_mode": pm}
+            _bg_refresh_done[account_id] = True
+            logger.info(f"BG-Refresh account {account_id}: {payload.get('colony_count', 0)} Kolonien")
+        except Exception as e:
+            logger.error(f"BG-Refresh account {account_id} fehlgeschlagen: {e}")
+            _bg_refresh_done[account_id] = True
+        finally:
+            newdb.close()
+            _bg_refresh_running.pop(account_id, None)
+
+    _threading.Thread(target=_worker, daemon=True).start()
 
 DASHBOARD_CACHE_TTL = 600.0   # 10 Minuten (entspricht ESI-Cache von CCP)
 REFRESH_COOLDOWN_SEC = 60.0   # 60 Sekunden
@@ -421,8 +543,8 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
         colony_prods.append((productions, prod_tiers, highest_tier, expiry_time, pins))
         all_product_names.update(productions.keys())
 
-    # Schritt 4: Eine einzige Batch-Preisabfrage
-    prices = get_prices_by_mode(list(all_product_names), price_mode) if all_product_names else {}
+    # Schritt 4: Eine einzige Batch-Preisabfrage (DB-Cache-Pfad)
+    prices = get_prices_by_mode(list(all_product_names), price_mode, db) if all_product_names else {}
 
     # Schritt 5: Kolonien-Liste aufbauen
     colonies = []
@@ -471,11 +593,15 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
             "corporation_id": char.corporation_id,
             "corporation_name": char.corporation_name or "",
             "alliance_name": char.alliance_name or "",
+            "expiry_iso": expiry_time.isoformat() if expiry_time else None,
             "expiry_hours": expiry_hours,
             "is_stalled": is_stalled,
             "is_active": is_active,
             "isk_day": isk_day,
             "highest_tier": highest_tier,
+            "highest_tier_num": highest_tier_num,
+            "productions": productions,
+            "prod_tiers": prod_tiers,
             "factories": _compute_factories(pins, prices),
             "storage": _compute_storage(pins),
             "extractor_status": _get_extractor_status(pins),
@@ -514,18 +640,67 @@ def dashboard(
         main_char = db.query(Character).filter(Character.id == account.main_character_id).first()
 
     characters = db.query(Character).filter(Character.account_id == account.id).all()
-
-    # Cache prüfen — auch invalidieren wenn price_mode geändert wurde
     now = _time.time()
     current_price_mode = getattr(account, "price_mode", "sell")
-    cached = _dashboard_cache.get(account.id)
-    if cached and (now - cached["fetched_at"]) < DASHBOARD_CACHE_TTL and cached.get("price_mode") == current_price_mode:
-        payload = cached
-    else:
-        payload = _build_dashboard_payload(account, characters, db, price_mode=current_price_mode)
-        _dashboard_cache[account.id] = payload
 
-    # ISK-Historie (immer frisch aus DB — billig)
+    # ── Schritt 1: DB-Cache laden (schnell, keine ESI-Calls) ──────────────────
+    db_cached = _load_colony_cache(account.id, db)
+    refreshing = account.id in _bg_refresh_running
+
+    if db_cached:
+        cache_age = now - db_cached["fetched_at"]
+        is_stale = cache_age > DASHBOARD_CACHE_TTL
+        colonies = db_cached["colonies"]
+
+        # Ablaufzeiten relativ zur jetzigen Zeit neu berechnen
+        next_expiry_dt, next_expiry_char = _recompute_expiry(colonies)
+
+        # ISK/Tag aus DB-Preiscache (MarketCache) neu berechnen — sehr schnell
+        colonies, total_isk_day = _recompute_isk(colonies, current_price_mode, db)
+
+        meta = db_cached["meta"]
+        char_count = meta.get("char_count", len(characters))
+        colony_count = len(colonies)
+        next_expiry_hours = _hours_until(next_expiry_dt)
+        if next_expiry_hours is None:
+            next_expiry_hours = meta.get("next_expiry_hours")
+
+        # In-Memory-Cache synchron halten (für Skyhook)
+        _dashboard_cache[account.id] = {
+            "colonies": colonies,
+            "total_isk_day": total_isk_day,
+            "next_expiry": next_expiry_dt,
+            "next_expiry_hours": next_expiry_hours,
+            "next_expiry_char": next_expiry_char,
+            "char_count": char_count,
+            "colony_count": colony_count,
+            "fetched_at": db_cached["fetched_at"],
+            "price_mode": current_price_mode,
+        }
+
+        # Hintergrund-Refresh anstoßen wenn Daten veraltet sind
+        if is_stale and not refreshing:
+            _start_bg_refresh(account.id, [c.id for c in characters], current_price_mode)
+            refreshing = True
+
+        cache_age_sec = int(cache_age)
+
+    else:
+        # Erster Start: synchron laden und sofort in DB speichern
+        payload = _build_dashboard_payload(account, characters, db, price_mode=current_price_mode)
+        _save_colony_cache(account.id, payload, db)
+        _dashboard_cache[account.id] = {**payload, "price_mode": current_price_mode}
+
+        colonies = payload["colonies"]
+        total_isk_day = payload["total_isk_day"]
+        next_expiry_dt = payload["next_expiry"]
+        next_expiry_hours = payload["next_expiry_hours"]
+        next_expiry_char = payload["next_expiry_char"]
+        char_count = payload["char_count"]
+        colony_count = payload["colony_count"]
+        cache_age_sec = 0
+
+    # ── ISK-Historie (immer frisch aus DB) ───────────────────────────────────
     snapshots = (
         db.query(IskSnapshot)
         .filter(IskSnapshot.account_id == account.id)
@@ -534,19 +709,14 @@ def dashboard(
         .all()
     )
     isk_history = [
-        {
-            "date": s.recorded_at.strftime("%d.%m"),
-            "date_iso": s.recorded_at.strftime("%Y-%m-%d"),
-            "isk": float(s.isk_day or 0),
-        }
+        {"date": s.recorded_at.strftime("%d.%m"), "date_iso": s.recorded_at.strftime("%Y-%m-%d"), "isk": float(s.isk_day or 0)}
         for s in snapshots
     ]
 
-    cache_age_sec = int(now - payload["fetched_at"])
     cooldown_remaining = max(0, int(REFRESH_COOLDOWN_SEC - (now - _refresh_cooldown.get(account.id, 0))))
 
-    # Skyhook-Daten laden (neuester Snapshot pro Planet, mit allen Items)
-    planet_ids = [c["planet_id"] for c in payload["colonies"] if c.get("planet_id")]
+    # ── Skyhook-Daten ─────────────────────────────────────────────────────────
+    planet_ids = [c["planet_id"] for c in colonies if c.get("planet_id")]
     skyhook_data = {}
     if planet_ids:
         subq = (
@@ -568,19 +738,20 @@ def dashboard(
         "account": account,
         "main_char": main_char,
         "characters": characters,
-        "char_count": payload["char_count"],
-        "colonies": payload["colonies"],
-        "colony_count": payload["colony_count"],
+        "char_count": char_count,
+        "colonies": colonies,
+        "colony_count": colony_count,
         "planet_type_colors": PLANET_TYPE_COLORS,
-        "total_isk_day": payload["total_isk_day"],
-        "next_expiry": payload["next_expiry"],
-        "next_expiry_hours": payload["next_expiry_hours"],
-        "next_expiry_char": payload["next_expiry_char"],
+        "total_isk_day": total_isk_day,
+        "next_expiry": next_expiry_dt,
+        "next_expiry_hours": next_expiry_hours,
+        "next_expiry_char": next_expiry_char,
         "cache_age_sec": cache_age_sec,
         "cooldown_remaining": cooldown_remaining,
         "isk_history": isk_history,
         "skyhook_data": skyhook_data,
-        "price_mode": getattr(account, "price_mode", "sell"),
+        "price_mode": current_price_mode,
+        "refreshing": refreshing,
     })
 
 
@@ -618,11 +789,16 @@ def set_price_mode(
         raise HTTPException(status_code=400, detail="Ungültiger Modus")
     account.price_mode = mode
     db.commit()
-    # Cache-Eintrag mit neuem price_mode markieren — wird beim nächsten Dashboard-Load neu gebaut
-    cached = _dashboard_cache.get(account.id)
-    if cached:
-        cached["price_mode"] = mode
+    # Kein Cache-Löschen nötig — nächster Load recomputed ISK direkt aus DB-Preisen
     return JSONResponse({"ok": True, "mode": mode})
+
+
+@router.get("/refresh-status")
+def refresh_status(account=Depends(require_account)):
+    """Liefert ob ein Hintergrund-ESI-Refresh läuft oder gerade fertig wurde."""
+    running = account.id in _bg_refresh_running
+    done = _bg_refresh_done.pop(account.id, False)
+    return JSONResponse({"running": running, "done": done})
 
 
 @router.get("/overview", response_class=HTMLResponse)
