@@ -58,9 +58,11 @@ def market_overview(
     can_refresh, cooldown_remaining = can_force_market_refresh()
 
     last_updated_str = None
+    last_updated_iso = None
     if last_updated:
         lu = last_updated.replace(tzinfo=timezone.utc) if last_updated.tzinfo is None else last_updated
         last_updated_str = lu.strftime("%d.%m.%Y %H:%M UTC")
+        last_updated_iso = lu.astimezone(timezone.utc).isoformat()
 
     return templates.TemplateResponse("market.html", {
         "request": request,
@@ -68,6 +70,7 @@ def market_overview(
         "rows": rows,
         "tier_colors": TIER_COLORS,
         "last_updated": last_updated_str,
+        "last_updated_iso": last_updated_iso,
         "can_refresh": can_refresh,
         "cooldown_remaining": cooldown_remaining,
     })
@@ -87,6 +90,19 @@ def market_trends(account=Depends(require_account)):
             "trend_7d": t.get("trend_7d"),
         }
     return JSONResponse(content=result)
+
+
+@router.get("/status")
+def market_status(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    last_updated = get_market_last_updated(db)
+    last_updated_iso = None
+    if last_updated:
+        ts = last_updated.replace(tzinfo=timezone.utc) if last_updated.tzinfo is None else last_updated
+        last_updated_iso = ts.astimezone(timezone.utc).isoformat()
+    return JSONResponse({"last_updated_iso": last_updated_iso})
 
 
 @router.post("/refresh")

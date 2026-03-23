@@ -272,6 +272,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 
                     <!-- ISK Wert -->
                     {% set planet_value = values.get(colony.planet_id, 0) %}
+                    {% set planet_details = value_details.get(colony.planet_id, []) %}
                     <td style="white-space:nowrap;" id="val_{{ ri }}">
                         <div class="eve-hover-wrap" style="display:inline-block;">
                             <span id="val_tot_{{ ri }}">
@@ -280,10 +281,10 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                             </span>
                             <div class="eve-hover-card" id="val_det_{{ ri }}" style="min-width:220px;right:0;top:calc(100% + 4px);">
-                                {% for it in cur_items %}{% set ip = prices.get(it.product_name, 0) %}{% if ip > 0 and it.quantity > 0 %}
+                                {% for it in planet_details %}{% if it.unit_price > 0 and it.quantity > 0 %}
                                 <div class="d-flex justify-content-between gap-3" style="font-size:.75rem;margin-bottom:2px;">
                                     <span style="color:var(--eve-text);">{{ it.product_name }}</span>
-                                    <span style="color:#7a9a6a;white-space:nowrap;">{{ (it.quantity * ip) | format_isk }}</span>
+                                    <span style="color:#7a9a6a;white-space:nowrap;">{{ it.line_value | format_isk }}</span>
                                 </div>
                                 {% endif %}{% endfor %}
                             </div>
@@ -332,6 +333,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 // planetId = EVE planet ID — used only for API calls
 const SH_PRODUCTS = {{ pi_products | tojson }};
 const SH_PRICES   = {{ prices | tojson }};
+const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
 
 // Volume lookup: product name → m³ per unit
 const SKYHOOK_CAP = 35000;
@@ -532,6 +534,7 @@ function removeRow(btn) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
     document.querySelectorAll('[data-init]').forEach(container => {
         const ri = parseInt(container.dataset.row);
         let items = [];
@@ -689,10 +692,20 @@ async function saveEntry(ri) {
             body: JSON.stringify({ planet_id: planetId, character_name: charName, items })
         });
         if (!res.ok) throw new Error();
+        const data = await res.json();
 
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Gespeichert';
         btn.classList.add('saved');
         showToast('Gespeichert.', 'success');
+        if (typeof data.total_value === 'number') {
+            _rowValues[ri] = data.total_value;
+        }
+        if (Array.isArray(data.details)) {
+            data.details.forEach(detail => {
+                SH_PRICES[detail.product_name] = detail.unit_price || 0;
+            });
+            updateValueCell(ri);
+        }
         _markClean(ri);
         _refreshHistPopup(ri, planetId);
         setTimeout(() => {
@@ -721,29 +734,16 @@ document.addEventListener('click', e => {
 
 function shSetPriceMode(mode) {
     document.querySelectorAll('#shPriceModeButtons .sh-price-btn').forEach(b => b.disabled = true);
-    let ov = document.getElementById('_shPriceLoadOv');
-    if (!ov) {
-        ov = document.createElement('div');
-        ov.id = '_shPriceLoadOv';
-        ov.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;';
-        ov.innerHTML = '<div style="width:36px;height:36px;border:3px solid rgba(0,180,216,.2);border-top-color:var(--eve-accent);border-radius:50%;animation:_spin .7s linear infinite;"></div>'
-                     + '<span style="color:var(--eve-accent);font-size:.85rem;letter-spacing:.05em;">Preise werden aktualisiert…</span>';
-        document.body.appendChild(ov);
-        if (!document.getElementById('_shPriceLoadStyle')) {
-            const s = document.createElement('style');
-            s.id = '_shPriceLoadStyle';
-            s.textContent = '@keyframes _spin{to{transform:rotate(360deg)}}';
-            document.head.appendChild(s);
-        }
-    }
     fetch('/dashboard/price-mode', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({mode})
     }).then(r => r.json()).then(d => {
         if (d.ok) window.location.reload();
-        else ov.style.display = 'none';
-    }).catch(() => { ov.style.display = 'none'; document.querySelectorAll('#shPriceModeButtons .sh-price-btn').forEach(b => b.disabled = false); });
+        else document.querySelectorAll('#shPriceModeButtons .sh-price-btn').forEach(b => b.disabled = false);
+    }).catch(() => {
+        document.querySelectorAll('#shPriceModeButtons .sh-price-btn').forEach(b => b.disabled = false);
+    });
 }
 </script>
 {% endblock %}

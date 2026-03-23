@@ -244,6 +244,8 @@
 
 {% block extra_scripts %}
 <script>
+const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
+
 function formatIsk(val) {
     if (!val || val === 0) return '—';
     if (val >= 1e9) return (val / 1e9).toFixed(2) + ' B ISK';
@@ -294,6 +296,8 @@ function applyOverviewFilters() {
     document.getElementById('visibleIsk').textContent = formatIsk(iskSum);
     overviewPager.applyFilter(matched);
 }
+
+enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
 </script>
 <style>
 .eve-filter-toggle {

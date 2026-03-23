@@ -1,3 +1,6 @@
+import json
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -6,7 +9,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import engine, get_db
 from app.dependencies import require_account
-from app.models import SkyhookEntry, SkyhookItem
+from app.market import get_prices_by_mode
+from app.models import SkyhookEntry, SkyhookItem, SkyhookValueCache
 from app.pi_data import ALL_P1, ALL_P2, ALL_P3, ALL_P4
 from app.templates_env import templates
 
@@ -15,15 +19,16 @@ router = APIRouter(prefix="/skyhook", tags=["skyhook"])
 # Tabellen anlegen falls noch nicht vorhanden
 SkyhookEntry.__table__.create(bind=engine, checkfirst=True)
 SkyhookItem.__table__.create(bind=engine, checkfirst=True)
+SkyhookValueCache.__table__.create(bind=engine, checkfirst=True)
 
 PI_PRODUCTS_BY_TIER = {"P4": ALL_P4, "P3": ALL_P3, "P2": ALL_P2, "P1": ALL_P1}
+PRICE_MODES = ("sell", "buy", "split")
 
 
 def _load_latest(account_id: int, planet_ids: list[int], db: Session) -> dict:
-    """Returns {planet_id: [{"product_name": ..., "quantity": ...}]}"""
+    """Returns {planet_id: [{"product_name": ..., "quantity": ...}]}."""
     if not planet_ids:
         return {}
-    # Step 1: latest entry-id per planet
     rows = (
         db.query(SkyhookEntry.planet_id, sqlfunc.max(SkyhookEntry.id).label("max_id"))
         .filter(SkyhookEntry.account_id == account_id, SkyhookEntry.planet_id.in_(planet_ids))
@@ -33,12 +38,9 @@ def _load_latest(account_id: int, planet_ids: list[int], db: Session) -> dict:
     if not rows:
         return {}
     entry_id_to_planet = {r.max_id: r.planet_id for r in rows}
-    entry_ids = list(entry_id_to_planet.keys())
+    items = db.query(SkyhookItem).filter(SkyhookItem.entry_id.in_(entry_id_to_planet.keys())).all()
 
-    # Step 2: all items for those entries
-    items = db.query(SkyhookItem).filter(SkyhookItem.entry_id.in_(entry_ids)).all()
-
-    result: dict = {}
+    result: dict[int, list[dict]] = {}
     for it in items:
         pid = entry_id_to_planet.get(it.entry_id)
         if pid is not None:
@@ -47,7 +49,7 @@ def _load_latest(account_id: int, planet_ids: list[int], db: Session) -> dict:
 
 
 def _load_history(account_id: int, planet_ids: list[int], db: Session, limit: int = 3) -> dict:
-    """Returns {planet_id: [entries with items, newest first]}"""
+    """Returns {planet_id: [entries with items, newest first]}."""
     if not planet_ids:
         return {}
     entries = (
@@ -57,20 +59,139 @@ def _load_history(account_id: int, planet_ids: list[int], db: Session, limit: in
         .order_by(SkyhookEntry.id.desc())
         .all()
     )
-    result: dict = {}
-    planet_seen: dict = {}
+    result: dict[int, list[dict]] = {}
+    planet_seen: dict[int, int] = {}
     for e in entries:
         pid = e.planet_id
         planet_seen[pid] = planet_seen.get(pid, 0) + 1
         if planet_seen[pid] == 1:
-            continue  # skip most recent — already visible in the form
+            continue
         result.setdefault(pid, [])
         if len(result[pid]) < limit:
             result[pid].append({
-                "recorded_at": e.recorded_at.strftime("%d.%m.%Y %H:%M") if e.recorded_at else "—",
+                "recorded_at": e.recorded_at.strftime("%d.%m.%Y %H:%M") if e.recorded_at else "-",
                 "items": [{"product_name": i.product_name, "quantity": i.quantity} for i in e.items],
             })
     return result
+
+
+def _save_value_cache(
+    account_id: int,
+    latest: dict[int, list[dict]],
+    db: Session,
+    prune_missing: bool = False,
+) -> dict[str, dict[int, dict]]:
+    """Rebuilds cached ISK values for the latest skyhook inventory per planet."""
+    all_products = {it["product_name"] for items in latest.values() for it in items if it.get("product_name")}
+    price_maps = {
+        mode: (get_prices_by_mode(list(all_products), mode, db) if all_products else {})
+        for mode in PRICE_MODES
+    }
+    now = datetime.now(timezone.utc)
+    existing = {
+        (row.planet_id, row.price_mode): row
+        for row in db.query(SkyhookValueCache).filter(SkyhookValueCache.account_id == account_id).all()
+    }
+    valid_keys: set[tuple[int, str]] = set()
+    cached: dict[str, dict[int, dict]] = {mode: {} for mode in PRICE_MODES}
+
+    for planet_id, items in latest.items():
+        for mode in PRICE_MODES:
+            details = []
+            total_value = 0.0
+            for item in items:
+                product_name = item["product_name"]
+                quantity = int(item.get("quantity") or 0)
+                unit_price = float(price_maps[mode].get(product_name, 0.0) or 0.0)
+                line_value = quantity * unit_price
+                total_value += line_value
+                details.append({
+                    "product_name": product_name,
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "line_value": line_value,
+                })
+
+            key = (planet_id, mode)
+            valid_keys.add(key)
+            row = existing.get(key)
+            details_json = json.dumps(details)
+            if row:
+                row.total_value = str(total_value)
+                row.details_json = details_json
+                row.updated_at = now
+            else:
+                row = SkyhookValueCache(
+                    account_id=account_id,
+                    planet_id=planet_id,
+                    price_mode=mode,
+                    total_value=str(total_value),
+                    details_json=details_json,
+                    updated_at=now,
+                )
+                db.add(row)
+            cached[mode][planet_id] = {
+                "total_value": total_value,
+                "details": details,
+                "updated_at": now,
+            }
+
+    for key, row in existing.items():
+        if prune_missing and key not in valid_keys:
+            db.delete(row)
+
+    db.commit()
+    return cached
+
+
+def refresh_skyhook_value_cache(db: Session, account_ids: list[int] | None = None) -> None:
+    """Refreshes cached skyhook values from the latest inventory and current market DB cache."""
+    query = db.query(SkyhookEntry.account_id).distinct()
+    if account_ids:
+        query = query.filter(SkyhookEntry.account_id.in_(account_ids))
+    target_account_ids = [row.account_id for row in query.all()]
+    for account_id in target_account_ids:
+        rows = (
+            db.query(SkyhookEntry.planet_id, sqlfunc.max(SkyhookEntry.id).label("max_id"))
+            .filter(SkyhookEntry.account_id == account_id)
+            .group_by(SkyhookEntry.planet_id)
+            .all()
+        )
+        if not rows:
+            db.query(SkyhookValueCache).filter(SkyhookValueCache.account_id == account_id).delete()
+            db.commit()
+            continue
+        latest = _load_latest(account_id, [r.planet_id for r in rows], db)
+        _save_value_cache(account_id, latest, db, prune_missing=True)
+
+
+def _load_value_cache(
+    account_id: int,
+    planet_ids: list[int],
+    price_mode: str,
+    db: Session,
+) -> tuple[dict[int, float], dict[int, list[dict]], datetime | None]:
+    rows = (
+        db.query(SkyhookValueCache)
+        .filter(
+            SkyhookValueCache.account_id == account_id,
+            SkyhookValueCache.price_mode == price_mode,
+            SkyhookValueCache.planet_id.in_(planet_ids),
+        )
+        .all()
+    )
+    values: dict[int, float] = {}
+    details: dict[int, list[dict]] = {}
+    last_updated: datetime | None = None
+    for row in rows:
+        values[row.planet_id] = float(row.total_value or 0)
+        try:
+            details[row.planet_id] = json.loads(row.details_json or "[]")
+        except Exception:
+            details[row.planet_id] = []
+        if row.updated_at and (last_updated is None or row.updated_at > last_updated):
+            last_updated = row.updated_at
+    return values, details, last_updated
 
 
 @router.get("", response_class=HTMLResponse)
@@ -79,30 +200,27 @@ def skyhook_page(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    from app.routers.dashboard import _dashboard_cache, _load_colony_cache
-    from app.market import get_prices_by_mode
-    cached = _dashboard_cache.get(account.id)
-    if cached:
-        colonies = cached["colonies"]
-    else:
-        db_cached = _load_colony_cache(account.id, db)
-        colonies = db_cached["colonies"] if db_cached else []
+    from app.routers.dashboard import _load_colony_cache
 
+    db_cached = _load_colony_cache(account.id, db)
+    colonies = db_cached["colonies"] if db_cached else []
     planet_ids = [c["planet_id"] for c in colonies if c.get("planet_id")]
-    latest  = _load_latest(account.id, planet_ids, db)
+
+    latest = _load_latest(account.id, planet_ids, db)
     history = _load_history(account.id, planet_ids, db)
 
-    # Prices for all products in current inventory
     price_mode = getattr(account, "price_mode", "sell")
-    all_products = {it["product_name"] for items in latest.values() for it in items}
-    prices = get_prices_by_mode(list(all_products), price_mode, db) if all_products else {}
+    values, value_details, market_last_updated = _load_value_cache(account.id, planet_ids, price_mode, db)
+    if planet_ids and len(values) < len({pid for pid in planet_ids if pid in latest}):
+        _save_value_cache(account.id, latest, db, prune_missing=True)
+        values, value_details, market_last_updated = _load_value_cache(account.id, planet_ids, price_mode, db)
 
-    # Per-planet ISK value
-    values: dict[int, float] = {
-        pid: sum(it["quantity"] * prices.get(it["product_name"], 0.0) for it in items)
-        for pid, items in latest.items()
-    }
     total_value = sum(values.values())
+    prices = {
+        detail["product_name"]: detail["unit_price"]
+        for planet_details in value_details.values()
+        for detail in planet_details
+    }
 
     return templates.TemplateResponse("skyhook.html", {
         "request": request,
@@ -113,14 +231,22 @@ def skyhook_page(
         "pi_products": PI_PRODUCTS_BY_TIER,
         "prices": prices,
         "values": values,
+        "value_details": value_details,
         "total_value": total_value,
         "price_mode": price_mode,
+        "market_last_updated_iso": (
+            (market_last_updated.replace(tzinfo=timezone.utc) if market_last_updated and market_last_updated.tzinfo is None else market_last_updated)
+            .astimezone(timezone.utc)
+            .isoformat()
+            if market_last_updated else ""
+        ),
     })
 
 
 class ItemIn(BaseModel):
     product_name: str
     quantity: int
+
 
 class EntryIn(BaseModel):
     planet_id: int
@@ -158,4 +284,13 @@ def save_entry(
     for it in valid:
         db.add(SkyhookItem(entry_id=entry.id, product_name=it.product_name, quantity=it.quantity))
     db.commit()
-    return JSONResponse({"ok": True})
+
+    latest = _load_latest(account.id, [body.planet_id], db)
+    cached = _save_value_cache(account.id, latest, db, prune_missing=False)
+    mode = getattr(account, "price_mode", "sell")
+    planet_cache = cached.get(mode, {}).get(body.planet_id, {"total_value": 0.0, "details": []})
+    return JSONResponse({
+        "ok": True,
+        "total_value": planet_cache["total_value"],
+        "details": planet_cache["details"],
+    })

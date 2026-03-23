@@ -300,6 +300,7 @@
 
 {% block extra_scripts %}
 <script>
+const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
 // ── Filter ────────────────────────────────────────────────────────────────────
 function getActive(groupId) {
     return [...document.querySelectorAll(`#${groupId} .eve-filter-toggle.active`)].map(b => b.dataset.val);
@@ -434,6 +435,7 @@ async function openForceLoad() {
     document.getElementById('forceLoadDoneBtn').classList.remove('d-none');
 }
 {% endif %}
+enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
 </script>
 <style>
 .eve-filter-toggle {

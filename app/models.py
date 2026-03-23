@@ -144,6 +144,17 @@ class SkyhookItem(Base):
     entry = relationship("SkyhookEntry", back_populates="items")
 
 
+class SkyhookValueCache(Base):
+    __tablename__ = "skyhook_value_cache"
+
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    planet_id = Column(Integer, primary_key=True)
+    price_mode = Column(String(10), primary_key=True)
+    total_value = Column(String(50), nullable=False, default="0")
+    details_json = Column(Text, nullable=False, default="[]")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class AccessPolicy(Base):
     __tablename__ = "access_policy"
 

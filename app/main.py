@@ -37,11 +37,15 @@ def cleanup_old_sso_states():
 def refresh_market_prices():
     """Stündlicher Marktpreis-Refresh via Janice API."""
     from app.market import refresh_all_pi_prices
+    from app.routers.dashboard import refresh_dashboard_price_cache
+    from app.routers.skyhook import refresh_skyhook_value_cache
     db = SessionLocal()
     try:
         logger.info("Starte stündlichen Marktpreis-Refresh...")
         refresh_all_pi_prices(db)
-        logger.info("Marktpreis-Refresh abgeschlossen.")
+        refresh_dashboard_price_cache(db)
+        refresh_skyhook_value_cache(db)
+        logger.info("Marktpreis- und Wert-Cache-Refresh abgeschlossen.")
     except Exception as e:
         logger.warning(f"Marktpreis-Refresh fehlgeschlagen: {e}")
     finally:

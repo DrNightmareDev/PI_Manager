@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Dashboard – EVE PI Manager{% endblock %}
 
 {% block extra_head %}
@@ -157,7 +157,10 @@
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     {% if colonies %}
-                    <button id="expiredFilter" class="eve-expired-toggle" onclick="toggleExpiredFilter()">
+                    <button id="activeFilter" class="eve-state-toggle eve-state-toggle-active" onclick="toggleActiveFilter()">
+                        <i class="bi bi-play-circle"></i>Aktiv
+                    </button>
+                    <button id="expiredFilter" class="eve-state-toggle eve-state-toggle-inactive" onclick="toggleExpiredFilter()">
                         <i class="bi bi-exclamation-circle"></i>Inaktiv
                     </button>
                     {% endif %}
@@ -172,23 +175,6 @@
                             {% endif %}
                         {% endfor %}
                     </select>
-                    {% endif %}
-                    <!-- Push-Benachrichtigungen -->
-                    <button id="notifyBtn" class="btn btn-sm eve-btn-ghost"
-                            onclick="toggleNotifications()" title="Extractor-Benachrichtigungen">
-                        <i class="bi bi-bell" id="notifyIcon"></i>
-                    </button>
-                    <!-- Hintergrund-Refresh-Indikator -->
-                    {% if refreshing %}
-                    <span class="d-flex align-items-center gap-1 text-muted small" id="bgRefreshBadge" style="white-space:nowrap">
-                        <span class="spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;color:var(--eve-accent);"></span>
-                        <span style="color:var(--eve-accent);">Aktualisierung läuft…</span>
-                    </span>
-                    {% else %}
-                    <span id="bgRefreshBadge" style="display:none;white-space:nowrap" class="d-flex align-items-center gap-1 text-muted small">
-                        <span class="spinner-border spinner-border-sm" style="width:.65rem;height:.65rem;border-width:2px;color:var(--eve-accent);"></span>
-                        <span style="color:var(--eve-accent);">Aktualisierung läuft…</span>
-                    </span>
                     {% endif %}
                     <!-- Cache-Alter + Refresh-Button -->
                     <div class="d-flex align-items-center gap-1" style="min-width:9rem;justify-content:flex-end">
@@ -257,7 +243,8 @@
                                 data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
                                 data-sort-isk="{{ colony.isk_day }}"
                                 data-sort-storage="{{ colony.storage | map(attribute='fill_pct') | max if colony.storage else -1 }}"
-                                data-expired="{{ '1' if (colony.expiry_hours is none and colony.is_stalled != False) or colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}">
+                                data-expired="{{ '1' if (colony.expiry_hours is none and colony.is_stalled != False) or colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}"
+                                data-active="{{ '1' if (colony.expiry_hours is not none and colony.expiry_hours > 0) or colony.is_stalled == false else '0' }}">
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
@@ -453,7 +440,7 @@
         const open = localStorage.getItem('isk_chart_open');
         const body = document.getElementById('iskChartBody');
         const chev = document.getElementById('iskChevron');
-        // default = collapsed (null → closed)
+        // default = collapsed (null ? closed)
         if (open === 'true') {
             if (body) body.style.display = '';
             if (chev) chev.style.transform = 'rotate(-180deg)';
@@ -512,7 +499,7 @@
                         <div class="card-body text-center p-4">
                             <i class="bi bi-diagram-3 fs-2 eve-accent d-block mb-3"></i>
                             <h6 class="fw-semibold">PI Chain Planner</h6>
-                            <p class="text-muted small mb-2">Vollständige Produktionsketten P0→P4 planen</p>
+                            <p class="text-muted small mb-2">Vollständige Produktionsketten P0?P4 planen</p>
                             <span class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">Verfügbar</span>
                         </div>
                     </div>
@@ -577,7 +564,7 @@
 
 {% block extra_scripts %}
 <script>
-// ── Daten für Colony-Detail-Modal ─────────────────────────────────────────────
+// -- Daten für Colony-Detail-Modal ---------------------------------------------
 const COLONY_META = [
 {% for colony in colonies %}
   {"name": {{ colony.planet_name | tojson }}, "type": {{ colony.planet_type | tojson }}, "char": {{ colony.character_name | tojson }}, "color": {{ colony.color | tojson }}},
@@ -613,8 +600,9 @@ const COLONY_LOCATION = [
 
 {% endfor %}
 ];
+const MARKET_LAST_UPDATED_ISO = {{ market_last_updated_iso | tojson }};
 
-// ── Colony Detail Modal ───────────────────────────────────────────────────────
+// -- Colony Detail Modal -------------------------------------------------------
 const colonyModal = new bootstrap.Modal(document.getElementById('colonyDetailModal'));
 const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
 
@@ -663,7 +651,7 @@ function openColonyDetail(idx) {
 
     let html = '';
 
-    // ── Storage ──────────────────────────────────────────────
+    // -- Storage ----------------------------------------------
     if (storage.length > 0) {
         html += '<div class="p-3 pb-0"><h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-box-seam me-1"></i>LAGERSTATUS</h6>';
         storage.forEach(s => {
@@ -692,7 +680,7 @@ function openColonyDetail(idx) {
         html += '</div><hr style="border-color:#1a2d3d;margin:.5rem 0;">';
     }
 
-    // ── Fabriken ─────────────────────────────────────────────
+    // -- Fabriken ---------------------------------------------
     html += '<div class="p-3 pt-2"><h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-gear me-1"></i>FABRIKEN</h6>';
     if (!factories.length) {
         html += '<p class="text-muted small">Keine aktiven Fabriken gefunden.</p>';
@@ -713,7 +701,7 @@ function openColonyDetail(idx) {
     }
     html += '</div>';
 
-    // ── Fehlende Inputs ──────────────────────────────────────────────
+    // -- Fehlende Inputs ----------------------------------------------
     if (missing.length > 0) {
         html += '<hr style="border-color:#1a2d3d;margin:.5rem 0;"><div class="p-3 pt-2">';
         html += '<h6 class="small text-muted fw-semibold mb-2"><i class="bi bi-box-arrow-in-down me-1"></i>FEHLENDE INPUTS (täglich zu importieren)</h6>';
@@ -730,7 +718,7 @@ function openColonyDetail(idx) {
     colonyModal.show();
 }
 
-// ── Refresh Button ────────────────────────────────────────────────────────────
+// -- Refresh Button ------------------------------------------------------------
 let cooldownTimer = null;
 
 async function forceRefresh() {
@@ -773,8 +761,9 @@ function startCooldownUI(seconds) {
 // Server-seitigen Cooldown in UI übernehmen (falls Seite während Cooldown geladen wurde)
 const serverCooldown = {{ cooldown_remaining }};
 if (serverCooldown > 0) startCooldownUI(serverCooldown);
+enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
 
-// ── ISK-Verlauf Chart ─────────────────────────────────────────────────────────
+// -- ISK-Verlauf Chart ---------------------------------------------------------
 {% if isk_history | length > 1 %}
 const iskHistoryData = {{ isk_history | tojson }};
 let _iskChart = null;
@@ -864,7 +853,7 @@ function _initIskChart() {
 if (localStorage.getItem('isk_chart_open') === 'true') _initIskChart();
 {% endif %}
 
-// ── Preis-Modus (Sell / Buy / Split) ─────────────────────────────────────────
+// -- Preis-Modus (Sell / Buy / Split) -----------------------------------------
 function setPriceMode(mode) {
     // Sofort aktiven Button setzen für Instant-Feedback
     document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => {
@@ -882,31 +871,24 @@ function setPriceMode(mode) {
     });
 }
 
-// ── Hintergrund-Refresh Polling ───────────────────────────────────────────────
+// -- Hintergrund-Refresh Polling -----------------------------------------------
 {% if refreshing %}
 (function pollBgRefresh() {
-    const badge = document.getElementById('bgRefreshBadge');
     let polls = 0;
     const MAX_POLLS = 20; // max 60s (3s * 20)
     function poll() {
         polls++;
         if (polls > MAX_POLLS) {
-            // Refresh hängt oder dauert zu lange → Badge ausblenden
-            if (badge) badge.style.display = 'none';
             return;
         }
         fetch('/dashboard/refresh-status')
         .then(r => r.json())
         .then(d => {
             if (d.done) {
-                if (badge) {
-                    badge.innerHTML = '<i class="bi bi-check-circle me-1" style="color:var(--eve-green);"></i><span style="color:var(--eve-green);">Aktualisiert</span>';
-                }
-                setTimeout(() => window.location.reload(), 1500);
+                window.location.reload();
             } else if (d.running) {
                 setTimeout(poll, 3000);
             } else {
-                // Nicht mehr running aber auch nicht done → Seite neu laden
                 window.location.reload();
             }
         })
@@ -916,7 +898,7 @@ function setPriceMode(mode) {
 })();
 {% endif %}
 
-// ── Push-Benachrichtigungen (Service Worker) ──────────────────────────────────
+// -- Push-Benachrichtigungen (Service Worker) ----------------------------------
 const COLONY_EXPIRIES = [
 {% for colony in colonies %}{% if colony.expiry_hours is not none and colony.expiry_hours > 0 %}
   {name: {{ colony.planet_name | tojson }}, char: {{ colony.character_name | tojson }},
@@ -1063,7 +1045,7 @@ initServiceWorker();
 .eve-hover-wrap:hover .eve-hover-card {
     display: block;
 }
-.eve-expired-toggle {
+.eve-state-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1078,15 +1060,35 @@ initServiceWorker();
     transition: all .15s;
     white-space: nowrap;
 }
-.eve-expired-toggle:hover {
+.eve-state-toggle-inactive {
+    border: 1px solid rgba(231,76,60,0.3);
+    background: rgba(231,76,60,0.07);
+    color: #c0534a;
+}
+.eve-state-toggle-inactive:hover {
     border-color: rgba(231,76,60,0.6);
     color: #e74c3c;
     background: rgba(231,76,60,0.13);
 }
-.eve-expired-toggle.active {
+.eve-state-toggle-inactive.active {
     border-color: rgba(231,76,60,0.75);
     background: rgba(231,76,60,0.18);
     color: #e74c3c;
+}
+.eve-state-toggle-active {
+    border: 1px solid rgba(45,198,83,0.3);
+    background: rgba(45,198,83,0.07);
+    color: #4cb36b;
+}
+.eve-state-toggle-active:hover {
+    border-color: rgba(45,198,83,0.6);
+    color: #2dc653;
+    background: rgba(45,198,83,0.13);
+}
+.eve-state-toggle-active.active {
+    border-color: rgba(45,198,83,0.75);
+    background: rgba(45,198,83,0.18);
+    color: #2dc653;
 }
 </style>
 <script>
@@ -1097,5 +1099,12 @@ function toggleExpiredFilter() {
     btn.classList.toggle('active');
     window.applyFilters();
 }
+
+function toggleActiveFilter() {
+    const btn = document.getElementById('activeFilter');
+    btn.classList.toggle('active');
+    window.applyFilters();
+}
 </script>
 {% endblock %}
+

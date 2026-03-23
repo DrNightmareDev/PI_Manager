@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache
-from app.market import get_sell_prices_by_names, get_prices_by_mode
+from app.market import get_prices_by_mode, get_market_last_updated
 from app.models import Account, Character, DashboardCache, IskSnapshot, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import joinedload as _joinedload
@@ -61,11 +61,13 @@ def _touch_colony_cache(account_id: int, db: Session) -> None:
 
 def _save_colony_cache(account_id: int, payload: dict, db: Session) -> None:
     """Speichert Colony-ESI-Daten persistent in DB."""
+    _hydrate_price_cache(payload, db)
     next_expiry = payload.get("next_expiry")
     meta = {
         "char_count": payload.get("char_count", 0),
         "colony_count": payload.get("colony_count", 0),
         "total_isk_day": payload.get("total_isk_day", 0.0),
+        "total_isk_day_modes": payload.get("total_isk_day_modes", {}),
         "next_expiry_iso": next_expiry.isoformat() if next_expiry else None,
         "next_expiry_char": payload.get("next_expiry_char"),
     }
@@ -146,6 +148,80 @@ def _recompute_isk(colonies: list, price_mode: str, db: Session) -> tuple[list, 
     return colonies, total
 
 
+def _compute_total_isk(colonies: list) -> float:
+    total = 0.0
+    for colony in colonies:
+        if colony.get("is_active"):
+            total += float(colony.get("isk_day", 0.0) or 0.0)
+    return total
+
+
+def _hydrate_price_cache(payload: dict, db: Session) -> dict:
+    """Schreibt ISK/Tag fuer sell/buy/split in den Payload."""
+    colonies = payload.get("colonies") or []
+    all_names = {name for colony in colonies for name in (colony.get("productions") or {})}
+    price_maps = {
+        mode: (get_prices_by_mode(list(all_names), mode, db) if all_names else {})
+        for mode in ("sell", "buy", "split")
+    }
+    totals = {"sell": 0.0, "buy": 0.0, "split": 0.0}
+    for colony in colonies:
+        prods = colony.get("productions") or {}
+        tiers = colony.get("prod_tiers") or {}
+        max_tier = colony.get("highest_tier_num") or 0
+        isk_day_modes = {}
+        for mode, prices in price_maps.items():
+            isk_day = sum(
+                qty * prices.get(name, 0.0)
+                for name, qty in prods.items()
+                if tiers.get(name, 0) == max_tier
+            )
+            isk_day_modes[mode] = isk_day
+            if colony.get("is_active"):
+                totals[mode] += isk_day
+        colony["isk_day_modes"] = isk_day_modes
+    payload["total_isk_day_modes"] = totals
+    payload["total_isk_day"] = totals.get(payload.get("price_mode", "sell"), 0.0)
+    return payload
+
+
+def _apply_price_mode(colonies: list, meta: dict, price_mode: str) -> tuple[list, float]:
+    """Setzt isk_day aus dem persistenten Preis-Cache fuer den gewaehlten Modus."""
+    totals = meta.get("total_isk_day_modes") or {}
+    total = float(totals.get(price_mode, 0.0) or 0.0)
+    missing_mode = False
+    for colony in colonies:
+        modes = colony.get("isk_day_modes") or {}
+        if price_mode not in modes:
+            missing_mode = True
+            colony["isk_day"] = float(colony.get("isk_day", 0.0) or 0.0)
+        else:
+            colony["isk_day"] = float(modes.get(price_mode, 0.0) or 0.0)
+    if missing_mode:
+        total = _compute_total_isk(colonies)
+    return colonies, total
+
+
+def refresh_dashboard_price_cache(db: Session, account_ids: list[int] | None = None) -> None:
+    """Aktualisiert persistierte Dashboard-Werte aus dem Markt-DB-Cache."""
+    query = db.query(DashboardCache)
+    if account_ids:
+        query = query.filter(DashboardCache.account_id.in_(account_ids))
+    for row in query.all():
+        try:
+            colonies = _json.loads(row.colonies_json or "[]")
+            meta = _json.loads(row.meta_json or "{}")
+            payload = {"colonies": colonies, "meta": meta, "price_mode": "sell"}
+            _hydrate_price_cache(payload, db)
+            meta["total_isk_day_modes"] = payload.get("total_isk_day_modes", {})
+            meta["total_isk_day"] = payload.get("total_isk_day", 0.0)
+            row.colonies_json = _json.dumps(payload["colonies"], default=str)
+            row.meta_json = _json.dumps(meta)
+        except Exception as e:
+            logger.warning(f"Dashboard-Preiscache fuer Account {row.account_id} fehlgeschlagen: {e}")
+    db.commit()
+
+
 def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> None:
     """Startet ESI-Refresh im Hintergrund-Thread. Aktualisiert DB-Cache wenn fertig."""
     if account_id in _bg_refresh_running:
@@ -156,11 +232,12 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
     def _worker():
         from app.database import SessionLocal
         newdb = SessionLocal()
+        finished = False
         try:
             account = newdb.query(Account).filter(Account.id == account_id).first()
             chars = newdb.query(Character).filter(Character.id.in_(char_ids)).all()
             if not account or not chars:
-                _bg_refresh_done[account_id] = True
+                finished = True
                 return
             pm = getattr(account, "price_mode", "sell")
             payload = _build_dashboard_payload(account, chars, newdb, price_mode=pm)
@@ -174,13 +251,15 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
                 # prevent the next page load from immediately triggering another refresh.
                 _touch_colony_cache(account_id, newdb)
                 logger.warning(f"BG-Refresh account {account_id}: ESI lieferte 0 Kolonien – Timestamp aktualisiert, Kolonie-Daten unverändert")
-            _bg_refresh_done[account_id] = True
+            finished = True
         except Exception as e:
             logger.error(f"BG-Refresh account {account_id} fehlgeschlagen: {e}")
-            _bg_refresh_done[account_id] = True
+            finished = True
         finally:
             newdb.close()
             _bg_refresh_running.pop(account_id, None)
+            if finished:
+                _bg_refresh_done[account_id] = True
 
     _threading.Thread(target=_worker, daemon=True).start()
 
@@ -633,9 +712,7 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
         })
 
     colony_count = len(colonies)
-    _record_isk_snapshot(account.id, total_isk_day, colony_count, db)
-
-    return {
+    payload = {
         "colonies": colonies,
         "total_isk_day": total_isk_day,
         "next_expiry": next_expiry,
@@ -646,6 +723,9 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
         "fetched_at": _time.time(),
         "price_mode": price_mode,
     }
+    _hydrate_price_cache(payload, db)
+    _record_isk_snapshot(account.id, total_isk_day, colony_count, db)
+    return payload
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -669,20 +749,18 @@ def dashboard(
 
     # ── Schritt 1: DB-Cache laden (schnell, keine ESI-Calls) ──────────────────
     db_cached = _load_colony_cache(account.id, db)
-    refreshing = account.id in _bg_refresh_running
+    refreshing = account.id in _bg_refresh_running and not _bg_refresh_done.get(account.id, False)
 
     if db_cached:
         cache_age = now - db_cached["fetched_at"]
-        is_stale = cache_age > DASHBOARD_CACHE_TTL
         colonies = db_cached["colonies"]
+        meta = db_cached["meta"]
 
         # Ablaufzeiten relativ zur jetzigen Zeit neu berechnen
         next_expiry_dt, next_expiry_char = _recompute_expiry(colonies)
 
         # ISK/Tag aus DB-Preiscache (MarketCache) neu berechnen — sehr schnell
-        colonies, total_isk_day = _recompute_isk(colonies, current_price_mode, db)
-
-        meta = db_cached["meta"]
+        colonies, total_isk_day = _apply_price_mode(colonies, meta, current_price_mode)
         char_count = meta.get("char_count", len(characters))
         colony_count = len(colonies)
         next_expiry_hours = _hours_until(next_expiry_dt)
@@ -701,11 +779,6 @@ def dashboard(
             "fetched_at": db_cached["fetched_at"],
             "price_mode": current_price_mode,
         }
-
-        # Hintergrund-Refresh anstoßen wenn Daten veraltet sind
-        if is_stale and not refreshing:
-            _start_bg_refresh(account.id, [c.id for c in characters], current_price_mode)
-            refreshing = True
 
         cache_age_sec = int(cache_age)
 
@@ -738,6 +811,11 @@ def dashboard(
     ]
 
     cooldown_remaining = max(0, int(REFRESH_COOLDOWN_SEC - (now - _refresh_cooldown.get(account.id, 0))))
+    market_last_updated = get_market_last_updated(db)
+    market_last_updated_iso = None
+    if market_last_updated:
+        ts = market_last_updated.replace(tzinfo=timezone.utc) if market_last_updated.tzinfo is None else market_last_updated
+        market_last_updated_iso = ts.astimezone(timezone.utc).isoformat()
 
     # ── Skyhook-Daten ─────────────────────────────────────────────────────────
     planet_ids = [c["planet_id"] for c in colonies if c.get("planet_id")]
@@ -776,6 +854,7 @@ def dashboard(
         "skyhook_data": skyhook_data,
         "price_mode": current_price_mode,
         "refreshing": refreshing,
+        "market_last_updated_iso": market_last_updated_iso,
     })
 
 
@@ -796,6 +875,12 @@ def force_refresh(account=Depends(require_account)):
         chars = db.query(_Char).filter(_Char.account_id == account.id).all()
         for char in chars:
             invalidate_planet_detail_cache(char.eve_character_id)
+        if chars:
+            _start_bg_refresh(
+                account.id,
+                [char.id for char in chars],
+                getattr(account, "price_mode", "sell"),
+            )
     finally:
         db.close()
     _refresh_cooldown[account.id] = now
@@ -820,8 +905,8 @@ def set_price_mode(
 @router.get("/refresh-status")
 def refresh_status(account=Depends(require_account)):
     """Liefert ob ein Hintergrund-ESI-Refresh läuft oder gerade fertig wurde."""
-    running = account.id in _bg_refresh_running
     done = _bg_refresh_done.pop(account.id, False)
+    running = (account.id in _bg_refresh_running) and not done
     return JSONResponse({"running": running, "done": done})
 
 
@@ -838,12 +923,16 @@ def overview_page(
     all_accounts = db.query(Account).all()
     all_colonies: list[dict] = []
     uncached: list[dict] = []
+    price_mode = getattr(account, "price_mode", "sell")
 
     for acc in all_accounts:
-        cached = _dashboard_cache.get(acc.id)
+        cached = _load_colony_cache(acc.id, db)
         if cached:
-            for colony in cached.get("colonies", []):
-                all_colonies.append(colony)
+            colonies = cached.get("colonies", [])
+            meta = cached.get("meta", {})
+            _recompute_expiry(colonies)
+            colonies, _ = _apply_price_mode(colonies, meta, price_mode)
+            all_colonies.extend(colonies)
         else:
             chars = db.query(Character).filter(Character.account_id == acc.id).all()
             main = None
@@ -857,6 +946,11 @@ def overview_page(
 
     all_colonies.sort(key=lambda x: (x.get("character_name", ""), x.get("planet_name", "")))
     total_isk = sum(c.get("isk_day", 0) for c in all_colonies if c.get("is_active", True))
+    market_last_updated = get_market_last_updated(db)
+    market_last_updated_iso = None
+    if market_last_updated:
+        ts = market_last_updated.replace(tzinfo=timezone.utc) if market_last_updated.tzinfo is None else market_last_updated
+        market_last_updated_iso = ts.astimezone(timezone.utc).isoformat()
 
     return templates.TemplateResponse("overview.html", {
         "request": request,
@@ -865,6 +959,7 @@ def overview_page(
         "uncached": uncached,
         "total_colonies": len(all_colonies),
         "total_isk_day": total_isk,
+        "market_last_updated_iso": market_last_updated_iso,
     })
 
 
@@ -915,12 +1010,17 @@ def corp_view_page(
 
     corp_char_names = {c.character_name for c in corp_chars}
     account_ids = {c.account_id for c in corp_chars}
+    price_mode = getattr(account, "price_mode", "sell")
 
     corp_colonies: list[dict] = []
     for acc_id in account_ids:
-        cached = _dashboard_cache.get(acc_id)
+        cached = _load_colony_cache(acc_id, db)
         if cached:
-            for colony in cached.get("colonies", []):
+            colonies = cached.get("colonies", [])
+            meta = cached.get("meta", {})
+            _recompute_expiry(colonies)
+            colonies, _ = _apply_price_mode(colonies, meta, price_mode)
+            for colony in colonies:
                 if colony.get("character_name") in corp_char_names:
                     corp_colonies.append(colony)
 
@@ -939,7 +1039,7 @@ def corp_view_page(
             corp_accounts.append({
                 "account_id": acc_id,
                 "main_name": main.character_name if main else f"Account #{acc_id}",
-                "is_cached": acc_id in _dashboard_cache,
+                "is_cached": _load_colony_cache(acc_id, db) is not None,
             })
 
     # All corps on this instance (for switcher, owner only)
@@ -955,6 +1055,11 @@ def corp_view_page(
         )
 
     uncached_count = sum(1 for a in corp_accounts if not a["is_cached"])
+    market_last_updated = get_market_last_updated(db)
+    market_last_updated_iso = None
+    if market_last_updated:
+        ts = market_last_updated.replace(tzinfo=timezone.utc) if market_last_updated.tzinfo is None else market_last_updated
+        market_last_updated_iso = ts.astimezone(timezone.utc).isoformat()
 
     return templates.TemplateResponse("corp_view.html", {
         "request": request,
@@ -968,6 +1073,7 @@ def corp_view_page(
         "total_colonies": len(corp_colonies),
         "total_isk_day": total_isk,
         "is_ceo": is_ceo,
+        "market_last_updated_iso": market_last_updated_iso,
     })
 
 
@@ -992,7 +1098,7 @@ def corp_accounts_api(
         result.append({
             "account_id": acc_id,
             "main_name": main.character_name if main else f"Account #{acc_id}",
-            "is_cached": acc_id in _dashboard_cache,
+            "is_cached": _load_colony_cache(acc_id, db) is not None,
         })
     return JSONResponse({"accounts": result})
 
@@ -1012,6 +1118,7 @@ def force_load_account(
     chars = db.query(Character).filter(Character.account_id == target_account_id).all()
     try:
         payload = _build_dashboard_payload(target, chars, db, price_mode=getattr(target, "price_mode", "sell"))
+        _save_colony_cache(target_account_id, payload, db)
         _dashboard_cache[target_account_id] = payload
         return JSONResponse({"ok": True, "colony_count": payload["colony_count"]})
     except Exception as e:

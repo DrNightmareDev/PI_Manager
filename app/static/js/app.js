@@ -196,17 +196,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Filter ---
     const filterSelect = document.getElementById('charFilter');
+    const activeCheck = document.getElementById('activeFilter');
     const expiredCheck = document.getElementById('expiredFilter');
 
     window.applyFilters = applyFilter;
 
     function applyFilter() {
         const charVal     = filterSelect ? filterSelect.value : '';
+        const onlyActive  = activeCheck ? activeCheck.classList.contains('active') : false;
         const onlyExpired = expiredCheck ? expiredCheck.classList.contains('active') : false;
         const matched = rows.filter(r => {
             const charOk    = !charVal     || r.dataset.char    === charVal;
+            const activeOk  = !onlyActive  || r.dataset.active  === '1';
             const expiredOk = !onlyExpired || r.dataset.expired === '1';
-            return charOk && expiredOk;
+            return charOk && activeOk && expiredOk;
         });
         pager.applyFilter(matched);
         _saveFilterState();
@@ -217,6 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             localStorage.setItem(FILTER_KEY, JSON.stringify({
                 char: filterSelect ? filterSelect.value : '',
+                active: activeCheck ? activeCheck.classList.contains('active') : false,
                 expired: expiredCheck ? expiredCheck.classList.contains('active') : false,
                 sortCol: sortCol,
                 sortAsc: sortAsc,
@@ -228,6 +232,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const s = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
             if (s.char && filterSelect) filterSelect.value = s.char;
+            if (s.active && activeCheck) activeCheck.classList.add('active');
             if (s.expired && expiredCheck) expiredCheck.classList.add('active');
             if (s.sortCol) {
                 sortCol = s.sortCol;

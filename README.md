@@ -15,13 +15,13 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | Feature | Beschreibung |
 |---|---|
 | **PI Kolonien** | Übersicht aller Planeten-Kolonien für Main + Alts |
-| **ISK/Tag Berechnung** | Echtzeit-Preise via Fuzzwork Jita 4-4 |
-| **Dashboard Cache** | Daten 15 min gecacht, Force-Refresh max. 1×/60 s (API-Schutz) |
+| **ISK/Tag Berechnung** | Preise werden persistent in PostgreSQL gecacht und alle 15 Minuten aktualisiert |
+| **Dashboard Cache** | Kolonie-Daten persistent in der DB; Preiswerte für Sell/Buy/Split werden daraus ohne Live-Refresh berechnet |
 | **Kolonie-Detail** | Fabrik-Übersicht pro Kolonie (Tier, Stück/Tag, ISK/Tag), fehlende Inputs, Lagerstand |
 | **ISK/Tag Verlauf** | Tägliche Snapshots mit Chart.js Verlaufsgraph |
 | **Ablauf-Timer** | Nächster Extractor-Ablauf mit Farb-Warnsystem, Filter für inaktive Kolonien |
 | **Push-Benachrichtigungen** | Browser-Notifications wenn Extractoren ablaufen (120/60/30/10 Min.) |
-| **Skyhook Inventar** | Skyhook-Bestand pro Planet direkt im Browser erfassen und bearbeiten; Füllstand-Anzeige (35.000 m³), ISK-Wert live mit Hover-Aufschlüsselung, Verlauf der letzten 3 Einträge, Undo-Button, Edit-Lock (immer nur ein Skyhook gleichzeitig bearbeitbar), Filter + sortierbare Tabelle |
+| **Skyhook Inventar** | Skyhook-Bestand pro Planet direkt im Browser erfassen und bearbeiten; Füllstand-Anzeige (35.000 m³), persistenter DB-Cache für Planetwerte, Hover-Aufschlüsselung, Verlauf der letzten 3 Einträge, Undo-Button, Edit-Lock (immer nur ein Skyhook gleichzeitig bearbeitbar), Filter + sortierbare Tabelle |
 | **Pagination** | Alle Tabellen mit konfigurierbarer Seitengröße (6/15/25/100/Alle) |
 | **PI Chain Planner** | Vollständige P0–P4 Produktionsketten mit interaktivem SVG-Graph (PLANETS → RAW → P1 → … → P4) |
 | **Planeten-Filter** | Im Graphen Planeten anklicken → nicht produzierbare Knoten ausgegraut |
@@ -41,6 +41,7 @@ Planetary Industry Dashboard für EVE Online — selbst gehostet, kein Cloud-Abo
 | **Owner-System** | Erster Account = Besitzer, stealth (nur für den Besitzer selbst sichtbar), geschützt vor Löschung/Entfernung |
 | **Jita Marktpreise** | Live-Preise P1–P4, Tier-Filter, Sortierung, 24h/7T/30T Trends |
 | **Light / Dark Mode** | Theme-Toggle in der Navbar, Einstellung per localStorage gespeichert |
+| **Globaler Update-Hinweis** | Ein einzelnes Storage-Icon in der Navbar zeigt per Hover den Zeitpunkt der letzten Preisaktualisierung |
 | **EveRef SDE** | Statische Spieldaten lokal (Schematics, Types) – kein ESI-Overhead |
 
 ---
@@ -197,6 +198,12 @@ cd /opt/eve-pi-manager
 ./venv/bin/alembic upgrade head
 ```
 
+Wichtige persistente Caches:
+
+- `market_cache` speichert P1-P4 Marktpreise
+- `dashboard_cache_db` speichert Kolonie- und Produktionsdaten pro Account
+- `skyhook_value_cache` speichert berechnete Skyhook-Werte pro Planet und Preis-Modus
+
 ---
 
 ## Lokale Entwicklung
@@ -312,7 +319,7 @@ Die ESI API wird weiterhin für **Echtzeit-Daten** genutzt (Charakter-Kolonien, 
 | Sessions | itsdangerous (signed cookies) |
 | Marktdaten | Fuzzwork API |
 | Spieldaten | EveRef Static Data Export |
-| Scheduler | APScheduler (Marktpreise alle 15 min) |
+| Scheduler | APScheduler (Marktpreise + Wert-Caches alle 15 min) |
 | Notifications | Web Notifications API + Service Worker |
 | Deployment | Docker Compose **oder** systemd + Nginx auf Proxmox LXC |
 
