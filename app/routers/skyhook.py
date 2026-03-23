@@ -271,8 +271,6 @@ def save_entry(
     db: Session = Depends(get_db),
 ):
     valid = [i for i in body.items if i.product_name and i.quantity >= 0]
-    if not valid:
-        return JSONResponse({"ok": False, "error": "no valid items"}, status_code=400)
 
     entry = SkyhookEntry(
         account_id=account.id,
@@ -286,7 +284,15 @@ def save_entry(
     db.commit()
 
     latest = _load_latest(account.id, [body.planet_id], db)
-    cached = _save_value_cache(account.id, latest, db, prune_missing=False)
+    if latest.get(body.planet_id):
+        cached = _save_value_cache(account.id, latest, db, prune_missing=False)
+    else:
+        db.query(SkyhookValueCache).filter(
+            SkyhookValueCache.account_id == account.id,
+            SkyhookValueCache.planet_id == body.planet_id,
+        ).delete()
+        db.commit()
+        cached = {mode: {} for mode in PRICE_MODES}
     mode = getattr(account, "price_mode", "sell")
     planet_cache = cached.get(mode, {}).get(body.planet_id, {"total_value": 0.0, "details": []})
     return JSONResponse({

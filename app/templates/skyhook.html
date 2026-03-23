@@ -679,7 +679,6 @@ async function saveEntry(ri) {
         const qty  = parseInt(row.querySelector('.sh-qty').value || '0');
         if (prod) items.push({ product_name: prod, quantity: isNaN(qty) ? 0 : qty });
     });
-    if (!items.length) { showToast('Bitte mindestens ein Produkt angeben.', 'warning'); return; }
 
     btn.disabled = true;
     const orig = btn.innerHTML;
