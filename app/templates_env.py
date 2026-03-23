@@ -1,4 +1,8 @@
+import time
 from fastapi.templating import Jinja2Templates
+
+# Bumped on every server start → busts browser cache for static JS/CSS
+_STATIC_VERSION = str(int(time.time()))
 
 
 def format_isk(value: float) -> str:
@@ -29,3 +33,4 @@ def format_expiry(hours: float) -> str:
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["format_isk"] = format_isk
 templates.env.filters["format_expiry"] = format_expiry
+templates.env.globals["static_version"] = _STATIC_VERSION
