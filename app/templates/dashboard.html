@@ -854,18 +854,40 @@ if (localStorage.getItem('isk_chart_open') === 'true') _initIskChart();
 
 // ── Preis-Modus (Sell / Buy / Split) ─────────────────────────────────────────
 function setPriceMode(mode) {
+    _showPriceLoading(mode);
     fetch('/dashboard/price-mode', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({mode})
     }).then(r => r.json()).then(d => {
-        if (!d.ok) return;
-        document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => {
-            b.classList.toggle('active', b.getAttribute('onclick').includes("'" + mode + "'"));
-        });
-        // Cache invalidated on server — reload to show new prices
-        window.location.reload();
-    });
+        if (d.ok) window.location.reload();
+    }).catch(() => _hidePriceLoading());
+}
+
+function _showPriceLoading(mode) {
+    document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => b.disabled = true);
+    let ov = document.getElementById('_priceLoadOv');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = '_priceLoadOv';
+        ov.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;';
+        ov.innerHTML = '<div style="width:36px;height:36px;border:3px solid rgba(0,180,216,.2);border-top-color:var(--eve-accent);border-radius:50%;animation:_spin .7s linear infinite;"></div>'
+                     + '<span style="color:var(--eve-accent);font-size:.85rem;letter-spacing:.05em;">Preise werden aktualisiert…</span>';
+        document.body.appendChild(ov);
+        if (!document.getElementById('_priceLoadStyle')) {
+            const s = document.createElement('style');
+            s.id = '_priceLoadStyle';
+            s.textContent = '@keyframes _spin{to{transform:rotate(360deg)}}';
+            document.head.appendChild(s);
+        }
+    }
+    ov.style.display = 'flex';
+}
+
+function _hidePriceLoading() {
+    const ov = document.getElementById('_priceLoadOv');
+    if (ov) ov.style.display = 'none';
+    document.querySelectorAll('#priceModeButtons .eve-filter-toggle').forEach(b => b.disabled = false);
 }
 
 // ── Push-Benachrichtigungen (Service Worker) ──────────────────────────────────
