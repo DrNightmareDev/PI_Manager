@@ -494,6 +494,7 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
         "char_count": len(characters),
         "colony_count": colony_count,
         "fetched_at": _time.time(),
+        "price_mode": price_mode,
     }
 
 
@@ -514,13 +515,14 @@ def dashboard(
 
     characters = db.query(Character).filter(Character.account_id == account.id).all()
 
-    # Cache prüfen
+    # Cache prüfen — auch invalidieren wenn price_mode geändert wurde
     now = _time.time()
+    current_price_mode = getattr(account, "price_mode", "sell")
     cached = _dashboard_cache.get(account.id)
-    if cached and (now - cached["fetched_at"]) < DASHBOARD_CACHE_TTL:
+    if cached and (now - cached["fetched_at"]) < DASHBOARD_CACHE_TTL and cached.get("price_mode") == current_price_mode:
         payload = cached
     else:
-        payload = _build_dashboard_payload(account, characters, db, price_mode=getattr(account, "price_mode", "sell"))
+        payload = _build_dashboard_payload(account, characters, db, price_mode=current_price_mode)
         _dashboard_cache[account.id] = payload
 
     # ISK-Historie (immer frisch aus DB — billig)
@@ -616,8 +618,10 @@ def set_price_mode(
         raise HTTPException(status_code=400, detail="Ungültiger Modus")
     account.price_mode = mode
     db.commit()
-    # Cache invalidieren, damit nächster Load die neuen Preise verwendet
-    _dashboard_cache.pop(account.id, None)
+    # Cache-Eintrag mit neuem price_mode markieren — wird beim nächsten Dashboard-Load neu gebaut
+    cached = _dashboard_cache.get(account.id)
+    if cached:
+        cached["price_mode"] = mode
     return JSONResponse({"ok": True, "mode": mode})
 
 
