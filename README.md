@@ -2,6 +2,8 @@
 
 Planetary Industry Dashboard fuer EVE Online - selbst gehostet.
 
+Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightmare`.
+
 ## Features
 
 - PI Kolonien fuer Main und Alts
