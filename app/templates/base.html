@@ -26,7 +26,7 @@
         Du siehst das Dashboard als <strong style="color:#fff;">{{ account.characters[0].character_name if account.characters else 'Account #' ~ account.id }}</strong>
     </span>
     <a href="/admin/impersonate-exit" class="btn btn-sm" style="background:#f97316;color:#fff;border:none;padding:2px 12px;">
-        <i class="bi bi-box-arrow-left me-1"></i>Zurück zu meinem Account
+        <i class="bi bi-box-arrow-left me-1"></i>Zurueck zu meinem Account
     </a>
 </div>
 {% endif %}
@@ -36,7 +36,7 @@
     <div class="container-fluid px-3">
         <!-- Brand -->
         <a class="navbar-brand eve-brand d-flex align-items-center gap-2" href="/dashboard">
-            <span class="eve-diamond">◆</span>
+            <span class="eve-diamond">&diams;</span>
             <span>PI Manager</span>
         </a>
 
@@ -148,7 +148,7 @@
                     <li><hr class="dropdown-divider eve-divider"></li>
                     <li>
                         <a class="dropdown-item" href="/auth/add-character">
-                            <i class="bi bi-person-plus me-2"></i>Alt hinzufügen
+                            <i class="bi bi-person-plus me-2"></i>Alt hinzufuegen
                         </a>
                     </li>
                     {% if account.is_owner and not account.is_admin %}
@@ -180,7 +180,7 @@
     <div class="container-fluid px-3">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="eve-footer-brand d-flex align-items-center gap-2 flex-wrap">
-                <span class="eve-diamond-sm">◆</span>
+                <span class="eve-diamond-sm">&diams;</span>
                 <span class="text-muted small">EVE PI Manager</span>
                 <span class="text-muted small">|</span>
                 <span class="text-muted small">Powered by EVE ESI</span>
@@ -188,7 +188,7 @@
                 <span class="text-muted" style="font-size:0.65rem;">
                     EVE Online and all related logos and designs are trademarks or registered trademarks of CCP ehf. Not affiliated with or endorsed by CCP ehf.
                     &nbsp;|&nbsp;
-                    Gefällt dir das Tool? Schick eine ISK-Spende an <strong style="color:var(--eve-accent);">DrNightmare</strong>!
+                    Gefaellt dir das Tool? Schick eine ISK-Spende an <strong style="color:var(--eve-accent);">DrNightmare</strong>!
                 </span>
             </div>
             <div class="d-flex align-items-center gap-2">
@@ -199,7 +199,7 @@
                     <i class="bi bi-box-seam"></i>
                 </span>
                 <span class="eve-esi-dot" id="esiStatusDot" title="ESI Status"></span>
-                <span class="text-muted small" id="esiStatusText">ESI wird geprüft...</span>
+                <span class="text-muted small" id="esiStatusText">ESI wird geprueft...</span>
             </div>
     </div>
 </footer>
