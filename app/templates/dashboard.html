@@ -898,8 +898,8 @@ function setPriceMode(mode) {
             } else if (d.running) {
                 setTimeout(poll, 3000);
             } else {
-                // Nicht mehr running aber auch nicht done → abgebrochen
-                if (badge) badge.style.display = 'none';
+                // Nicht mehr running aber auch nicht done → Seite neu laden
+                window.location.reload();
             }
         })
         .catch(() => setTimeout(poll, 5000));

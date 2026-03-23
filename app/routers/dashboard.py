@@ -148,6 +148,7 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
             account = newdb.query(Account).filter(Account.id == account_id).first()
             chars = newdb.query(Character).filter(Character.id.in_(char_ids)).all()
             if not account or not chars:
+                _bg_refresh_done[account_id] = True
                 return
             pm = getattr(account, "price_mode", "sell")
             payload = _build_dashboard_payload(account, chars, newdb, price_mode=pm)
