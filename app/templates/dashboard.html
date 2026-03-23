@@ -231,7 +231,7 @@
                                 data-sort-tier="{{ colony.highest_tier or 'P0' }}"
                                 data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
                                 data-sort-isk="{{ colony.isk_day }}"
-                                data-expired="{{ '1' if colony.expiry_hours is none or colony.expiry_hours < 0 else '0' }}">
+                                data-expired="{{ '1' if (colony.expiry_hours is none and colony.is_stalled != False) or colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}">
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
@@ -290,6 +290,14 @@
                                                 <i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}
                                             </span>
                                         {% endif %}
+                                    {% elif colony.is_stalled == true %}
+                                        <span class="eve-expiry-expired">
+                                            <i class="bi bi-pause-circle me-1"></i>Stalled
+                                        </span>
+                                    {% elif colony.is_stalled == false %}
+                                        <span class="eve-expiry-ok">
+                                            <i class="bi bi-play-circle me-1"></i>Läuft
+                                        </span>
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}

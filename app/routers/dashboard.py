@@ -236,6 +236,54 @@ def _get_colony_expiry(pins: list) -> datetime | None:
     return expiry
 
 
+def _check_factory_stall(pins: list) -> bool | None:
+    """Für factory-only Planeten (keine Extractors): prüft ob höchste-Tier Fabriken laufen.
+    Returns True = stalled, False = läuft, None = kein reiner Factory-Planet."""
+    from datetime import timedelta
+    has_extractors = any(pin.get("extractor_details") is not None for pin in pins)
+    if has_extractors:
+        return None
+
+    now = datetime.now(timezone.utc)
+    factory_pins: list[tuple[dict, int, int]] = []  # (pin, tier_num, cycle_time)
+    for pin in pins:
+        factory = pin.get("factory_details") or {}
+        schematic_id = factory.get("schematic_id") or pin.get("schematic_id")
+        if not schematic_id:
+            continue
+        try:
+            schematic = get_schematic(int(schematic_id))
+        except Exception:
+            continue
+        cycle_time = schematic.get("cycle_time", 0)
+        if not cycle_time:
+            continue
+        tier_num = 1 if cycle_time <= 1800 else 2 if cycle_time <= 3600 else 3 if cycle_time <= 9000 else 4
+        factory_pins.append((pin, tier_num, cycle_time))
+
+    if not factory_pins:
+        return None  # keine konfigurierten Fabriken
+
+    max_tier = max(t for _, t, _ in factory_pins)
+    stalled = False
+    for pin, tier, cycle_time in factory_pins:
+        if tier != max_tier:
+            continue
+        last_start_str = pin.get("last_cycle_start", "")
+        if not last_start_str:
+            stalled = True
+            continue
+        last_start = _parse_expiry(last_start_str)
+        if last_start is None:
+            stalled = True
+            continue
+        from datetime import timedelta
+        cycle_end = last_start + timedelta(seconds=cycle_time)
+        if cycle_end <= now:
+            stalled = True
+    return stalled
+
+
 def _compute_factories(pins: list, prices: dict) -> list:
     """Liste aktiver Fabriken mit Produkt, Tier, Menge/Tag und ISK/Tag."""
     tier_labels = {1: "P1", 2: "P2", 3: "P3", 4: "P4"}
@@ -354,7 +402,9 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             if prod_tiers.get(name, 0) == highest_tier_num
         )
         expiry_hours = _hours_until(expiry_time)
-        is_active = expiry_hours is not None and expiry_hours > 0
+        is_stalled = _check_factory_stall(pins) if expiry_time is None else None
+        is_active = (expiry_hours is not None and expiry_hours > 0) if expiry_time is not None \
+                    else (is_stalled is False)
         if is_active:
             total_isk_day += isk_day
 
@@ -380,6 +430,7 @@ def _build_dashboard_payload(account, characters: list, db: Session) -> dict:
             "corporation_name": char.corporation_name or "",
             "alliance_name": char.alliance_name or "",
             "expiry_hours": expiry_hours,
+            "is_stalled": is_stalled,
             "is_active": is_active,
             "isk_day": isk_day,
             "highest_tier": highest_tier,
