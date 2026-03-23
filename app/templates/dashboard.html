@@ -229,7 +229,7 @@
                                 <th class="eve-sortable" data-col="isk">
                                     ISK/Tag <i class="bi bi-chevron-expand eve-sort-icon"></i>
                                 </th>
-                                <th>Lager</th>
+                                <th class="eve-sortable" data-col="storage">Lager <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
                                 <th>Skyhook</th>
                             </tr>
                         </thead>
@@ -243,6 +243,7 @@
                                 data-sort-tier="{{ colony.highest_tier or 'P0' }}"
                                 data-sort-expiry="{{ colony.expiry_hours if colony.expiry_hours is not none else 9999999 }}"
                                 data-sort-isk="{{ colony.isk_day }}"
+                                data-sort-storage="{{ colony.storage | map(attribute='fill_pct') | max if colony.storage else -1 }}"
                                 data-expired="{{ '1' if (colony.expiry_hours is none and colony.is_stalled != False) or colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}">
                                 <td>
                                     <div class="d-flex align-items-center gap-2">

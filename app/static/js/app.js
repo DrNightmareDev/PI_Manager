@@ -170,13 +170,14 @@ document.addEventListener('DOMContentLoaded', function () {
     function sortRows(col, asc) {
         const attrMap = {
             char: 'sortChar', planet: 'sortPlanet', type: 'sortType',
-            level: 'sortLevel', tier: 'sortTier', expiry: 'sortExpiry', isk: 'sortIsk'
+            level: 'sortLevel', tier: 'sortTier', expiry: 'sortExpiry', isk: 'sortIsk',
+            storage: 'sortStorage'
         };
         const attr = attrMap[col];
         if (!attr) return;
         const sorted = [...rows].sort((a, b) => {
             let av = a.dataset[attr] || '', bv = b.dataset[attr] || '';
-            if (col === 'expiry' || col === 'isk' || col === 'level') {
+            if (col === 'expiry' || col === 'isk' || col === 'level' || col === 'storage') {
                 av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
                 return asc ? av - bv : bv - av;
             }
