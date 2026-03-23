@@ -18,7 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _check_access_policy(db: Session, corporation_id, alliance_id) -> bool:
-    """Gibt True zurück wenn Zugang erlaubt, False wenn verweigert."""
+    """Gibt True zurÃ¼ck wenn Zugang erlaubt, False wenn verweigert."""
     policy = db.get(AccessPolicy, 1)
     if policy is None or policy.mode == "open":
         return True
@@ -37,6 +37,17 @@ def _check_access_policy(db: Session, corporation_id, alliance_id) -> bool:
             (alliance_id and alliance_id in alliance_ids)
         )
     return True
+
+
+def _invalidate_account_dashboard_state(account_id: int, db: Session) -> None:
+    from app.esi import invalidate_planet_detail_cache
+    from app.models import DashboardCache
+    from app.routers.dashboard import invalidate_dashboard_cache
+
+    invalidate_dashboard_cache(account_id)
+    db.query(DashboardCache).filter(DashboardCache.account_id == account_id).delete()
+    for char in db.query(Character).filter(Character.account_id == account_id).all():
+        invalidate_planet_detail_cache(char.eve_character_id)
 
 
 def _generate_state(db: Session, flow: str, account_id: int | None = None) -> str:
@@ -87,12 +98,12 @@ def callback(
     # State validieren (CSRF-Schutz)
     sso_state = db.query(SSOState).filter(SSOState.state == state).first()
     if not sso_state:
-        raise HTTPException(status_code=400, detail="Ungültiger State – möglicher CSRF-Angriff")
+        raise HTTPException(status_code=400, detail="UngÃ¼ltiger State â€“ mÃ¶glicher CSRF-Angriff")
 
     flow = sso_state.flow
     existing_account_id = sso_state.account_id
 
-    # State löschen (Einmalnutzung)
+    # State lÃ¶schen (Einmalnutzung)
     db.delete(sso_state)
     db.commit()
 
@@ -149,6 +160,7 @@ def callback(
     response = RedirectResponse(url="/dashboard", status_code=302)
 
     if existing_char:
+        old_account_id = existing_char.account_id
         # Tokens aktualisieren
         existing_char.access_token = access_token
         existing_char.refresh_token = refresh_token
@@ -162,7 +174,7 @@ def callback(
         existing_char.alliance_name = alliance_name
         db.commit()
 
-        # Zugangspolitik auch für bestehende Charaktere prüfen (corp/allianz kann sich geändert haben)
+        # Zugangspolitik auch fÃ¼r bestehende Charaktere prÃ¼fen (corp/allianz kann sich geÃ¤ndert haben)
         # Ausnahmen: Owner immer erlaubt, add_character-Flow (bereits eingeloggt)
         if flow == "login":
             acc = db.get(Account, existing_char.account_id)
@@ -170,8 +182,17 @@ def callback(
                 return RedirectResponse(url="/?error=access_denied", status_code=302)
 
         if flow == "add_character" and existing_account_id:
-            # Charakter zu einem anderen Account verknüpfen (falls nötig)
-            pass
+            existing_char.account_id = existing_account_id
+            target_account = db.get(Account, existing_account_id)
+            if target_account and not target_account.main_character_id:
+                target_account.main_character_id = existing_char.id
+            db.commit()
+            _invalidate_account_dashboard_state(existing_account_id, db)
+            if old_account_id != existing_account_id:
+                _invalidate_account_dashboard_state(old_account_id, db)
+            db.commit()
+            create_session(response, existing_account_id)
+            return response
 
         create_session(response, existing_char.account_id)
         return response
@@ -182,7 +203,7 @@ def callback(
         total_accounts = db.query(Account).count()
         is_first = total_accounts == 0
 
-        # Zugangspolitik prüfen (nicht für den ersten Account / Besitzer)
+        # Zugangspolitik prÃ¼fen (nicht fÃ¼r den ersten Account / Besitzer)
         if not is_first and not _check_access_policy(db, corporation_id, alliance_id):
             return RedirectResponse(url="/?error=access_denied", status_code=302)
 
@@ -216,7 +237,7 @@ def callback(
         create_session(response, new_account.id)
 
     elif flow == "add_character" and existing_account_id:
-        # Alt hinzufügen
+        # Alt hinzufÃ¼gen
         new_char = Character(
             eve_character_id=eve_character_id,
             character_name=character_name,
@@ -237,9 +258,9 @@ def callback(
         db.add(new_char)
         db.commit()
 
-        # Dashboard-Cache invalidieren damit neue Kolonien sofort erscheinen
-        from app.routers.dashboard import invalidate_dashboard_cache
-        invalidate_dashboard_cache(existing_account_id)
+        # Dashboard- und Planetencache invalidieren damit neue Kolonien sofort erscheinen
+        _invalidate_account_dashboard_state(existing_account_id, db)
+        db.commit()
 
         create_session(response, existing_account_id)
     else:
@@ -253,7 +274,7 @@ def become_admin(
     account=Depends(require_account),
     db: Session = Depends(get_db)
 ):
-    """Nur für den Besitzer: stellt Admin-Rechte wieder her."""
+    """Nur fÃ¼r den Besitzer: stellt Admin-Rechte wieder her."""
     if not account.is_owner:
         raise HTTPException(status_code=403, detail="Nur der Besitzer kann diesen Endpunkt nutzen")
     account.is_admin = True
@@ -301,7 +322,7 @@ def remove_character(
 
     was_main = account.main_character_id == char.id
 
-    # Main-Referenz entfernen falls nötig
+    # Main-Referenz entfernen falls nÃ¶tig
     if was_main:
         account.main_character_id = None
         db.flush()
