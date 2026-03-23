@@ -110,6 +110,17 @@ def _get_product_tiers() -> dict[str, int]:
     _PRODUCT_TIERS = t
     return t
 
+
+def _tier_from_schematic(schematic: dict) -> int:
+    """Tier (1–4) des Schematic-Outputs via Produktname (cycle_time ist kein verlässlicher Indikator
+    da P2/P3/P4 alle 3600s haben). Fallback auf cycle_time nur für P1."""
+    name = schematic.get("schematic_name", "")
+    tier = _get_product_tiers().get(name, 0)
+    if tier > 0:
+        return tier
+    # Fallback: P1 hat 1800s, alles andere ≥ 2
+    return 1 if schematic.get("cycle_time", 0) <= 1800 else 2
+
 def _get_pi_volumes() -> dict[str, float]:
     global _PI_VOLUMES
     if _PI_VOLUMES:
@@ -235,7 +246,7 @@ def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str,
         product_name = schematic.get("schematic_name", "")
         if not cycle_time or not product_name:
             continue
-        tier_num = 1 if cycle_time <= 1800 else 2 if cycle_time <= 3600 else 3 if cycle_time <= 9000 else 4
+        tier_num = _tier_from_schematic(schematic)
         highest_tier_num = max(highest_tier_num, tier_num)
         qty_per_cycle = schematic.get("output_quantity") or _CYCLE_QTY_FALLBACK.get(cycle_time, 1)
         productions[product_name] = (
@@ -289,7 +300,7 @@ def _check_factory_stall(pins: list) -> bool | None:
         cycle_time = schematic.get("cycle_time", 0)
         if not cycle_time:
             continue
-        tier_num = 1 if cycle_time <= 1800 else 2 if cycle_time <= 3600 else 3 if cycle_time <= 9000 else 4
+        tier_num = _tier_from_schematic(schematic)
         factory_pins.append((pin, tier_num, cycle_time))
 
     if not factory_pins:
@@ -332,7 +343,7 @@ def _compute_factories(pins: list, prices: dict) -> list:
         product_name = schematic.get("schematic_name", "")
         if not cycle_time or not product_name:
             continue
-        tier_num = 1 if cycle_time <= 1800 else 2 if cycle_time <= 3600 else 3 if cycle_time <= 9000 else 4
+        tier_num = _tier_from_schematic(schematic)
         qty_per_cycle = schematic.get("output_quantity") or _CYCLE_QTY_FALLBACK.get(cycle_time, 1)
         qty_per_day = qty_per_cycle * (86400.0 / float(cycle_time))
         factories.append({
