@@ -65,8 +65,18 @@
                         <th class="eve-sortable text-end" data-sort="spread" style="cursor:pointer;">
                             Spread <i class="bi bi-chevron-expand eve-sort-icon"></i>
                         </th>
-                        <th class="text-end">Trend 24h</th>
-                        <th class="text-end">Trend 7T</th>
+                        <th class="eve-sortable text-end" data-sort="trend1d" style="cursor:pointer;">
+                            Trend 24h <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
+                        <th class="eve-sortable text-end" data-sort="volume1d" style="cursor:pointer;">
+                            Handel / Tag <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
+                        <th class="eve-sortable text-end" data-sort="trend7d" style="cursor:pointer;">
+                            Trend 7T <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
+                        <th class="eve-sortable text-end" data-sort="volume7d" style="cursor:pointer;">
+                            Handel / 7T <i class="bi bi-chevron-expand eve-sort-icon"></i>
+                        </th>
                     </tr>
                 </thead>
                 <tbody id="marketBody">
@@ -76,7 +86,11 @@
                         data-tier="{{ row.tier }}"
                         data-sell="{{ row.sell }}"
                         data-buy="{{ row.buy }}"
-                        data-spread="{{ row.spread if row.spread is not none else '' }}">
+                        data-spread="{{ row.spread if row.spread is not none else '' }}"
+                        data-trend1d=""
+                        data-volume1d="{{ row.avg_volume }}"
+                        data-trend7d=""
+                        data-volume7d="{{ row.avg_volume_7d }}">
                         <td class="fw-medium">{{ row.name }}</td>
                         <td>
                             {% set tc = tier_colors.get(row.tier, '#586e75') %}
@@ -98,8 +112,18 @@
                         <td class="text-end small trend-1d" data-name="{{ row.name }}">
                             <span class="text-muted">...</span>
                         </td>
+                        <td class="text-end small volume-day" data-name="{{ row.name }}">
+                            {% if row.avg_volume > 0 %}
+                            <span class="text-muted">{{ "{:,.0f}".format(row.avg_volume) }}</span>
+                            {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                        </td>
                         <td class="text-end small trend-7d" data-name="{{ row.name }}">
                             <span class="text-muted">...</span>
+                        </td>
+                        <td class="text-end small volume-7d" data-name="{{ row.name }}">
+                            {% if row.avg_volume_7d > 0 %}
+                            <span class="text-muted">{{ "{:,.0f}".format(row.avg_volume_7d) }}</span>
+                            {% else %}<span class="text-muted">&mdash;</span>{% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -183,6 +207,10 @@ function sortTable() {
             case 'sell':   va = parseFloat(a.dataset.sell) || 0;   vb = parseFloat(b.dataset.sell) || 0;   break;
             case 'buy':    va = parseFloat(a.dataset.buy) || 0;    vb = parseFloat(b.dataset.buy) || 0;    break;
             case 'spread': va = parseFloat(a.dataset.spread) || -1; vb = parseFloat(b.dataset.spread) || -1; break;
+            case 'trend1d': va = parseFloat(a.dataset.trend1d) || 0; vb = parseFloat(b.dataset.trend1d) || 0; break;
+            case 'volume1d': va = parseFloat(a.dataset.volume1d) || 0; vb = parseFloat(b.dataset.volume1d) || 0; break;
+            case 'trend7d': va = parseFloat(a.dataset.trend7d) || 0; vb = parseFloat(b.dataset.trend7d) || 0; break;
+            case 'volume7d': va = parseFloat(a.dataset.volume7d) || 0; vb = parseFloat(b.dataset.volume7d) || 0; break;
             default: return 0;
         }
         return sortState.asc ? va - vb : vb - va;
@@ -199,15 +227,34 @@ async function loadTrends() {
         document.querySelectorAll('.trend-1d').forEach(cell => {
             const name = cell.dataset.name;
             const t = data[name];
+            const row = cell.closest('tr');
+            if (row) row.dataset.trend1d = t?.trend_1d ?? '';
             cell.innerHTML = trendHtml(t?.trend_1d);
         });
         document.querySelectorAll('.trend-7d').forEach(cell => {
             const name = cell.dataset.name;
             const t = data[name];
+            const row = cell.closest('tr');
+            if (row) row.dataset.trend7d = t?.trend_7d ?? '';
             cell.innerHTML = trendHtml(t?.trend_7d);
         });
+        document.querySelectorAll('.volume-day').forEach(cell => {
+            const name = cell.dataset.name;
+            const t = data[name];
+            const row = cell.closest('tr');
+            if (row) row.dataset.volume1d = t?.avg_volume ?? 0;
+            cell.innerHTML = volumeHtml(t?.avg_volume);
+        });
+        document.querySelectorAll('.volume-7d').forEach(cell => {
+            const name = cell.dataset.name;
+            const t = data[name];
+            const row = cell.closest('tr');
+            if (row) row.dataset.volume7d = t?.avg_volume_7d ?? 0;
+            cell.innerHTML = volumeHtml(t?.avg_volume_7d);
+        });
+        sortTable();
     } catch(e) {
-        document.querySelectorAll('.trend-1d, .trend-7d').forEach(cell => {
+        document.querySelectorAll('.trend-1d, .trend-7d, .volume-day, .volume-7d').forEach(cell => {
             cell.innerHTML = '<span class="text-muted small">&mdash;</span>';
         });
     }
@@ -277,6 +324,11 @@ function startCooldownUI(seconds) {
     }, 1000);
 }
 {% endif %}
+
+function volumeHtml(val) {
+    if (val == null || Number(val) <= 0) return '<span class="text-muted small">&mdash;</span>';
+    return `<span class="text-muted">${Number(val).toLocaleString('de-DE', {maximumFractionDigits: 0})}</span>`;
+}
 
 // Trends direkt beim Laden asynchron nachladen
 loadTrends();

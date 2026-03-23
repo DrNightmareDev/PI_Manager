@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+{% block title %}System Mix - EVE PI Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h2 class="eve-page-title mb-0">
+        <i class="bi bi-collection me-2 eve-accent"></i>System Mix
+    </h2>
+    <div class="text-muted small">Mehrere Systeme und Konstellationen kombinieren und gemeinsame PI-Produkte sehen</div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="eve-card card border-0 h-100">
+            <div class="card-body p-3">
+                <label class="form-label text-muted small">System hinzufuegen</label>
+                <div class="position-relative mb-3">
+                    <input type="text" id="mixSystemSearch" class="form-control eve-input"
+                           placeholder="z.B. M-OEE8, UMI-KK..." autocomplete="off">
+                    <div id="mixSystemDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                </div>
+
+                <label class="form-label text-muted small">Konstellation hinzufuegen</label>
+                <div class="position-relative mb-3">
+                    <input type="text" id="mixConstellationSearch" class="form-control eve-input"
+                           placeholder="z.B. 0-8MWQ, Y8R..." autocomplete="off">
+                    <div id="mixConstellationDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small">Ausgewaehlte Systeme</span>
+                    <span class="badge eve-badge-count" id="mixSelectedCount">0</span>
+                </div>
+                <div id="mixSelectedList" class="d-flex flex-column gap-2"></div>
+
+                <div class="d-flex align-items-center justify-content-between mt-4 mb-2">
+                    <span class="text-muted small">Ausgewaehlte Konstellationen</span>
+                    <span class="badge eve-badge-count" id="mixSelectedConstellationCount">0</span>
+                </div>
+                <div id="mixSelectedConstellationList" class="d-flex flex-column gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md-4">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body text-center p-3">
+                        <div class="eve-stat-value" id="mixSystemsCount">0</div>
+                        <div class="eve-stat-label">Auswahl</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body text-center p-3">
+                        <div class="eve-stat-value" id="mixPlanetsCount">0</div>
+                        <div class="eve-stat-label">Planeten</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="eve-stat-card card border-0 h-100">
+                    <div class="card-body text-center p-3">
+                        <div class="eve-stat-value" id="mixProductsCount">0</div>
+                        <div class="eve-stat-label">P2-P4 Produkte</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="eve-card card border-0 mb-3">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-globe2 eve-accent"></i>
+                    <span class="fw-medium">Planetentypen gesamt</span>
+                </div>
+                <div id="mixPlanetTypes" class="d-flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+
+        <div id="mixLoading" class="eve-card card border-0 d-none">
+            <div class="card-body text-center py-5">
+                <div class="spinner-border eve-accent mb-3" role="status" aria-hidden="true"></div>
+                <p class="mb-1 fw-medium">Planetendaten werden geladen</p>
+                <p class="text-muted mb-0 small">Systeme und Produkte werden gerade zusammengestellt.</p>
+            </div>
+        </div>
+
+        <div id="mixEmpty" class="eve-card card border-0">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-3"></i>
+                <p class="text-muted mb-0">Waehle mindestens ein System oder eine Konstellation aus, um die kombinierte Produktion zu sehen.</p>
+            </div>
+        </div>
+
+        <div id="mixResults" class="d-none">
+            {% for tier in ['P4', 'P3', 'P2'] %}
+            <div class="eve-card card border-0 mb-3">
+                <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                    <span class="badge" style="background:{{ planet_type_colors.get('Lava', '#586e75') }}10;color:{{
+                        '#e63946' if tier == 'P4' else '#f4a300' if tier == 'P3' else '#00b4d8'
+                    }};border:1px solid {{
+                        '#e63946' if tier == 'P4' else '#f4a300' if tier == 'P3' else '#00b4d8'
+                    }}40;">{{ tier }}</span>
+                    <span class="fw-medium">Produkte {{ tier }}</span>
+                    <span class="badge eve-badge-count ms-auto" id="mixCount{{ tier }}">0</span>
+                </div>
+                <div class="card-body p-3">
+                    <div id="mixTier{{ tier }}" class="d-flex flex-column gap-2"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let mixSearchTimer = null;
+let mixConstellationSearchTimer = null;
+let selectedSystems = [];
+let selectedConstellations = [];
+let mixIsLoading = false;
+
+const searchInput = document.getElementById('mixSystemSearch');
+const searchDropdown = document.getElementById('mixSystemDropdown');
+const constellationInput = document.getElementById('mixConstellationSearch');
+const constellationDropdown = document.getElementById('mixConstellationDropdown');
+const selectedList = document.getElementById('mixSelectedList');
+const selectedConstellationList = document.getElementById('mixSelectedConstellationList');
+
+function setMixLoading(isLoading) {
+    mixIsLoading = isLoading;
+    document.getElementById('mixLoading').classList.toggle('d-none', !isLoading);
+    if (isLoading) {
+        document.getElementById('mixEmpty').classList.add('d-none');
+        document.getElementById('mixResults').classList.add('d-none');
+    }
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatIsk(value) {
+    const num = Number(value || 0);
+    if (!num) return '&mdash;';
+    return num.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ISK';
+}
+
+function renderSelectionState() {
+    document.getElementById('mixSelectedCount').textContent = String(selectedSystems.length);
+    document.getElementById('mixSelectedConstellationCount').textContent = String(selectedConstellations.length);
+    document.getElementById('mixSystemsCount').textContent = String(selectedSystems.length);
+
+    if (!selectedSystems.length && !selectedConstellations.length) {
+        setMixLoading(false);
+        renderMixResults(null);
+        return;
+    }
+    analyzeMix();
+}
+
+function renderSelectedSystems() {
+    selectedList.innerHTML = '';
+    if (!selectedSystems.length) {
+        selectedList.innerHTML = '<div class="text-muted small">Noch keine Systeme ausgewaehlt.</div>';
+    } else {
+        selectedSystems.forEach(system => {
+            const item = document.createElement('div');
+            item.className = 'd-flex align-items-center justify-content-between gap-2 p-2 rounded';
+            item.style.background = 'rgba(30,45,61,0.35)';
+            item.style.border = '1px solid var(--eve-card-border)';
+            const sourceText = system.sourceKeys?.some(key => key.startsWith('constellation:'))
+                ? 'Teil einer Konstellation'
+                : 'Direkt gewaehlt';
+            item.innerHTML = `
+                <div>
+                    <div class="small fw-medium">${system.name}</div>
+                    <div class="text-muted" style="font-size:.72rem;">${system.constellation || '-'} - ${system.region || '-'}</div>
+                    <div class="text-muted" style="font-size:.68rem;">${sourceText}</div>
+                </div>
+                <button class="btn btn-sm eve-btn-ghost px-2" onclick="removeMixSystem(${system.id})">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            `;
+            selectedList.appendChild(item);
+        });
+    }
+    renderSelectionState();
+}
+
+function renderSelectedConstellations() {
+    selectedConstellationList.innerHTML = '';
+    if (!selectedConstellations.length) {
+        selectedConstellationList.innerHTML = '<div class="text-muted small">Noch keine Konstellationen ausgewaehlt.</div>';
+    } else {
+        selectedConstellations.forEach(constellation => {
+            const item = document.createElement('div');
+            item.className = 'd-flex align-items-center justify-content-between gap-2 p-2 rounded';
+            item.style.background = 'rgba(30,45,61,0.35)';
+            item.style.border = '1px solid var(--eve-card-border)';
+            item.innerHTML = `
+                <div>
+                    <div class="small fw-medium">${constellation.name}</div>
+                    <div class="text-muted" style="font-size:.72rem;">${constellation.region || '-'}</div>
+                </div>
+                <button class="btn btn-sm eve-btn-ghost px-2" onclick="removeMixConstellation(${constellation.id})">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            `;
+            selectedConstellationList.appendChild(item);
+        });
+    }
+}
+
+function removeMixSystem(systemId) {
+    const targetSystem = selectedSystems.find(system => system.id === systemId);
+    const constellationSourceIds = (targetSystem?.sourceKeys || [])
+        .filter(key => key.startsWith('constellation:'))
+        .map(key => Number(key.split(':')[1]))
+        .filter(Number.isFinite);
+
+    if (constellationSourceIds.length) {
+        const dissolveKeys = new Set(constellationSourceIds.map(id => `constellation:${id}`));
+        selectedConstellations = selectedConstellations.filter(constellation => !constellationSourceIds.includes(constellation.id));
+        selectedSystems = selectedSystems
+            .map(system => {
+                const keptKeys = (system.sourceKeys || []).filter(key => !dissolveKeys.has(key));
+                if (system.id !== systemId && constellationSourceIds.some(id => (system.sourceKeys || []).includes(`constellation:${id}`))) {
+                    keptKeys.push(`system:${system.id}`);
+                }
+                return {
+                    ...system,
+                    sourceKeys: Array.from(new Set(keptKeys)),
+                };
+            })
+            .filter(system => system.id !== systemId && (system.sourceKeys || []).length > 0);
+        renderSelectedConstellations();
+    } else {
+        selectedSystems = selectedSystems
+            .map(system => {
+                if (system.id !== systemId) return system;
+                return {
+                    ...system,
+                    sourceKeys: (system.sourceKeys || []).filter(key => !key.startsWith('system:')),
+                };
+            })
+            .filter(system => (system.sourceKeys || []).length > 0);
+    }
+    renderSelectedSystems();
+}
+
+function removeMixConstellation(constellationId) {
+    selectedConstellations = selectedConstellations.filter(constellation => constellation.id !== constellationId);
+    const keyToRemove = `constellation:${constellationId}`;
+    selectedSystems = selectedSystems
+        .map(system => ({
+            ...system,
+            sourceKeys: (system.sourceKeys || []).filter(key => key !== keyToRemove),
+        }))
+        .filter(system => (system.sourceKeys || []).length > 0);
+    renderSelectedConstellations();
+    renderSelectedSystems();
+}
+
+function addMixSystem(system) {
+    const existing = selectedSystems.find(s => s.id === system.id);
+    if (existing) {
+        if (!existing.sourceKeys.includes(`system:${system.id}`)) {
+            existing.sourceKeys.push(`system:${system.id}`);
+        }
+    } else {
+        selectedSystems.push({...system, sourceKeys: [`system:${system.id}`]});
+    }
+    searchInput.value = '';
+    searchDropdown.classList.add('d-none');
+    renderSelectedSystems();
+}
+
+async function addMixConstellation(constellation) {
+    if (selectedConstellations.some(c => c.id === constellation.id)) return;
+    setMixLoading(true);
+    try {
+        const res = await fetch('/system/constellations/' + encodeURIComponent(constellation.id) + '/systems');
+        const data = await res.json();
+        const systems = data.systems || [];
+        const sourceKey = `constellation:${constellation.id}`;
+        systems.forEach(system => {
+            const existing = selectedSystems.find(s => s.id === system.id);
+            if (existing) {
+                if (!existing.sourceKeys.includes(sourceKey)) {
+                    existing.sourceKeys.push(sourceKey);
+                }
+            } else {
+                selectedSystems.push({...system, sourceKeys: [sourceKey]});
+            }
+        });
+        selectedConstellations.push(constellation);
+        constellationInput.value = '';
+        constellationDropdown.classList.add('d-none');
+        renderSelectedConstellations();
+        renderSelectedSystems();
+    } catch (e) {
+        setMixLoading(false);
+    }
+}
+
+async function searchMixSystems(query) {
+    if (!query || query.length < 3) {
+        searchDropdown.classList.add('d-none');
+        return;
+    }
+    const res = await fetch('/system/search?q=' + encodeURIComponent(query));
+    const data = await res.json();
+    const systems = (data.systems || []).filter(system => !selectedSystems.some(s => s.id === system.id));
+    searchDropdown.innerHTML = '';
+    if (!systems.length) {
+        searchDropdown.classList.add('d-none');
+        return;
+    }
+    systems.forEach(system => {
+        const item = document.createElement('div');
+        item.className = 'eve-search-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span class="fw-medium">${system.name}</span>
+            <span class="text-muted small">${system.constellation || '-'} - ${system.region || '-'}</span>
+        `;
+        item.addEventListener('click', () => addMixSystem(system));
+        searchDropdown.appendChild(item);
+    });
+    searchDropdown.classList.remove('d-none');
+}
+
+async function searchMixConstellations(query) {
+    if (!query || query.length < 3) {
+        constellationDropdown.classList.add('d-none');
+        return;
+    }
+    const res = await fetch('/system/search/constellations?q=' + encodeURIComponent(query));
+    const data = await res.json();
+    const constellations = (data.constellations || []).filter(constellation => !selectedConstellations.some(c => c.id === constellation.id));
+    constellationDropdown.innerHTML = '';
+    if (!constellations.length) {
+        constellationDropdown.classList.add('d-none');
+        return;
+    }
+    constellations.forEach(constellation => {
+        const item = document.createElement('div');
+        item.className = 'eve-search-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span class="fw-medium">${constellation.name}</span>
+            <span class="text-muted small">${constellation.region || '-'}</span>
+        `;
+        item.addEventListener('click', () => addMixConstellation(constellation));
+        constellationDropdown.appendChild(item);
+    });
+    constellationDropdown.classList.remove('d-none');
+}
+
+async function analyzeMix() {
+    if (!selectedSystems.length) {
+        setMixLoading(false);
+        renderMixResults(null);
+        return;
+    }
+    setMixLoading(true);
+    try {
+        const ids = selectedSystems.map(system => system.id).join(',');
+        const res = await fetch('/system/mix/analyze?system_ids=' + encodeURIComponent(ids));
+        const data = await res.json();
+        data.constellations = selectedConstellations;
+        setMixLoading(false);
+        renderMixResults(data);
+    } catch (e) {
+        setMixLoading(false);
+        renderMixResults(null);
+    }
+}
+
+function renderMixResults(data) {
+    const empty = document.getElementById('mixEmpty');
+    const results = document.getElementById('mixResults');
+    const planetTypes = document.getElementById('mixPlanetTypes');
+
+    if (mixIsLoading) {
+        empty.classList.add('d-none');
+        results.classList.add('d-none');
+        return;
+    }
+
+    if (!data) {
+        empty.classList.remove('d-none');
+        results.classList.add('d-none');
+        planetTypes.innerHTML = '<span class="text-muted small">Noch keine Daten.</span>';
+        document.getElementById('mixSystemsCount').textContent = '0';
+        document.getElementById('mixPlanetsCount').textContent = '0';
+        document.getElementById('mixProductsCount').textContent = '0';
+        ['P4', 'P3', 'P2'].forEach(tier => {
+            document.getElementById('mixTier' + tier).innerHTML = '';
+            document.getElementById('mixCount' + tier).textContent = '0';
+        });
+        return;
+    }
+
+    empty.classList.add('d-none');
+    results.classList.remove('d-none');
+
+    const totalProducts = ['P4', 'P3', 'P2'].reduce((sum, tier) => sum + (data.products?.[tier]?.length || 0), 0);
+    document.getElementById('mixSystemsCount').textContent = String((data.systems || []).length);
+    document.getElementById('mixPlanetsCount').textContent = String(data.planet_count || 0);
+    document.getElementById('mixProductsCount').textContent = String(totalProducts);
+
+    planetTypes.innerHTML = '';
+    (data.planet_types || []).forEach(pt => {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.style.background = `${pt.color}20`;
+        badge.style.color = pt.color;
+        badge.style.border = `1px solid ${pt.color}40`;
+        badge.textContent = `${pt.type} ${pt.count}`;
+        planetTypes.appendChild(badge);
+    });
+    if (!planetTypes.innerHTML) {
+        planetTypes.innerHTML = '<span class="text-muted small">Keine Planetendaten gefunden.</span>';
+    }
+
+    ['P4', 'P3', 'P2'].forEach(tier => {
+        const container = document.getElementById('mixTier' + tier);
+        const items = data.products?.[tier] || [];
+        document.getElementById('mixCount' + tier).textContent = String(items.length);
+        container.innerHTML = '';
+        if (!items.length) {
+            container.innerHTML = '<div class="text-muted small">Keine Produkte fuer dieses Tier.</div>';
+            return;
+        }
+        items.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'p-3 rounded';
+            row.style.background = 'rgba(30,45,61,0.25)';
+            row.style.border = '1px solid var(--eve-card-border)';
+            row.style.cursor = 'pointer';
+            row.dataset.expanded = 'false';
+            const locations = item.locations || [];
+            const locationHtml = locations.length
+                ? locations.map(location => `
+                    <div class="mt-2">
+                        <div class="small fw-medium">
+                            <a href="/system/${encodeURIComponent(location.system_name)}" class="eve-link-primary" target="_blank" rel="noopener noreferrer">
+                                ${location.system_name}
+                            </a>
+                        </div>
+                        <div class="text-muted" style="font-size:.72rem;">${location.constellation_name || '-'} - ${location.region_name || '-'}</div>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            ${location.planets.map(planet => `
+                                <span class="badge" style="background:rgba(91,141,228,.12);color:var(--eve-text);border:1px solid rgba(91,141,228,.28);">
+                                    ${planet.planet_name} - ${planet.planet_type}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('')
+                : '<div class="text-muted small mt-2">Keine passenden Planeten in der Auswahl gefunden.</div>';
+            const productLink = `/planner?product=${encodeURIComponent(item.name)}`;
+            row.innerHTML = `
+                <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                    <div>
+                        <div class="fw-medium">
+                            <a href="${productLink}" class="eve-link-primary" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">
+                                ${escapeHtml(item.name)}
+                            </a>
+                        </div>
+                        <div class="small text-muted mt-1">Benoetigte Planetentypen: ${(item.planets_needed || []).join(', ') || '-'}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="small"><span class="text-muted">Jita Sell:</span> <span style="color:var(--eve-gold);">${formatIsk(item.jita_sell)}</span></div>
+                        <div class="small"><span class="text-muted">Jita Buy:</span> <span style="color:#2dc653;">${formatIsk(item.jita_buy)}</span></div>
+                        <div class="small text-muted mt-1"><i class="bi bi-chevron-down me-1 mix-collapse-icon"></i><span class="mix-collapse-label">Details anzeigen</span></div>
+                    </div>
+                </div>
+                <div class="mt-3 d-none mix-collapsible-body">
+                    <div class="small text-muted">Inputs: ${(item.inputs || []).join(', ') || '-'}</div>
+                    <div class="mt-2">${locationHtml}</div>
+                </div>
+            `;
+            row.addEventListener('click', () => {
+                const body = row.querySelector('.mix-collapsible-body');
+                const icon = row.querySelector('.mix-collapse-icon');
+                const label = row.querySelector('.mix-collapse-label');
+                const expanded = row.dataset.expanded === 'true';
+                row.dataset.expanded = expanded ? 'false' : 'true';
+                body.classList.toggle('d-none', expanded);
+                icon.className = expanded ? 'bi bi-chevron-down me-1 mix-collapse-icon' : 'bi bi-chevron-up me-1 mix-collapse-icon';
+                label.textContent = expanded ? 'Details anzeigen' : 'Details ausblenden';
+            });
+            container.appendChild(row);
+        });
+    });
+}
+
+searchInput.addEventListener('input', () => {
+    clearTimeout(mixSearchTimer);
+    mixSearchTimer = setTimeout(() => searchMixSystems(searchInput.value.trim()), 150);
+});
+searchInput.addEventListener('focus', () => searchMixSystems(searchInput.value.trim()));
+searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') searchDropdown.classList.add('d-none');
+});
+
+constellationInput.addEventListener('input', () => {
+    clearTimeout(mixConstellationSearchTimer);
+    mixConstellationSearchTimer = setTimeout(() => searchMixConstellations(constellationInput.value.trim()), 150);
+});
+constellationInput.addEventListener('focus', () => searchMixConstellations(constellationInput.value.trim()));
+constellationInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') constellationDropdown.classList.add('d-none');
+});
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('#mixSystemSearch') && !e.target.closest('#mixSystemDropdown')) {
+        searchDropdown.classList.add('d-none');
+    }
+    if (!e.target.closest('#mixConstellationSearch') && !e.target.closest('#mixConstellationDropdown')) {
+        constellationDropdown.classList.add('d-none');
+    }
+});
+
+renderSelectedSystems();
+renderSelectedConstellations();
+</script>
+{% endblock %}

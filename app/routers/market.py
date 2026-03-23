@@ -41,6 +41,8 @@ def _build_market_rows(db: Session) -> list[dict]:
             "buy": buy,
             "sell": sell,
             "spread": spread,
+            "avg_volume": float(cache.avg_volume or 0) if cache else 0.0,
+            "avg_volume_7d": float(cache.avg_volume_7d or 0) if cache else 0.0,
         })
     return rows
 
@@ -88,6 +90,8 @@ def market_trends(account=Depends(require_account)):
         result[name] = {
             "trend_1d": t.get("trend_1d"),
             "trend_7d": t.get("trend_7d"),
+            "avg_volume": t.get("avg_volume", 0.0),
+            "avg_volume_7d": t.get("avg_volume_7d", 0.0),
         }
     return JSONResponse(content=result)
 

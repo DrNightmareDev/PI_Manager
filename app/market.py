@@ -237,7 +237,7 @@ def get_prices_by_type_ids(type_ids: list[int], db: Session) -> dict[int, dict]:
     """
     Holt Preise für eine Liste von Type-IDs.
     Nutzt DB-Cache (15min TTL) mit Fuzzwork als Datenquelle.
-    Returns: dict von type_id -> {best_buy, best_sell, avg_volume, type_name}
+    Returns: dict von type_id -> {best_buy, best_sell, avg_volume, avg_volume_7d, type_name}
     """
     result = {}
     ids_to_fetch = []
@@ -249,6 +249,7 @@ def get_prices_by_type_ids(type_ids: list[int], db: Session) -> dict[int, dict]:
                 "best_buy": float(cache.best_buy or 0),
                 "best_sell": float(cache.best_sell or 0),
                 "avg_volume": float(cache.avg_volume or 0),
+                "avg_volume_7d": float(cache.avg_volume_7d or 0),
                 "type_name": cache.type_name or PI_TYPE_NAMES.get(type_id),
                 "cached": True,
             }
@@ -278,6 +279,7 @@ def get_prices_by_type_ids(type_ids: list[int], db: Session) -> dict[int, dict]:
                         best_buy=str(best_buy),
                         best_sell=str(best_sell),
                         avg_volume="0",
+                        avg_volume_7d="0",
                         updated_at=datetime.now(timezone.utc),
                     )
                     db.add(cache)
@@ -286,6 +288,7 @@ def get_prices_by_type_ids(type_ids: list[int], db: Session) -> dict[int, dict]:
                     "best_buy": best_buy,
                     "best_sell": best_sell,
                     "avg_volume": 0.0,
+                    "avg_volume_7d": 0.0,
                     "type_name": type_name,
                     "cached": False,
                 }
@@ -297,6 +300,7 @@ def get_prices_by_type_ids(type_ids: list[int], db: Session) -> dict[int, dict]:
                         "best_buy": 0.0,
                         "best_sell": 0.0,
                         "avg_volume": 0.0,
+                        "avg_volume_7d": 0.0,
                         "type_name": PI_TYPE_NAMES.get(type_id),
                         "error": str(e),
                     }
@@ -309,7 +313,7 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
     Holt Jita-Preise für eine Liste von Type-IDs.
     Nutzt Janice API (über Namen-Mapping) mit Fuzzwork als Fallback.
     Nutzt DB-Cache (15min TTL).
-    Returns: dict von type_id -> {best_buy, best_sell, avg_volume, type_name}
+    Returns: dict von type_id -> {best_buy, best_sell, avg_volume, avg_volume_7d, type_name}
     """
     result = {}
     ids_to_fetch = []
@@ -321,6 +325,7 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                 "best_buy": float(cache.best_buy or 0),
                 "best_sell": float(cache.best_sell or 0),
                 "avg_volume": float(cache.avg_volume or 0),
+                "avg_volume_7d": float(cache.avg_volume_7d or 0),
                 "type_name": cache.type_name or PI_TYPE_NAMES.get(type_id),
                 "cached": True,
             }
@@ -329,6 +334,8 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
 
     if not ids_to_fetch:
         return result
+
+    history_metrics = get_market_trends(ids_to_fetch)
 
     # Baue Namen-Liste für Janice
     names_to_ids: dict[str, int] = {}
@@ -351,6 +358,8 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                     cache.best_buy = str(best_buy)
                     cache.best_sell = str(best_sell)
                     cache.type_name = name
+                    cache.avg_volume = str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume") or 0.0))
+                    cache.avg_volume_7d = str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume_7d") or 0.0))
                     cache.updated_at = datetime.now(timezone.utc)
                 else:
                     cache = MarketCache(
@@ -358,7 +367,8 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                         type_name=name,
                         best_buy=str(best_buy),
                         best_sell=str(best_sell),
-                        avg_volume="0",
+                        avg_volume=str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume") or 0.0)),
+                        avg_volume_7d=str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume_7d") or 0.0)),
                         updated_at=datetime.now(timezone.utc),
                     )
                     db.add(cache)
@@ -366,7 +376,8 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                 result[type_id] = {
                     "best_buy": best_buy,
                     "best_sell": best_sell,
-                    "avg_volume": 0.0,
+                    "avg_volume": float((history_metrics.get(type_id, {}) or {}).get("avg_volume") or 0.0),
+                    "avg_volume_7d": float((history_metrics.get(type_id, {}) or {}).get("avg_volume_7d") or 0.0),
                     "type_name": name,
                     "cached": False,
                 }
@@ -392,6 +403,8 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                     if cache:
                         cache.best_buy = str(best_buy)
                         cache.best_sell = str(best_sell)
+                        cache.avg_volume = str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume") or 0.0))
+                        cache.avg_volume_7d = str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume_7d") or 0.0))
                         cache.updated_at = datetime.now(timezone.utc)
                         if type_name and not cache.type_name:
                             cache.type_name = type_name
@@ -401,7 +414,8 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                             type_name=type_name,
                             best_buy=str(best_buy),
                             best_sell=str(best_sell),
-                            avg_volume="0",
+                            avg_volume=str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume") or 0.0)),
+                            avg_volume_7d=str(float((history_metrics.get(type_id, {}) or {}).get("avg_volume_7d") or 0.0)),
                             updated_at=datetime.now(timezone.utc),
                         )
                         db.add(cache)
@@ -409,7 +423,8 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                     result[type_id] = {
                         "best_buy": best_buy,
                         "best_sell": best_sell,
-                        "avg_volume": 0.0,
+                        "avg_volume": float((history_metrics.get(type_id, {}) or {}).get("avg_volume") or 0.0),
+                        "avg_volume_7d": float((history_metrics.get(type_id, {}) or {}).get("avg_volume_7d") or 0.0),
                         "type_name": type_name,
                         "cached": False,
                     }
@@ -421,6 +436,7 @@ def get_jita_prices(type_ids: list[int], db: Session) -> dict:
                             "best_buy": 0.0,
                             "best_sell": 0.0,
                             "avg_volume": 0.0,
+                            "avg_volume_7d": 0.0,
                             "type_name": PI_TYPE_NAMES.get(type_id),
                             "error": str(e),
                         }
@@ -556,7 +572,7 @@ def get_market_trends(type_ids: list[int]) -> dict[int, dict]:
     """
     Holt Preistrends (24h/7T/30T) für mehrere Type-IDs via ESI Market History.
     Cached 24h in-memory. Parallele Requests für nicht-gecachte IDs (max 10 Threads).
-    Returns: dict von type_id -> {trend_1d, trend_7d, trend_30d}
+    Returns: dict von type_id -> {trend_1d, trend_7d, trend_30d, avg_volume, avg_volume_7d}
     """
     now = _time.time()
     unique_ids = list(set(type_ids))
@@ -574,6 +590,8 @@ def get_market_trends(type_ids: list[int]) -> dict[int, dict]:
             "trend_1d": _calc_trend(history, 1),
             "trend_7d": _calc_trend(history, 7),
             "trend_30d": _calc_trend(history, 30),
+            "avg_volume": float(history[-1].get("volume", 0) or 0) if history else 0.0,
+            "avg_volume_7d": float(sum((day.get("volume", 0) or 0) for day in history[-7:])) if history else 0.0,
         }
     return result
 

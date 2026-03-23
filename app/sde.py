@@ -26,6 +26,7 @@ UPDATE_INTERVAL_DAYS = 7
 
 FUZZWORK_SYSTEMS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapSolarSystems.sql.bz2"
 FUZZWORK_REGIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapRegions.sql.bz2"
+FUZZWORK_CONSTELLATIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapConstellations.sql.bz2"
 SYSTEMS_UPDATE_DAYS = 30
 
 # In-memory stores
@@ -33,8 +34,10 @@ _schematics: dict[int, dict] = {}   # schematic_id -> normalized schematic
 _types: dict[int, str] = {}         # type_id -> name (en)
 _build_time: str | None = None
 _systems: dict[str, tuple[int, str, float]] = {}    # name_lower -> (system_id, name, security)
-_systems_by_id: dict[int, dict] = {}                # system_id -> {name, security, region_id}
+_systems_by_id: dict[int, dict] = {}                # system_id -> {name, security, region_id, constellation_id}
 _regions: dict[int, str] = {}                       # region_id -> region_name
+_constellations: dict[int, dict] = {}               # constellation_id -> {name, region_id}
+_constellations_by_name: dict[str, dict] = {}       # name_lower -> {id, name, region_id}
 
 
 # ─── Version & Update-Check ───────────────────────────────────────────────────
@@ -197,17 +200,23 @@ def _load_systems() -> None:
         #               security, factionID, radius, sunTypeID, securityClass)
         # col 0: regionID, col 2: solarSystemID, col 3: name, cols 4-20: 17 numerics, col 21: security
         pattern = re.compile(
-            r"\((\d+),\d+,(\d+),'([^']+)'(?:,[^,)]+){17},(-?[\d.eE+\-]+)"
+            r"\((\d+),(\d+),(\d+),'([^']+)'(?:,[^,)]+){17},(-?[\d.eE+\-]+)"
         )
         result: dict[str, tuple[int, str, float]] = {}
         by_id: dict[int, dict] = {}
         for m in pattern.finditer(raw_sql):
             region_id = int(m.group(1))
-            sys_id = int(m.group(2))
-            name = m.group(3)
-            security = float(m.group(4))
+            constellation_id = int(m.group(2))
+            sys_id = int(m.group(3))
+            name = m.group(4)
+            security = float(m.group(5))
             result[name.lower()] = (sys_id, name, security)
-            by_id[sys_id] = {"name": name, "security": security, "region_id": region_id}
+            by_id[sys_id] = {
+                "name": name,
+                "security": security,
+                "region_id": region_id,
+                "constellation_id": constellation_id,
+            }
         _systems = result
         _systems_by_id = by_id
         logger.info(f"SDE: {len(_systems)} Solar-Systeme geladen.")
@@ -263,6 +272,59 @@ def _load_regions() -> None:
         logger.error(f"Fehler beim Laden von mapRegions: {e}")
 
 
+def _constellations_path() -> Path:
+    return DATA_DIR / "mapConstellations.sql.bz2"
+
+
+def _is_constellations_update_needed() -> bool:
+    path = _constellations_path()
+    if not path.exists():
+        return True
+    return time.time() - path.stat().st_mtime > SYSTEMS_UPDATE_DAYS * 86400
+
+
+def _download_constellations() -> bool:
+    logger.info(f"Lade Fuzzwork mapConstellations von {FUZZWORK_CONSTELLATIONS_URL} ...")
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        resp = requests.get(FUZZWORK_CONSTELLATIONS_URL, timeout=30, stream=True)
+        resp.raise_for_status()
+        tmp = DATA_DIR / "mapConstellations.sql.bz2.tmp"
+        tmp.write_bytes(resp.content)
+        tmp.replace(_constellations_path())
+        logger.info("mapConstellations.sql.bz2 heruntergeladen.")
+        return True
+    except Exception as e:
+        logger.error(f"Fuzzwork Constellations Download fehlgeschlagen: {e}")
+        return False
+
+
+def _load_constellations() -> None:
+    global _constellations, _constellations_by_name
+    path = _constellations_path()
+    if not path.exists():
+        logger.warning("mapConstellations.sql.bz2 nicht gefunden - Konstellationen unbekannt.")
+        return
+    try:
+        pattern = re.compile(r"\((\d+),(\d+),'([^']+)'")
+        by_id: dict[int, dict] = {}
+        by_name: dict[str, dict] = {}
+        with bz2.open(str(path), "rt", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                for m in pattern.finditer(line):
+                    region_id = int(m.group(1))
+                    constellation_id = int(m.group(2))
+                    name = m.group(3)
+                    entry = {"id": constellation_id, "name": name, "region_id": region_id}
+                    by_id[constellation_id] = entry
+                    by_name[name.lower()] = entry
+        _constellations = by_id
+        _constellations_by_name = by_name
+        logger.info(f"SDE: {len(_constellations)} Konstellationen geladen.")
+    except Exception as e:
+        logger.error(f"Fehler beim Laden von mapConstellations: {e}")
+
+
 # ─── Öffentliche API ──────────────────────────────────────────────────────────
 
 def init():
@@ -284,6 +346,10 @@ def init():
         _download_regions()
     _load_regions()
 
+    if _is_constellations_update_needed():
+        _download_constellations()
+    _load_constellations()
+
 
 def find_system(query: str) -> dict | None:
     """
@@ -300,6 +366,7 @@ def find_system(query: str) -> dict | None:
                 "name": data["name"],
                 "security": round(data["security"], 1),
                 "region": _regions.get(data.get("region_id", 0), ""),
+                "constellation": _constellations.get(data.get("constellation_id", 0), {}).get("name", ""),
             }
         return None
     except ValueError:
@@ -314,6 +381,7 @@ def find_system(query: str) -> dict | None:
             "name": name,
             "security": round(security, 1),
             "region": _regions.get(sys_data.get("region_id", 0), ""),
+            "constellation": _constellations.get(sys_data.get("constellation_id", 0), {}).get("name", ""),
         }
     return None
 
@@ -338,6 +406,8 @@ def get_system_local(system_id: int) -> dict | None:
         "security": data["security"],
         "region_id": data.get("region_id", 0),
         "region_name": _regions.get(data.get("region_id", 0), None),
+        "constellation_id": data.get("constellation_id", 0),
+        "constellation_name": _constellations.get(data.get("constellation_id", 0), {}).get("name"),
     }
 
 
@@ -354,7 +424,13 @@ def search_systems_local(query: str, limit: int = 10) -> list[dict]:
     for name_lower, (sys_id, name, security) in _systems.items():
         sys_data = _systems_by_id.get(sys_id, {})
         region_name = _regions.get(sys_data.get("region_id", 0), "")
-        entry = {"id": sys_id, "name": name, "security": round(security, 1), "region": region_name}
+        entry = {
+            "id": sys_id,
+            "name": name,
+            "security": round(security, 1),
+            "region": region_name,
+            "constellation": _constellations.get(sys_data.get("constellation_id", 0), {}).get("name", ""),
+        }
         if name_lower.startswith(q):
             prefix.append(entry)
         elif q in name_lower:
@@ -363,3 +439,44 @@ def search_systems_local(query: str, limit: int = 10) -> list[dict]:
             break
     results = prefix + contains
     return results[:limit]
+
+
+def search_constellations_local(query: str, limit: int = 10) -> list[dict]:
+    if not _constellations_by_name or len(query) < 3:
+        return []
+    q = query.lower()
+    prefix: list[dict] = []
+    contains: list[dict] = []
+    for name_lower, constellation in _constellations_by_name.items():
+        region_name = _regions.get(constellation.get("region_id", 0), "")
+        entry = {
+            "id": constellation["id"],
+            "name": constellation["name"],
+            "region": region_name,
+        }
+        if name_lower.startswith(q):
+            prefix.append(entry)
+        elif q in name_lower:
+            contains.append(entry)
+        if len(prefix) >= limit:
+            break
+    return (prefix + contains)[:limit]
+
+
+def get_constellation_systems_local(constellation_id: int) -> list[dict]:
+    result: list[dict] = []
+    constellation = _constellations.get(constellation_id)
+    if not constellation:
+        return result
+    for system_id, system in _systems_by_id.items():
+        if system.get("constellation_id") != constellation_id:
+            continue
+        result.append({
+            "id": system_id,
+            "name": system["name"],
+            "security": round(system["security"], 1),
+            "region": _regions.get(system.get("region_id", 0), ""),
+            "constellation": constellation["name"],
+        })
+    result.sort(key=lambda item: item["name"])
+    return result

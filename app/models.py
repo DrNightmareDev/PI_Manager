@@ -89,6 +89,7 @@ class MarketCache(Base):
     best_buy = Column(String(50), nullable=True)   # stored as string to avoid float precision issues
     best_sell = Column(String(50), nullable=True)
     avg_volume = Column(String(50), nullable=True)
+    avg_volume_7d = Column(String(50), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
