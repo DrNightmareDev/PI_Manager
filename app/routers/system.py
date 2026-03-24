@@ -423,7 +423,17 @@ def system_analyzer_direct(
     account=Depends(require_account),
 ):
     """Direktlink: /system/Jita oder /system/30000142"""
+    lang = get_language_from_request(request)
     preset_system = sde.find_system(system_query)
+    preset_system_json = None
+    if preset_system:
+        preset_system_json = {
+            "id": int(preset_system.get("id", 0) or 0),
+            "name": str(preset_system.get("name", "")),
+            "security": float(preset_system.get("security", 0.0) or 0.0),
+            "region": str(preset_system.get("region", "") or ""),
+            "constellation": str(preset_system.get("constellation", "") or ""),
+        }
     preset_error = None if preset_system else f'System "{system_query}" nicht gefunden.'
     return templates.TemplateResponse("system.html", {
         "request": request,
@@ -431,6 +441,9 @@ def system_analyzer_direct(
         "planet_type_colors": PLANET_TYPE_COLORS,
         "planet_resources": PLANET_RESOURCES,
         "p0_to_p1": P0_TO_P1,
+        "product_labels": _build_product_labels(lang),
+        "planet_type_labels": _build_planet_type_labels(lang),
         "preset_system": preset_system,
+        "preset_system_json": preset_system_json,
         "preset_error": preset_error,
     })

@@ -234,7 +234,7 @@ let resourceToPlanet = {}; // P0-Ressource → [Planetentypen die sie produziere
 {% if preset_system %}
 // Direktlink: System vorauswählen und Analyse sofort starten
 window.addEventListener('DOMContentLoaded', () => {
-    selectSystem({{ preset_system | tojson }});
+    selectSystem({{ preset_system_json | tojson }});
     analyzeSystem();
 });
 {% endif %}
