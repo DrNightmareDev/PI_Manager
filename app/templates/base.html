@@ -123,6 +123,14 @@
             </ul>
 
             <!-- Theme Toggle -->
+            <button class="eve-theme-toggle me-2"
+                    type="button"
+                    data-bs-toggle="modal"
+                    data-bs-target="#helpModal"
+                    title="{{ t('common.help') }}">
+                <i class="bi bi-question-circle" style="font-size:0.95rem;"></i>
+            </button>
+
             <div class="dropdown me-2">
                 <button class="eve-theme-toggle" id="languageToggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="{{ t('common.language') }}">
                     <i class="bi bi-translate" style="font-size:0.95rem;"></i>
@@ -195,6 +203,45 @@
         </div>
     </div>
 </nav>
+
+<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content eve-help-modal">
+            <div class="modal-header border-0 pb-2">
+                <div>
+                    <h5 class="modal-title fw-semibold" id="helpModalLabel">{{ t('help.title') }}</h5>
+                    <div class="text-muted small">{{ t('help.subtitle') }}</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{{ t('common.close') }}"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <div class="eve-help-note mb-4">
+                    <div class="fw-semibold mb-1">{{ t('help.esi_notice_title') }}</div>
+                    <div class="small text-muted">{{ t('help.esi_notice_text') }}</div>
+                </div>
+
+                <div class="eve-help-section mb-4">
+                    <div class="eve-help-section-title">{{ t('help.section_pages') }}</div>
+                    <ul class="eve-help-list">
+                        <li><strong>{{ t('nav.dashboard') }}:</strong> {{ t('help.page.dashboard') }}</li>
+                        <li><strong>{{ t('nav.skyhooks') }}:</strong> {{ t('help.page.skyhooks') }}</li>
+                        <li><strong>{{ t('common.manage_characters') }}:</strong> {{ t('help.page.characters') }}</li>
+                        <li><strong>{{ t('nav.corporation') }}:</strong> {{ t('help.page.corporation') }}</li>
+                        <li><strong>{{ t('nav.market') }}:</strong> {{ t('help.page.market') }}</li>
+                        <li><strong>{{ t('nav.planner') }}:</strong> {{ t('help.page.planner') }}</li>
+                        <li><strong>{{ t('nav.system') }}:</strong> {{ t('help.page.system') }}</li>
+                        <li><strong>{{ t('nav.system_mix') }}:</strong> {{ t('help.page.system_mix') }}</li>
+                        <li><strong>{{ t('nav.compare') }}:</strong> {{ t('help.page.compare') }}</li>
+                    </ul>
+                </div>
+
+                <div class="eve-help-donate small text-muted">
+                    {{ t('help.donate', name='DrNightmare') }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Hauptinhalt -->
 <main class="container-fluid py-4 px-3 px-md-4">
@@ -327,6 +374,39 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .eve-language-menu {
     min-width: 10rem;
+}
+
+.eve-help-modal {
+    background: linear-gradient(180deg, rgba(19, 30, 42, 0.98), rgba(14, 22, 31, 0.98));
+    border: 1px solid rgba(0, 180, 216, 0.18);
+    color: var(--eve-text);
+}
+
+.eve-help-note {
+    padding: 0.9rem 1rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 193, 7, 0.24);
+    background: rgba(255, 193, 7, 0.08);
+}
+
+.eve-help-section-title {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--eve-text-muted);
+    margin-bottom: 0.8rem;
+}
+
+.eve-help-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    display: grid;
+    gap: 0.6rem;
+}
+
+.eve-help-donate {
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(122, 138, 154, 0.16);
 }
 </style>
 {% block extra_scripts %}{% endblock %}
