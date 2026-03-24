@@ -1001,6 +1001,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const filterSelect = document.getElementById('charFilter');
     const activeCheck = document.getElementById('activeFilter');
     const expiredCheck = document.getElementById('expiredFilter');
+    const stalledCheck = document.getElementById('stalledFilter');
 
     window.applyFilters = applyFilter;
 
@@ -1008,11 +1009,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const charVal = filterSelect ? filterSelect.value : '';
         const onlyActive = activeCheck ? activeCheck.classList.contains('active') : false;
         const onlyExpired = expiredCheck ? expiredCheck.classList.contains('active') : false;
+        const onlyStalled = stalledCheck ? stalledCheck.classList.contains('active') : false;
+        const hasStateFilter = onlyActive || onlyExpired || onlyStalled;
         const matched = rows.filter(r => {
             const charOk = !charVal || r.dataset.char === charVal;
-            const activeOk = !onlyActive || r.dataset.active === '1';
-            const expiredOk = !onlyExpired || r.dataset.expired === '1';
-            return charOk && activeOk && expiredOk;
+            const stateOk = !hasStateFilter || (
+                (onlyActive && r.dataset.active === '1') ||
+                (onlyExpired && r.dataset.expired === '1') ||
+                (onlyStalled && r.dataset.stalled === '1')
+            );
+            return charOk && stateOk;
         });
         pager.applyFilter(matched);
         saveFilterState();
@@ -1024,6 +1030,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 char: filterSelect ? filterSelect.value : '',
                 active: activeCheck ? activeCheck.classList.contains('active') : false,
                 expired: expiredCheck ? expiredCheck.classList.contains('active') : false,
+                stalled: stalledCheck ? stalledCheck.classList.contains('active') : false,
                 sortCol,
                 sortAsc,
             }));
@@ -1036,6 +1043,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (state.char && filterSelect) filterSelect.value = state.char;
             if (state.active && activeCheck) activeCheck.classList.add('active');
             if (state.expired && expiredCheck) expiredCheck.classList.add('active');
+            if (state.stalled && stalledCheck) stalledCheck.classList.add('active');
             if (state.sortCol) {
                 sortCol = state.sortCol;
                 sortAsc = state.sortAsc !== false;

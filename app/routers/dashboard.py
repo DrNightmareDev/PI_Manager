@@ -843,10 +843,7 @@ def dashboard(
     expired_colony_count = sum(
         1
         for colony in colonies
-        if (
-            (colony.get("expiry_hours") is not None and colony.get("expiry_hours") < 0)
-            or (colony.get("expiry_hours") is None and colony.get("is_stalled") is True)
-        )
+        if colony.get("expiry_hours") is not None and colony.get("expiry_hours") < 0
     )
     active_colony_count = sum(1 for colony in colonies if colony.get("is_active") is True)
     stalled_colony_count = sum(
