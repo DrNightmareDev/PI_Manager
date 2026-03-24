@@ -179,7 +179,7 @@
                         </span>
                         <div class="d-flex align-items-center gap-2 ms-1" title="Maximal erlaubte Abweichung der Extraktoren pro Stunde">
                             <span class="small text-muted" style="font-size:.78rem;">{{ t('dashboard.balance_threshold') }}</span>
-                            <input id="balanceThresholdRange" type="range" min="1" max="20" step="0.5" value="5"
+                            <input id="balanceThresholdRange" type="range" min="1" max="50" step="0.5" value="5"
                                    style="width:90px;" oninput="updateBalanceThreshold(this.value)">
                             <span id="balanceThresholdValue" class="small" style="min-width:42px;color:#c9d1d9;">5.0%</span>
                         </div>
@@ -1334,7 +1334,7 @@ function renderExtractorBalanceIndicators() {
 window.renderExtractorBalanceIndicators = renderExtractorBalanceIndicators;
 
 function updateBalanceThreshold(value) {
-    const numeric = Math.max(1, Math.min(20, parseFloat(value) || 5));
+    const numeric = Math.max(1, Math.min(50, parseFloat(value) || 5));
     localStorage.setItem(BALANCE_THRESHOLD_KEY, String(numeric));
     const range = document.getElementById('balanceThresholdRange');
     const label = document.getElementById('balanceThresholdValue');
