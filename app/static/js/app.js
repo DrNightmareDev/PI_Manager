@@ -1031,6 +1031,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const onlyExpired = expiredCheck ? expiredCheck.classList.contains('active') : false;
         const onlyStalled = stalledCheck ? stalledCheck.classList.contains('active') : false;
         const hasStateFilter = onlyBalanced || onlyUnbalanced || onlyActive || onlyExpired || onlyStalled;
+        const extractorRateThreshold = typeof window.getExtractorRateThreshold === 'function'
+            ? window.getExtractorRateThreshold()
+            : 0;
         const matched = rows.filter(r => {
             const charOk = !charVal || r.dataset.char === charVal;
             const threshold = typeof window.getBalanceThreshold === 'function'
@@ -1049,6 +1052,12 @@ document.addEventListener('DOMContentLoaded', function () {
             );
             const isBalanced = hasComparableBalance && Number(balance.diff_pct) <= threshold;
             const isUnbalanced = hasComparableBalance && Number(balance.diff_pct) > threshold;
+            const minExtractorRate = parseFloat(r.dataset.minExtractorRate || '-1');
+            const rateOk = extractorRateThreshold <= 0 || (
+                Number.isFinite(minExtractorRate) &&
+                minExtractorRate >= 0 &&
+                minExtractorRate < extractorRateThreshold
+            );
             const stateOk = !hasStateFilter || (
                 (onlyBalanced && isBalanced) ||
                 (onlyUnbalanced && isUnbalanced) ||
@@ -1056,7 +1065,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 (onlyExpired && r.dataset.expired === '1') ||
                 (onlyStalled && r.dataset.stalled === '1')
             );
-            return charOk && stateOk;
+            return charOk && stateOk && rateOk;
         });
         pager.applyFilter(matched);
         notifyDashboardTableChanged();

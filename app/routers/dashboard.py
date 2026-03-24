@@ -515,6 +515,41 @@ def _compute_extractor_balance(pins: list) -> dict | None:
     }
 
 
+def _compute_extractor_rate_summary(pins: list) -> dict | None:
+    """Liefert Kennzahlen fuer laufende Extraktoren eines Planeten."""
+    now = datetime.now(timezone.utc)
+    rates: list[float] = []
+
+    for pin in pins:
+        details = pin.get("extractor_details") or {}
+        if not details:
+            continue
+
+        exp_dt = _parse_expiry(pin.get("expiry_time", ""))
+        if exp_dt is None or exp_dt <= now:
+            continue
+
+        cycle_time = float(details.get("cycle_time") or 0)
+        qty_per_cycle = float(
+            details.get("qty_per_cycle")
+            or details.get("quantity_per_cycle")
+            or details.get("output_per_cycle")
+            or 0
+        )
+        avg_per_hour = qty_per_cycle * (3600.0 / cycle_time) if cycle_time > 0 and qty_per_cycle > 0 else 0.0
+        if avg_per_hour > 0:
+            rates.append(round(avg_per_hour, 1))
+
+    if not rates:
+        return None
+
+    return {
+        "count": len(rates),
+        "min_avg_per_hour": min(rates),
+        "max_avg_per_hour": max(rates),
+    }
+
+
 def _compute_colony_productions(pins: list) -> tuple[dict[str, float], dict[str, int], str | None]:
     """Gibt (productions, prod_tiers, highest_tier_label) zurück.
     prod_tiers: product_name -> tier_num (1–4).
@@ -780,6 +815,7 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
             "storage": _compute_storage(pins),
             "extractor_status": _get_extractor_status(pins),
             "extractor_balance": _compute_extractor_balance(pins),
+            "extractor_rate_summary": _compute_extractor_rate_summary(pins),
             "missing_inputs": _compute_missing_inputs(pins),
         })
 
@@ -828,6 +864,7 @@ def dashboard(
 
         needs_balance_refresh = any(
             ("extractor_balance" not in colony)
+            or ("extractor_rate_summary" not in colony)
             or (
                 colony.get("extractor_balance") is None
                 and int((colony.get("extractor_status") or {}).get("total") or 0) == 2
