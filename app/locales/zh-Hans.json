@@ -20,8 +20,10 @@
   "common.storage": "仓储",
   "common.product": "产品",
   "common.active": "活跃",
+  "common.balanced": "平衡",
   "common.expired": "已过期",
   "common.stalled": "已停滞",
+  "common.unbalanced": "失衡",
   "common.inactive": "不活跃",
   "common.all": "全部",
   "common.reset": "重置",
@@ -200,5 +202,7 @@
   "manager.i18n.source_sde": "API / SDE",
   "manager.i18n.locked": "已锁定",
   "manager.i18n.saved": "翻译已保存",
-  "manager.i18n.save_error": "保存翻译失败"
+  "manager.i18n.save_error": "保存翻译失败",
+  "dashboard.balance_threshold": "差值",
+  "dashboard.extractor_rate_threshold": "单位/小时"
 }

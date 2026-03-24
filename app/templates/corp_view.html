@@ -427,31 +427,30 @@ async function openForceLoad() {
     const res = await fetch(`/dashboard/corp/accounts?corp_id=${corpId}`);
     const data = await res.json();
     const accounts = data.accounts || [];
-    const uncached = accounts.filter(acc => !acc.is_cached);
 
     const list = document.getElementById('forceLoadList');
     list.innerHTML = '';
-    if (!uncached.length) {
-        list.insertAdjacentHTML('beforeend', '<div class="text-muted small py-2">Alle Accounts sind bereits gecacht.</div>');
+    if (!accounts.length) {
+        list.insertAdjacentHTML('beforeend', '<div class="text-muted small py-2">Keine Accounts gefunden.</div>');
     }
-    uncached.forEach(acc => {
+    accounts.forEach(acc => {
         list.insertAdjacentHTML('beforeend', `
         <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="border-color:var(--eve-card-border)!important;">
             <span id="spin_${acc.account_id}" class="d-inline-flex" style="width:1rem;text-align:center;">
                 <i class="bi bi-hourglass" style="color:var(--eve-text-muted);"></i>
             </span>
             <span class="flex-grow-1">${acc.main_name}</span>
-            <span id="status_${acc.account_id}" class="small text-muted ms-auto">ausstehend</span>
+            <span id="status_${acc.account_id}" class="small text-muted ms-auto">${acc.is_cached ? 'wird neu geladen' : 'ausstehend'}</span>
         </div>`);
     });
 
-    document.getElementById('forceLoadRemaining').textContent = uncached.length;
+    document.getElementById('forceLoadRemaining').textContent = accounts.length;
     document.getElementById('forceLoadDoneBtn').classList.add('d-none');
-    document.getElementById('forceLoadSpinner').style.display = uncached.length ? '' : 'none';
+    document.getElementById('forceLoadSpinner').style.display = accounts.length ? '' : 'none';
     modal.show();
 
-    let remaining = uncached.length;
-    for (const acc of uncached) {
+    let remaining = accounts.length;
+    for (const acc of accounts) {
         document.getElementById(`spin_${acc.account_id}`).innerHTML =
             '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
         document.getElementById(`status_${acc.account_id}`).textContent = 'laedt...';

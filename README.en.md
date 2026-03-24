@@ -11,7 +11,7 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 - PI colonies for mains and alts
 - Persistent DB caches for market prices, dashboard values, and skyhook values
 - Automatic 15-minute refresh for price and value data
-- Dashboard with status filters, ISK/day, expiry warnings, and Dotlan links
+- Dashboard with status filters, ISK/day, expiry warnings, extractor balance indicators, adjustable extractor-rate filtering, and Dotlan links
 - Skyhook inventory with history and DB value cache
 - PI skills per character in card and list views
 - Corporation overview, System Analyzer, Compare, System Mix, and PI Chain Planner

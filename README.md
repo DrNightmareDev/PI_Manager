@@ -16,6 +16,7 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 
 - Dashboard, Skyhooks, Characters, Corporation, System Analyzer, Compare, System Mix, and PI Chain Planner
 - DB-backed caches for market prices, dashboard values, skyhook values, and GUI translations
+- Dashboard extractor balance indicators, balanced/unbalanced filters, and adjustable extractor-rate filter
 - GUI languages: German, English, and Simplified Chinese
 - Linux, Docker Compose, and native Windows setup/update scripts
 

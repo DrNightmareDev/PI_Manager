@@ -1039,19 +1039,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const threshold = typeof window.getBalanceThreshold === 'function'
                 ? window.getBalanceThreshold()
                 : 5;
-            const colonyIdx = parseInt(r.dataset.colonyIdx || '-1', 10);
-            const balanceList = Array.isArray(window.COLONY_EXTRACTOR_BALANCE)
-                ? window.COLONY_EXTRACTOR_BALANCE
-                : [];
-            const balance = colonyIdx >= 0 ? balanceList[colonyIdx] : null;
-            const hasComparableBalance = !!(
-                balance &&
-                Array.isArray(balance.extractors) &&
-                balance.extractors.length === 2 &&
-                Number.isFinite(Number(balance.diff_pct))
-            );
-            const isBalanced = hasComparableBalance && Number(balance.diff_pct) <= threshold;
-            const isUnbalanced = hasComparableBalance && Number(balance.diff_pct) > threshold;
+            const hasComparableBalance = r.dataset.hasBalance === '1';
+            const balanceDiffPct = parseFloat(r.dataset.balanceDiffPct || '-1');
+            const isBalanced = hasComparableBalance && Number.isFinite(balanceDiffPct) && balanceDiffPct <= threshold;
+            const isUnbalanced = hasComparableBalance && Number.isFinite(balanceDiffPct) && balanceDiffPct > threshold;
             const minExtractorRate = parseFloat(r.dataset.minExtractorRate || '-1');
             const rateOk = extractorRateThreshold <= 0 || (
                 Number.isFinite(minExtractorRate) &&

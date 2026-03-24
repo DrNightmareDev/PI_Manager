@@ -20,8 +20,10 @@
   "common.storage": "Storage",
   "common.product": "Product",
   "common.active": "Active",
+  "common.balanced": "Balanced",
   "common.expired": "Expired",
   "common.stalled": "Stalled",
+  "common.unbalanced": "Unbalanced",
   "common.inactive": "Inactive",
   "common.all": "All",
   "common.reset": "Reset",
@@ -200,5 +202,7 @@
   "manager.i18n.source_sde": "API / SDE",
   "manager.i18n.locked": "Locked",
   "manager.i18n.saved": "Translation saved",
-  "manager.i18n.save_error": "Failed to save translation"
+  "manager.i18n.save_error": "Failed to save translation",
+  "dashboard.balance_threshold": "Delta",
+  "dashboard.extractor_rate_threshold": "u/h"
 }
