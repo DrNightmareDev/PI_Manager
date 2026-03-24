@@ -49,10 +49,23 @@ function EvePaginate(tableId, opts) {
         renderControls(total, start + 1, end, totPg);
     }
 
+    function getControlContainers() {
+        const ids = [];
+        if (Array.isArray(o.controlsIds)) ids.push(...o.controlsIds);
+        else if (o.controlsIds) ids.push(o.controlsIds);
+        if (o.controlsId) ids.push(o.controlsId);
+        return [...new Set(ids)]
+            .map(id => document.getElementById(id))
+            .filter(Boolean);
+    }
+
     function renderControls(total, from, to, totPg) {
-        const c = o.controlsId ? document.getElementById(o.controlsId) : null;
-        if (!c) return;
-        if (total === 0) { c.innerHTML = ''; return; }
+        const containers = getControlContainers();
+        if (!containers.length) return;
+        if (total === 0) {
+            containers.forEach(c => { c.innerHTML = ''; });
+            return;
+        }
 
         let h = `<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-3 py-2" style="border-top:1px solid #1a2d3d;">`;
 
@@ -81,7 +94,7 @@ function EvePaginate(tableId, opts) {
         });
         h += `</div></div>`;
 
-        c.innerHTML = h;
+        containers.forEach(c => { c.innerHTML = h; });
     }
 
     const api = {
