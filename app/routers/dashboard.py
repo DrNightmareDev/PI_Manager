@@ -840,6 +840,14 @@ def dashboard(
             skyhook_data[e.planet_id] = [
                 {"product_name": i.product_name, "quantity": i.quantity} for i in e.items
             ]
+    expired_colony_count = sum(
+        1
+        for colony in colonies
+        if (
+            (colony.get("expiry_hours") is not None and colony.get("expiry_hours") < 0)
+            or (colony.get("expiry_hours") is None and colony.get("is_stalled") is True)
+        )
+    )
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "account": account,
@@ -853,6 +861,7 @@ def dashboard(
         "next_expiry": next_expiry_dt,
         "next_expiry_hours": next_expiry_hours,
         "next_expiry_char": next_expiry_char,
+        "expired_colony_count": expired_colony_count,
         "cache_age_sec": cache_age_sec,
         "cooldown_remaining": cooldown_remaining,
         "isk_history": isk_history,

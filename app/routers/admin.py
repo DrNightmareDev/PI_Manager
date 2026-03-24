@@ -5,6 +5,7 @@ from sqlalchemy import func
 
 from app.database import get_db
 from app.dependencies import require_admin, require_account
+from app.i18n import get_translation_rows, save_translation, SUPPORTED_LANGUAGES
 from app.models import Account, Character, IskSnapshot, AccessPolicy, AccessPolicyEntry
 from app.session import create_session, create_impersonate_session, read_session
 from app.templates_env import templates
@@ -77,7 +78,26 @@ def admin_panel(
         "total_colonies": total_colonies,
         "policy": policy,
         "policy_entries": policy_entries,
+        "translation_rows": get_translation_rows(),
+        "translation_languages": [lang for lang in SUPPORTED_LANGUAGES if lang not in ("en", "de")],
     })
+
+
+@router.post("/i18n/update")
+async def update_translation(
+    request: Request,
+    account=Depends(require_admin),
+):
+    payload = await request.json()
+    key = (payload.get("key") or "").strip()
+    updates = payload.get("updates") or {}
+    if not key:
+        raise HTTPException(status_code=400, detail="translation key missing")
+    for locale, value in updates.items():
+        if locale not in SUPPORTED_LANGUAGES:
+            raise HTTPException(status_code=400, detail=f"unsupported locale: {locale}")
+        save_translation(locale, key, str(value or ""))
+    return JSONResponse({"ok": True})
 
 
 @router.get("/toggle-admin/{target_account_id}")

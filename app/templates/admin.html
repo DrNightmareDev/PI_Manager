@@ -447,6 +447,41 @@
 </div>
 {% endif %}
 
+<div class="eve-card card border-0 mt-4" id="translation-editor">
+    <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-translate eve-accent me-1"></i>
+            <span class="fw-medium">Übersetzungen</span>
+            <span class="badge eve-badge-count" id="i18nCount">{{ translation_rows | length }}</span>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="text" id="i18nSearch" class="form-control form-control-sm eve-input" style="width:240px;" placeholder="Schlüssel oder Text suchen...">
+            <select id="i18nLangSelect" class="form-select form-select-sm eve-input" style="width:180px;">
+                {% for lang in translation_languages %}
+                <option value="{{ lang }}" {% if lang == 'zh-Hans' %}selected{% endif %}>
+                    {% if lang == 'zh-Hans' %}Chinese (Simplified){% else %}{{ lang }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="card-body p-3">
+        <div class="table-responsive" style="max-height:720px; overflow:auto;">
+            <table class="table eve-table-sm align-middle mb-0">
+                <thead style="position:sticky;top:0;background:var(--eve-bg-2);z-index:2;">
+                    <tr>
+                        <th style="min-width:300px;">English</th>
+                        <th style="min-width:300px;">Deutsch</th>
+                        <th style="min-width:300px;" id="i18nDynamicHeader">zh-Hans</th>
+                        <th style="width:120px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="i18nRows"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -454,6 +489,11 @@
 let adminFilterActive = false;
 let sortAsc = true;
 let entries = [...document.querySelectorAll('.acc-entry')];
+const translationRows = {{ translation_rows | tojson }};
+const translationLanguages = {{ translation_languages | tojson }};
+const translationLanguageLabels = {
+    'zh-Hans': 'Chinese (Simplified)'
+};
 
 function applyFilters() {
     const q = document.getElementById('charSearch').value.trim().toLowerCase();
@@ -547,5 +587,82 @@ function apFill(type, id, name) {
     document.getElementById('apSearchResults').innerHTML =
         `<span class="small" style="color:#2dc653;"><i class="bi bi-check-circle me-1"></i>${name} übernommen – bitte mit "Hinzufügen" bestätigen.</span>`;
 }
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getActiveTranslationLang() {
+    return document.getElementById('i18nLangSelect')?.value || 'zh-Hans';
+}
+
+function getFilteredTranslationRows() {
+    const query = (document.getElementById('i18nSearch')?.value || '').trim().toLowerCase();
+    const activeLang = getActiveTranslationLang();
+    return translationRows.filter(row => {
+        if (!query) return true;
+        return [row.key, row.en, row.de, row[activeLang] || ''].some(v => String(v || '').toLowerCase().includes(query));
+    });
+}
+
+function renderTranslationRows() {
+    const tbody = document.getElementById('i18nRows');
+    if (!tbody) return;
+    const activeLang = getActiveTranslationLang();
+    const rows = getFilteredTranslationRows();
+    document.getElementById('i18nDynamicHeader').textContent = translationLanguageLabels[activeLang] || activeLang;
+    document.getElementById('i18nCount').textContent = rows.length;
+    tbody.innerHTML = rows.map((row, idx) => `
+        <tr>
+            <td>
+                <div class="small text-muted mb-1">${escapeHtml(row.key)}</div>
+                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="en" rows="3">${escapeHtml(row.en || '')}</textarea>
+            </td>
+            <td>
+                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="de" rows="3">${escapeHtml(row.de || '')}</textarea>
+            </td>
+            <td>
+                <textarea class="form-control form-control-sm eve-input i18n-input" data-locale="${escapeHtml(activeLang)}" rows="3">${escapeHtml(row[activeLang] || '')}</textarea>
+            </td>
+            <td class="text-end">
+                <button type="button" class="btn btn-sm eve-btn-gold" onclick="saveTranslationRow(${idx})">
+                    <i class="bi bi-floppy me-1"></i>Save
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function saveTranslationRow(idx) {
+    const rows = getFilteredTranslationRows();
+    const row = rows[idx];
+    if (!row) return;
+    const tr = document.querySelectorAll('#i18nRows tr')[idx];
+    if (!tr) return;
+    const updates = {};
+    tr.querySelectorAll('.i18n-input').forEach(input => {
+        updates[input.dataset.locale] = input.value;
+    });
+    try {
+        const res = await fetch('/manager/i18n/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: row.key, updates })
+        });
+        if (!res.ok) throw new Error('save failed');
+        Object.assign(row, updates);
+        showToast('Übersetzung gespeichert', 'success');
+    } catch (e) {
+        showToast('Fehler beim Speichern', 'error');
+    }
+}
+
+document.getElementById('i18nSearch')?.addEventListener('input', renderTranslationRows);
+document.getElementById('i18nLangSelect')?.addEventListener('change', renderTranslationRows);
+renderTranslationRows();
 </script>
 {% endblock %}

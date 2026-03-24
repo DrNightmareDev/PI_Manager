@@ -12,7 +12,15 @@
  */
 function EvePaginate(tableId, opts) {
     const o = Object.assign({ pageSize: 6, controlsId: null, onCount: null }, opts || {});
-    let ps   = o.pageSize;
+    const sizeStorageKey = `eve_paginate_size_${tableId}`;
+    let persistedSize = null;
+    try {
+        persistedSize = parseInt(localStorage.getItem(sizeStorageKey), 10);
+        if (Number.isNaN(persistedSize)) persistedSize = null;
+    } catch (_) {
+        persistedSize = null;
+    }
+    let ps   = persistedSize !== null ? persistedSize : o.pageSize;
     let page = 1;
     const sizes = o.pageSizes || [6, 15, 25, 100, 0];
     const labels = o.pageSizeLabels || sizes.map(v => v === 0 ? 'Alle' : String(v));
@@ -81,7 +89,12 @@ function EvePaginate(tableId, opts) {
         goTo(p)       { page = parseInt(p); run(); },
         prev()        { if (page > 1) { page--; run(); } },
         next()        { const t = filtered().length, pg = ps<=0?Math.max(t,1):ps; if (page < Math.ceil(t/pg)) { page++; run(); } },
-        setSize(sz)   { ps = parseInt(sz); page = 1; run(); },
+        setSize(sz)   {
+            ps = parseInt(sz);
+            page = 1;
+            try { localStorage.setItem(sizeStorageKey, String(ps)); } catch (_) {}
+            run();
+        },
         applyFilter(matchedRows) {
             page = 1;
             if (matchedRows !== undefined) {

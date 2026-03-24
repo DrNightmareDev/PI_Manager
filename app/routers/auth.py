@@ -18,7 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _check_access_policy(db: Session, corporation_id, alliance_id) -> bool:
-    """Gibt True zurÃ¼ck wenn Zugang erlaubt, False wenn verweigert."""
+    """Gibt True zurÃƒÂ¼ck wenn Zugang erlaubt, False wenn verweigert."""
     policy = db.get(AccessPolicy, 1)
     if policy is None or policy.mode == "open":
         return True
@@ -98,15 +98,10 @@ def callback(
     # State validieren (CSRF-Schutz)
     sso_state = db.query(SSOState).filter(SSOState.state == state).first()
     if not sso_state:
-        raise HTTPException(status_code=400, detail="UngÃ¼ltiger State â€“ mÃ¶glicher CSRF-Angriff")
+        raise HTTPException(status_code=400, detail="Ungueltiger State - moeglicher CSRF-Angriff")
 
     flow = sso_state.flow
     existing_account_id = sso_state.account_id
-
-    # State lÃ¶schen (Einmalnutzung)
-    db.delete(sso_state)
-    db.commit()
-
     # Code gegen Token tauschen
     try:
         token_data = exchange_code_for_tokens(code)
@@ -128,6 +123,9 @@ def callback(
     character_name = verified.get("CharacterName", "Unbekannt")
     scopes = verified.get("Scopes", "")
 
+    # State erst nach erfolgreicher Verifikation verbrauchen.
+    db.delete(sso_state)
+    db.commit()
     # Charakterinfo von ESI holen
     corporation_id = None
     corporation_name = None
@@ -174,7 +172,7 @@ def callback(
         existing_char.alliance_name = alliance_name
         db.commit()
 
-        # Zugangspolitik auch fÃ¼r bestehende Charaktere prÃ¼fen (corp/allianz kann sich geÃ¤ndert haben)
+        # Zugangspolitik auch fÃƒÂ¼r bestehende Charaktere prÃƒÂ¼fen (corp/allianz kann sich geÃƒÂ¤ndert haben)
         # Ausnahmen: Owner immer erlaubt, add_character-Flow (bereits eingeloggt)
         if flow == "login":
             acc = db.get(Account, existing_char.account_id)
@@ -203,7 +201,7 @@ def callback(
         total_accounts = db.query(Account).count()
         is_first = total_accounts == 0
 
-        # Zugangspolitik prÃ¼fen (nicht fÃ¼r den ersten Account / Besitzer)
+        # Zugangspolitik prÃƒÂ¼fen (nicht fÃƒÂ¼r den ersten Account / Besitzer)
         if not is_first and not _check_access_policy(db, corporation_id, alliance_id):
             return RedirectResponse(url="/?error=access_denied", status_code=302)
 
@@ -237,7 +235,7 @@ def callback(
         create_session(response, new_account.id)
 
     elif flow == "add_character" and existing_account_id:
-        # Alt hinzufÃ¼gen
+        # Alt hinzufÃƒÂ¼gen
         new_char = Character(
             eve_character_id=eve_character_id,
             character_name=character_name,
@@ -322,7 +320,7 @@ def remove_character(
 
     was_main = account.main_character_id == char.id
 
-    # Main-Referenz entfernen falls nÃ¶tig
+    # Main-Referenz entfernen falls nÃƒÂ¶tig
     if was_main:
         account.main_character_id = None
         db.flush()

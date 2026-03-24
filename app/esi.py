@@ -1,4 +1,5 @@
 import base64
+import json
 import secrets
 import time as _time
 from datetime import datetime, timezone
@@ -13,7 +14,11 @@ settings = get_settings()
 # ESI Basis-URLs
 ESI_BASE = "https://esi.evetech.net/latest"
 SSO_TOKEN_URL = "https://login.eveonline.com/v2/oauth/token"
-SSO_VERIFY_URL = "https://esi.evetech.net/verify/"
+SSO_VERIFY_URLS = (
+    "https://login.eveonline.com/oauth/verify",
+    "https://login.eveonline.com/v2/oauth/verify",
+    "https://esi.evetech.net/verify/",
+)
 SSO_AUTHORIZE_URL = "https://login.eveonline.com/v2/oauth/authorize"
 
 HEADERS = {"Accept": "application/json", "User-Agent": "EVE PI Manager / contact: admin"}
@@ -65,13 +70,50 @@ def refresh_access_token(refresh_token: str) -> dict:
 
 
 def verify_token(access_token: str) -> dict:
-    response = requests.get(
-        SSO_VERIFY_URL,
-        headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
-        timeout=15,
-    )
-    response.raise_for_status()
-    return response.json()
+    if access_token.count(".") == 2:
+        try:
+            _, payload_b64, _ = access_token.split(".", 2)
+            padding = "=" * (-len(payload_b64) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64 + padding).decode("utf-8"))
+
+            subject = payload.get("sub", "")
+            character_id = None
+            if subject.startswith("CHARACTER:EVE:"):
+                character_id = int(subject.rsplit(":", 1)[-1])
+
+            scopes = payload.get("scp", [])
+            if isinstance(scopes, list):
+                scopes = " ".join(scopes)
+
+            if character_id:
+                return {
+                    "CharacterID": character_id,
+                    "CharacterName": payload.get("name", "Unbekannt"),
+                    "Scopes": scopes or "",
+                    "TokenType": payload.get("token_type", "Bearer"),
+                }
+        except Exception:
+            pass
+
+    last_error = None
+    for verify_url in SSO_VERIFY_URLS:
+        try:
+            response = requests.get(
+                verify_url,
+                headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            # Some deployments still answer on older verify URLs.
+            # Keep trying until one accepts the token.
+            last_error = exc
+        except requests.RequestException as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+    raise RuntimeError("Token verification failed without a response")
 
 
 def get_character_info(character_id: int) -> dict:

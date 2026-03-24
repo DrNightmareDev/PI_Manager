@@ -1,47 +1,47 @@
 {% extends "base.html" %}
-{% block title %}System Mix - EVE PI Manager{% endblock %}
+{% block title %}{{ t('system_mix.title') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <h2 class="eve-page-title mb-0">
-        <i class="bi bi-collection me-2 eve-accent"></i>System Mix
+        <i class="bi bi-collection me-2 eve-accent"></i>{{ t('system_mix.title') }}
     </h2>
-    <div class="text-muted small">Mehrere Systeme und Konstellationen kombinieren und gemeinsame PI-Produkte sehen</div>
+    <div class="text-muted small">{{ t('system_mix.subtitle') }}</div>
 </div>
 
 <div class="row g-4">
     <div class="col-lg-4">
         <div class="eve-card card border-0 h-100">
             <div class="card-body p-3">
-                <label class="form-label text-muted small">System hinzufuegen</label>
+                <label class="form-label text-muted small">{{ t('system_mix.add_system') }}</label>
                 <div class="position-relative mb-3">
                     <input type="text" id="mixSystemSearch" class="form-control eve-input"
-                           placeholder="z.B. M-OEE8, UMI-KK..." autocomplete="off">
+                           placeholder="{{ t('system_mix.add_system_placeholder') }}" autocomplete="off">
                     <div id="mixSystemDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
                 </div>
 
-                <label class="form-label text-muted small">Konstellation hinzufuegen</label>
+                <label class="form-label text-muted small">{{ t('system_mix.add_constellation') }}</label>
                 <div class="position-relative mb-3">
                     <input type="text" id="mixConstellationSearch" class="form-control eve-input"
-                           placeholder="z.B. 0-8MWQ, Y8R..." autocomplete="off">
+                           placeholder="{{ t('system_mix.add_constellation_placeholder') }}" autocomplete="off">
                     <div id="mixConstellationDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
                 </div>
 
                 <div id="mixFavCard" class="mb-4 d-none">
                     <div class="d-flex align-items-center justify-content-between mb-2">
-                        <span class="text-muted small">Favoriten</span>
+                        <span class="text-muted small">{{ t('system_mix.favorites') }}</span>
                     </div>
                     <div id="mixFavList" class="d-flex flex-wrap gap-2"></div>
                 </div>
 
                 <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small">Ausgewaehlte Systeme</span>
+                    <span class="text-muted small">{{ t('system_mix.selected_systems') }}</span>
                     <span class="badge eve-badge-count" id="mixSelectedCount">0</span>
                 </div>
                 <div id="mixSelectedList" class="d-flex flex-column gap-2"></div>
 
                 <div class="d-flex align-items-center justify-content-between mt-4 mb-2">
-                    <span class="text-muted small">Ausgewaehlte Konstellationen</span>
+                    <span class="text-muted small">{{ t('system_mix.selected_constellations') }}</span>
                     <span class="badge eve-badge-count" id="mixSelectedConstellationCount">0</span>
                 </div>
                 <div id="mixSelectedConstellationList" class="d-flex flex-column gap-2"></div>
@@ -55,7 +55,7 @@
                 <div class="eve-stat-card card border-0 h-100">
                     <div class="card-body text-center p-3">
                         <div class="eve-stat-value" id="mixSystemsCount">0</div>
-                        <div class="eve-stat-label">Auswahl</div>
+                        <div class="eve-stat-label">{{ t('common.selection') }}</div>
                     </div>
                 </div>
             </div>
@@ -63,7 +63,7 @@
                 <div class="eve-stat-card card border-0 h-100">
                     <div class="card-body text-center p-3">
                         <div class="eve-stat-value" id="mixPlanetsCount">0</div>
-                        <div class="eve-stat-label">Planeten</div>
+                        <div class="eve-stat-label">{{ t('common.planets') }}</div>
                     </div>
                 </div>
             </div>
@@ -71,7 +71,7 @@
                 <div class="eve-stat-card card border-0 h-100">
                     <div class="card-body text-center p-3">
                         <div class="eve-stat-value" id="mixProductsCount">0</div>
-                        <div class="eve-stat-label">P2-P4 Produkte</div>
+                        <div class="eve-stat-label">{{ t('system_mix.products_count') }}</div>
                     </div>
                 </div>
             </div>
@@ -81,7 +81,7 @@
             <div class="card-body p-3">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <i class="bi bi-globe2 eve-accent"></i>
-                    <span class="fw-medium">Planetentypen gesamt</span>
+                    <span class="fw-medium">{{ t('system_mix.total_planet_types') }}</span>
                 </div>
                 <div id="mixPlanetTypes" class="d-flex flex-wrap gap-2"></div>
             </div>
@@ -90,15 +90,15 @@
         <div id="mixLoading" class="eve-card card border-0 d-none">
             <div class="card-body text-center py-5">
                 <div class="spinner-border eve-accent mb-3" role="status" aria-hidden="true"></div>
-                <p class="mb-1 fw-medium">Planetendaten werden geladen</p>
-                <p class="text-muted mb-0 small">Systeme und Produkte werden gerade zusammengestellt.</p>
+                <p class="mb-1 fw-medium">{{ t('system_mix.loading_title') }}</p>
+                <p class="text-muted mb-0 small">{{ t('system_mix.loading_subtitle') }}</p>
             </div>
         </div>
 
         <div id="mixEmpty" class="eve-card card border-0">
             <div class="card-body text-center py-5">
                 <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-3"></i>
-                <p class="text-muted mb-0">Waehle mindestens ein System oder eine Konstellation aus, um die kombinierte Produktion zu sehen.</p>
+                <p class="text-muted mb-0">{{ t('system_mix.empty') }}</p>
             </div>
         </div>
 
@@ -111,7 +111,7 @@
                     }};border:1px solid {{
                         '#e63946' if tier == 'P4' else '#f4a300' if tier == 'P3' else '#00b4d8'
                     }}40;">{{ tier }}</span>
-                    <span class="fw-medium">Produkte {{ tier }}</span>
+                    <span class="fw-medium">{{ t('system_mix.products_for_tier', tier=tier) }}</span>
                     <span class="badge eve-badge-count ms-auto" id="mixCount{{ tier }}">0</span>
                 </div>
                 <div class="card-body p-3">
@@ -257,7 +257,7 @@ function renderSelectionState() {
 function renderSelectedSystems() {
     selectedList.innerHTML = '';
     if (!selectedSystems.length) {
-        selectedList.innerHTML = '<div class="text-muted small">Noch keine Systeme ausgewaehlt.</div>';
+        selectedList.innerHTML = `<div class="text-muted small">${window.eveTranslateKey('system_mix.no_systems')}</div>`;
     } else {
         selectedSystems.forEach(system => {
             const favoriteIcon = isFav(system.id)
@@ -268,8 +268,8 @@ function renderSelectedSystems() {
             item.style.background = 'rgba(30,45,61,0.35)';
             item.style.border = '1px solid var(--eve-card-border)';
             const sourceText = system.sourceKeys?.some(key => key.startsWith('constellation:'))
-                ? 'Teil einer Konstellation'
-                : 'Direkt gewaehlt';
+                ? (window.eveTranslateKey('system_mix.part_of_constellation', {}, 'Teil einer Konstellation'))
+                : (window.eveTranslateKey('system_mix.direct_selected', {}, 'Direkt gewaehlt'));
             item.innerHTML = `
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center gap-2">
@@ -294,7 +294,7 @@ function renderSelectedSystems() {
 function renderSelectedConstellations() {
     selectedConstellationList.innerHTML = '';
     if (!selectedConstellations.length) {
-        selectedConstellationList.innerHTML = '<div class="text-muted small">Noch keine Konstellationen ausgewaehlt.</div>';
+        selectedConstellationList.innerHTML = `<div class="text-muted small">${window.eveTranslateKey('system_mix.no_constellations')}</div>`;
     } else {
         selectedConstellations.forEach(constellation => {
             const item = document.createElement('div');
@@ -506,7 +506,7 @@ function renderMixResults(data) {
     if (!data) {
         empty.classList.remove('d-none');
         results.classList.add('d-none');
-        planetTypes.innerHTML = '<span class="text-muted small">Noch keine Daten.</span>';
+        planetTypes.innerHTML = `<span class="text-muted small">${window.eveTranslateKey('system_mix.no_data', {}, 'Noch keine Daten.')}</span>`;
         document.getElementById('mixSystemsCount').textContent = '0';
         document.getElementById('mixPlanetsCount').textContent = '0';
         document.getElementById('mixProductsCount').textContent = '0';
@@ -536,7 +536,7 @@ function renderMixResults(data) {
         planetTypes.appendChild(badge);
     });
     if (!planetTypes.innerHTML) {
-        planetTypes.innerHTML = '<span class="text-muted small">Keine Planetendaten gefunden.</span>';
+        planetTypes.innerHTML = `<span class="text-muted small">${window.eveTranslateKey('system_mix.no_planet_data', {}, 'Keine Planetendaten gefunden.')}</span>`;
     }
 
     ['P4', 'P3', 'P2'].forEach(tier => {
@@ -545,7 +545,7 @@ function renderMixResults(data) {
         document.getElementById('mixCount' + tier).textContent = String(items.length);
         container.innerHTML = '';
         if (!items.length) {
-            container.innerHTML = '<div class="text-muted small">Keine Produkte fuer dieses Tier.</div>';
+            container.innerHTML = `<div class="text-muted small">${window.eveTranslateKey('system_mix.no_products_for_tier', {}, 'Keine Produkte fuer dieses Tier.')}</div>`;
             return;
         }
         items.forEach(item => {
