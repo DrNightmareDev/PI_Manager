@@ -15,6 +15,7 @@ Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightm
 - Sortierbare Charakter-Liste in der Listenansicht
 - Corporation-Uebersicht mit Main-Tabelle und Pagination
 - System Analyzer, System Vergleich und PI Chain Planner
+- Seitenuebergreifende System-Favoriten in System Analyzer, Vergleich, System Mix und PI Chain Planner
 - Manager Panel und Zugangspolitik
 - Globales Storage-Icon fuer letzte Preisaktualisierung
 
@@ -124,6 +125,7 @@ systemctl restart eve-pi-manager
 
 - Die fruehere Gesamt-Uebersicht wurde entfernt.
 - Preisaktualisierungen laufen zentral ueber den Scheduler.
+- System-Favoriten werden browserseitig gemeinsam genutzt, damit dieselben Systeme in `System Analyzer`, `Vergleich`, `System Mix` und `PI Chain Planner` direkt wieder angeklickt werden koennen.
 - Templates sollten als UTF-8 ohne BOM gespeichert werden.
 
 ## Tech Stack

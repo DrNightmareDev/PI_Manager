@@ -27,6 +27,13 @@
                     <div id="mixConstellationDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
                 </div>
 
+                <div id="mixFavCard" class="mb-4 d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="text-muted small">Favoriten</span>
+                    </div>
+                    <div id="mixFavList" class="d-flex flex-wrap gap-2"></div>
+                </div>
+
                 <div class="d-flex align-items-center justify-content-between mb-2">
                     <span class="text-muted small">Ausgewaehlte Systeme</span>
                     <span class="badge eve-badge-count" id="mixSelectedCount">0</span>
@@ -118,12 +125,38 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<style>
+.eve-fav-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #0a1520;
+    border: 1px solid #1a3a5a;
+    border-radius: 20px;
+    padding: 4px 10px 4px 9px;
+    cursor: pointer;
+    font-size: .8rem;
+    color: #c9d1d9;
+    transition: border-color .15s, background .15s;
+}
+.eve-fav-pill:hover { background: #0f1f30; border-color: #2a5a8a; }
+.eve-fav-region { color: #586e75; font-size: .7rem; }
+.eve-fav-remove {
+    color: #3a5a7a;
+    font-size: .95rem;
+    line-height: 1;
+    margin-left: 2px;
+    transition: color .12s;
+}
+.eve-fav-remove:hover { color: #e74c3c; }
+</style>
 <script>
 let mixSearchTimer = null;
 let mixConstellationSearchTimer = null;
 let selectedSystems = [];
 let selectedConstellations = [];
 let mixIsLoading = false;
+const FAV_KEY = 'pi_fav_systems';
 
 const searchInput = document.getElementById('mixSystemSearch');
 const searchDropdown = document.getElementById('mixSystemDropdown');
@@ -131,6 +164,58 @@ const constellationInput = document.getElementById('mixConstellationSearch');
 const constellationDropdown = document.getElementById('mixConstellationDropdown');
 const selectedList = document.getElementById('mixSelectedList');
 const selectedConstellationList = document.getElementById('mixSelectedConstellationList');
+
+function getFavs() {
+    try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch(e) { return []; }
+}
+
+function saveFavs(list) {
+    localStorage.setItem(FAV_KEY, JSON.stringify(list));
+}
+
+function isFav(id) {
+    return getFavs().some(f => f.id === id);
+}
+
+function renderFavList() {
+    const favs = getFavs();
+    const card = document.getElementById('mixFavCard');
+    const list = document.getElementById('mixFavList');
+    if (!favs.length) {
+        card.classList.add('d-none');
+        list.innerHTML = '';
+        return;
+    }
+    card.classList.remove('d-none');
+    list.innerHTML = favs.map(f => `
+        <div class="eve-fav-pill" data-id="${f.id}">
+            <i class="bi bi-star-fill" style="color:#f4a300;font-size:.7rem;"></i>
+            <span>${escapeHtml(f.name)}</span>
+            ${f.region ? `<span class="eve-fav-region">${escapeHtml(f.region)}</span>` : ''}
+            <span style="color:${f.security >= 0.5 ? '#2dc653' : (f.security > 0 ? '#f4a300' : '#e63946')};">${Number(f.security || 0).toFixed(1)}</span>
+            <span class="eve-fav-remove" data-id="${f.id}">x</span>
+        </div>
+    `).join('');
+}
+
+function toggleMixFav(systemId) {
+    const system = selectedSystems.find(entry => entry.id === systemId);
+    if (!system) return;
+    let favs = getFavs();
+    if (isFav(systemId)) {
+        favs = favs.filter(f => f.id !== systemId);
+    } else {
+        favs.push({
+            id: system.id,
+            name: system.name,
+            region: system.region,
+            security: system.security || 0,
+        });
+    }
+    saveFavs(favs);
+    renderFavList();
+    renderSelectedSystems();
+}
 
 function setMixLoading(isLoading) {
     mixIsLoading = isLoading;
@@ -175,6 +260,9 @@ function renderSelectedSystems() {
         selectedList.innerHTML = '<div class="text-muted small">Noch keine Systeme ausgewaehlt.</div>';
     } else {
         selectedSystems.forEach(system => {
+            const favoriteIcon = isFav(system.id)
+                ? '<i class="bi bi-star-fill" style="font-size:1rem;color:#f4a300;"></i>'
+                : '<i class="bi bi-star" style="font-size:1rem;"></i>';
             const item = document.createElement('div');
             item.className = 'd-flex align-items-center justify-content-between gap-2 p-2 rounded';
             item.style.background = 'rgba(30,45,61,0.35)';
@@ -183,8 +271,13 @@ function renderSelectedSystems() {
                 ? 'Teil einer Konstellation'
                 : 'Direkt gewaehlt';
             item.innerHTML = `
-                <div>
-                    <div class="small fw-medium">${system.name}</div>
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="small fw-medium">${system.name}</div>
+                        <button class="btn btn-sm eve-btn-ghost p-0" onclick="toggleMixFav(${system.id})" title="Als Favorit speichern">
+                            ${favoriteIcon}
+                        </button>
+                    </div>
                     <div class="text-muted" style="font-size:.72rem;">${system.constellation || '-'} - ${system.region || '-'}</div>
                     <div class="text-muted" style="font-size:.68rem;">${sourceText}</div>
                 </div>
@@ -312,6 +405,19 @@ async function addMixConstellation(constellation) {
     } catch (e) {
         setMixLoading(false);
     }
+}
+
+async function addFavoriteToMix(systemId) {
+    if (selectedSystems.some(system => system.id === systemId)) return;
+    const favorite = getFavs().find(entry => entry.id === systemId);
+    if (!favorite) return;
+    addMixSystem({
+        id: favorite.id,
+        name: favorite.name,
+        region: favorite.region,
+        security: favorite.security || 0,
+        constellation: favorite.constellation || '',
+    });
 }
 
 async function searchMixSystems(query) {
@@ -533,6 +639,23 @@ document.addEventListener('click', e => {
     }
 });
 
+document.getElementById('mixFavList').addEventListener('click', async e => {
+    const rm = e.target.closest('.eve-fav-remove');
+    if (rm) {
+        e.stopPropagation();
+        const id = parseInt(rm.dataset.id, 10);
+        saveFavs(getFavs().filter(f => f.id !== id));
+        renderFavList();
+        renderSelectedSystems();
+        return;
+    }
+    const pill = e.target.closest('.eve-fav-pill');
+    if (pill) {
+        await addFavoriteToMix(parseInt(pill.dataset.id, 10));
+    }
+});
+
+renderFavList();
 renderSelectedSystems();
 renderSelectedConstellations();
 </script>
