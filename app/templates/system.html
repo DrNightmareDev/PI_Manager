@@ -133,9 +133,17 @@
                 <span class="fw-medium">{{ t('system.available_p0') }}</span>
                 <span class="text-muted small" style="font-size:0.72rem;">&mdash; {{ t('system.click_tiles_filter') }}</span>
             </div>
-            <button id="clearPlanetFilter" class="btn btn-sm eve-tier-filter-btn d-none" onclick="clearFilters()">
-                <i class="bi bi-x-circle me-1"></i>{{ t('system.clear_filter') }}
-            </button>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button id="singlePlanetFilterBtn"
+                        class="btn btn-sm eve-tier-filter-btn"
+                        onclick="toggleSinglePlanetFilter()"
+                        title="{{ t('system.single_planet_filter_hint', default='Nur Produkte anzeigen, die in diesem System auf genau einem Planetentyp gebaut werden koennen') }}">
+                    <i class="bi bi-circle-square me-1"></i>{{ t('system.single_planet_filter', default='1 Planet') }}
+                </button>
+                <button id="clearPlanetFilter" class="btn btn-sm eve-tier-filter-btn d-none" onclick="clearFilters()">
+                    <i class="bi bi-x-circle me-1"></i>{{ t('system.clear_filter') }}
+                </button>
+            </div>
         </div>
         <div class="card-body p-3">
             <div id="resourceGrid" class="row g-3"></div>
@@ -269,6 +277,34 @@ let sortState = { col: 'isk_sell', asc: false };
 let resourceToPlanet = {}; // P0-Ressource → [Planetentypen die sie produzieren]
 
 let planetDetailsExpanded = false;
+let singlePlanetOnly = false;
+const SYSTEM_FILTER_STATE_KEY = 'system_analyzer_filters_v1';
+
+function loadSystemFilterState() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SYSTEM_FILTER_STATE_KEY) || '{}');
+        currentTier = typeof raw.currentTier === 'string' ? raw.currentTier : '';
+        currentTrendPeriod = typeof raw.currentTrendPeriod === 'string' ? raw.currentTrendPeriod : 'trend_1d';
+        singlePlanetOnly = Boolean(raw.singlePlanetOnly);
+        activeFilters = new Set(Array.isArray(raw.activeFilters) ? raw.activeFilters : []);
+    } catch (_) {
+        currentTier = '';
+        currentTrendPeriod = 'trend_1d';
+        singlePlanetOnly = false;
+        activeFilters = new Set();
+    }
+}
+
+function saveSystemFilterState() {
+    localStorage.setItem(SYSTEM_FILTER_STATE_KEY, JSON.stringify({
+        currentTier,
+        currentTrendPeriod,
+        singlePlanetOnly,
+        activeFilters: [...activeFilters],
+    }));
+}
+
+loadSystemFilterState();
 
 {% if preset_system %}
 // Direktlink: System vorauswählen und Analyse sofort starten
@@ -468,6 +504,7 @@ function toggleFilter(value) {
     } else {
         activeFilters.add(value);
     }
+    saveSystemFilterState();
     updatePlanetTiles();
     updateResourceBadges();
     document.getElementById('clearPlanetFilter').classList.toggle('d-none', activeFilters.size === 0);
@@ -476,9 +513,17 @@ function toggleFilter(value) {
 
 function clearFilters() {
     activeFilters.clear();
+    saveSystemFilterState();
     updatePlanetTiles();
     updateResourceBadges();
     document.getElementById('clearPlanetFilter').classList.add('d-none');
+    renderRecs();
+}
+
+function toggleSinglePlanetFilter() {
+    singlePlanetOnly = !singlePlanetOnly;
+    document.getElementById('singlePlanetFilterBtn')?.classList.toggle('active', singlePlanetOnly);
+    saveSystemFilterState();
     renderRecs();
 }
 
@@ -563,6 +608,7 @@ document.getElementById('tierFilter').addEventListener('click', function(e) {
     const btn = e.target.closest('.eve-tier-filter-btn[data-tier]');
     if (!btn) return;
     currentTier = btn.dataset.tier;
+    saveSystemFilterState();
     document.querySelectorAll('.eve-tier-filter-btn[data-tier]').forEach(b =>
         b.classList.toggle('active', b === btn));
     renderRecs();
@@ -574,6 +620,7 @@ document.getElementById('trendPeriodFilter').addEventListener('click', function(
     const btn = e.target.closest('[data-period]');
     if (!btn) return;
     currentTrendPeriod = btn.dataset.period;
+    saveSystemFilterState();
     document.querySelectorAll('[data-period]').forEach(b =>
         b.classList.toggle('active', b === btn));
     if (sortState.col === 'trend') { applySort(); }
@@ -616,10 +663,11 @@ function renderAnalysis(data) {
     analysisResult.classList.remove('d-none');
 
     // Filter + Sort zurücksetzen
-    activeFilters.clear();
+    loadSystemFilterState();
     sortState = { col: 'isk_sell', asc: false };
     resourceToPlanet = {};
-    document.getElementById('clearPlanetFilter').classList.add('d-none');
+    document.getElementById('singlePlanetFilterBtn')?.classList.toggle('active', singlePlanetOnly);
+    document.getElementById('clearPlanetFilter').classList.toggle('d-none', activeFilters.size === 0);
 
     // P0-Ressource → Planetentyp Mapping aufbauen
     (data.planet_types || []).forEach(pt => {
@@ -694,9 +742,10 @@ function renderAnalysis(data) {
 
     // Empfehlungen
     allRecs = data.recommendations || [];
-    currentTier = '';
     document.querySelectorAll('.eve-tier-filter-btn[data-tier]').forEach(b =>
-        b.classList.toggle('active', b.dataset.tier === ''));
+        b.classList.toggle('active', b.dataset.tier === currentTier));
+    document.querySelectorAll('[data-period]').forEach(b =>
+        b.classList.toggle('active', b.dataset.period === currentTrendPeriod));
     applySort();
     updateSortIcons();
     renderRecs();
@@ -780,6 +829,12 @@ document.addEventListener('DOMContentLoaded', renderFavList);
 function renderRecs() {
     let filtered = currentTier ? allRecs.filter(r => r.tier === currentTier) : [...allRecs];
 
+    if (singlePlanetOnly) {
+        filtered = filtered.filter(r => {
+            return Boolean(r.single_planet_viable) || (r.single_planet_types || []).length > 0;
+        });
+    }
+
     if (activeFilters.size > 0) {
         // Filter aufteilen nach Typ:
         // 1. Planetentypen (z.B. "Storm") → Abdeckungsfilter: alle P1-Inputs müssen durch ausgewählte Planeten produzierbar sein
@@ -839,7 +894,8 @@ function renderRecs() {
             : `<span class="text-muted">&mdash;</span>`;
 
         const inputBadges  = (rec.inputs || []).map(i => inputBadge(i, rec.tier)).join('');
-        const planetBadges = (rec.planets_needed || []).map(p => planetBadge(p)).join('');
+        const visiblePlanetTypes = singlePlanetOnly ? (rec.single_planet_types || []) : (rec.planets_needed || []);
+        const planetBadges = visiblePlanetTypes.map(p => planetBadge(p)).join('');
 
         tr.innerHTML = `
             <td class="fw-medium">

@@ -32,6 +32,25 @@ def _all_p1_for_product(name: str, tier: str) -> list[str]:
     return []
 
 
+def _p0_for_p1(p1_name: str) -> str | None:
+    for p0, out in P0_TO_P1.items():
+        if out == p1_name:
+            return p0
+    return None
+
+
+def _single_planet_types_for_p1_inputs(p1_inputs: list[str], available_planets: list[str]) -> list[str]:
+    required_p0 = {p0 for p0 in (_p0_for_p1(p1) for p1 in p1_inputs) if p0}
+    if not required_p0:
+        return []
+    matches: list[str] = []
+    for pt in available_planets:
+        resources = set(PLANET_RESOURCES.get(pt, []))
+        if required_p0.issubset(resources):
+            matches.append(pt)
+    return sorted(set(matches))
+
+
 def analyze_system(planet_types: list[str]) -> list[dict]:
     """
     Analysiert ein System und gibt empfohlene PI-Produktionsketten zurück.
@@ -65,6 +84,8 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
             "tier": "P1",
             "inputs": p0_inputs[:1],
             "planets_needed": needed_planets,
+            "single_planet_types": _single_planet_types_for_p1_inputs([p1], planet_types),
+            "single_planet_viable": len(_single_planet_types_for_p1_inputs([p1], planet_types)) > 0,
             "all_p1_inputs": [p1],
             "available": True,
             "score": 10,
@@ -84,6 +105,8 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
             "tier": "P2",
             "inputs": inputs,
             "planets_needed": needed_planets,
+            "single_planet_types": _single_planet_types_for_p1_inputs(inputs, planet_types),
+            "single_planet_viable": len(_single_planet_types_for_p1_inputs(inputs, planet_types)) > 0,
             "all_p1_inputs": _all_p1_for_product(p2, "P2"),
             "available": True,
             "score": 25,
@@ -101,11 +124,14 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
         for p2 in inputs:
             for pt in _planets_for_p1_list(P1_TO_P2.get(p2, []), planet_types):
                 needed_planets.add(pt)
+        single_planet_types = _single_planet_types_for_p1_inputs(_all_p1_for_product(p3, "P3"), planet_types)
         results.append({
             "name": p3,
             "tier": "P3",
             "inputs": inputs,
             "planets_needed": sorted(needed_planets),
+            "single_planet_types": single_planet_types,
+            "single_planet_viable": len(single_planet_types) > 0,
             "all_p1_inputs": _all_p1_for_product(p3, "P3"),
             "available": True,
             "score": 60,
@@ -125,11 +151,14 @@ def analyze_system(planet_types: list[str]) -> list[dict]:
                 for advanced in ("Barren", "Temperate"):
                     if advanced in planet_types:
                         needed_planets.add(advanced)
+                single_planet_types = _single_planet_types_for_p1_inputs(_all_p1_for_product(p4, "P4"), planet_types)
                 results.append({
                     "name": p4,
                     "tier": "P4",
                     "inputs": inputs,
                     "planets_needed": sorted(needed_planets),
+                    "single_planet_types": single_planet_types,
+                    "single_planet_viable": len(single_planet_types) > 0,
                     "all_p1_inputs": _all_p1_for_product(p4, "P4"),
                     "available": True,
                     "score": 150,
