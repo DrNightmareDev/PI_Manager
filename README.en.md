@@ -11,7 +11,7 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 - PI colonies for mains and alts
 - Persistent DB caches for market prices, dashboard values, and skyhook values
 - Automatic 15-minute refresh for price and value data
-- Dashboard with status filters, ISK/day, expiry warnings, extractor balance indicators, adjustable extractor-rate filtering, and Dotlan links
+- Dashboard with status filters, ISK/day, expiry warnings, extractor balance indicators, adjustable extractor-rate filters, tier filtering, and Dotlan links
 - Skyhook inventory with history and DB value cache
 - PI skills per character in card and list views
 - Corporation overview, System Analyzer, Compare, System Mix, and PI Chain Planner
@@ -25,7 +25,7 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 - `Corporation`: Summarizes PI data for your corporation and shows mains, colonies, PI types, and product search across corporation colonies.
 - `Jita Market`: Displays buy/sell prices, spreads, trends, and trade volume for PI products from the cached Jita/The Forge market data.
 - `PI Chain Planner`: Builds full production chains for P1-P4 items and shows required planet types, P0 resources, and suitable systems.
-- `System Analyzer`: Analyzes a single system and shows available planet types, P0 resources, and derived PI recommendations.
+- `System Analyzer`: Analyzes a single system and shows available planet types, P0 resources, derived PI recommendations, and expandable planet details with planet number and radius.
 - `System Mix`: Combines multiple systems or constellations and shows which PI products are possible with the shared planet mix.
 - `Compare`: Places multiple systems side by side to compare planet types and PI recommendations directly.
 
@@ -232,6 +232,7 @@ Effect:
 - GUI translations are loaded from `translation_entries` in the database
 - seed files in `app/locales/` provide the bootstrap content
 - official PI product names are imported from the EVE SDE (`types.json`)
+- static planet details such as planet number and radius are imported from SDE universe data
 - API/SDE-backed entries such as `type.<id>.name` are intentionally read-only in the Manager UI
 
 ## Deployment workflow

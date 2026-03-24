@@ -11,7 +11,7 @@ Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightm
 - PI Kolonien fuer Main und Alts
 - Persistente DB-Caches fuer Marktpreise, Dashboard-Daten und Skyhook-Werte
 - Automatischer 15-Minuten-Refresh fuer Preis- und Wertdaten
-- Dashboard mit Statusfiltern, ISK/Tag, Ablaufwarnungen, Extraktor-Balance-Indikatoren, einstellbarem Extraktor-Ratenfilter und Dotlan-Links
+- Dashboard mit Statusfiltern, ISK/Tag, Ablaufwarnungen, Extraktor-Balance-Indikatoren, einstellbaren Extraktor-Ratenfiltern, Tier-Filter und Dotlan-Links
 - Skyhook Inventar mit Verlauf und DB-Wert-Cache
 - PI Skills pro Charakter in Karten- und Listenansicht
 - Corporation-Uebersicht, System Analyzer, Vergleich, System Mix und PI Chain Planner
@@ -25,7 +25,7 @@ Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightm
 - `Corporation`: Fasst die PI-Daten der eigenen Corporation zusammen, zeigt Main-Charaktere, Kolonien, PI-Typen und Produktsuche ueber alle Corp-Kolonien.
 - `Jita Markt`: Zeigt Kauf-/Verkaufspreise, Spreads, Trends und Handelsvolumen fuer PI-Produkte aus dem Jita-/The-Forge-Marktcache.
 - `PI Chain Planner`: Baut Produktionsketten fuer P1-P4 auf, zeigt benoetigte Planetentypen, P0-Rohstoffe und passende Systeme fuer ein Produkt.
-- `System Analyzer`: Analysiert ein einzelnes System, zeigt verfuegbare Planetentypen, P0-Ressourcen und daraus abgeleitete PI-Empfehlungen.
+- `System Analyzer`: Analysiert ein einzelnes System, zeigt verfuegbare Planetentypen, P0-Ressourcen, daraus abgeleitete PI-Empfehlungen sowie ausklappbare Planetendetails mit Planetennummer und Radius.
 - `System Mix`: Kombiniert mehrere Systeme oder Konstellationen und zeigt, welche PI-Produkte mit den gemeinsamen Planetentypen moeglich sind.
 - `Vergleich`: Vergleicht mehrere Systeme direkt nebeneinander, inklusive Planetentypen und PI-Empfehlungen.
 
@@ -232,6 +232,7 @@ Wirkung:
 - GUI-Uebersetzungen werden aus `translation_entries` in der Datenbank geladen
 - Seed-Dateien unter `app/locales/` liefern den Bootstrap-Bestand
 - Offizielle PI-Produktnamen werden aus der EVE SDE (`types.json`) in die DB uebernommen
+- Statische Planetendetails wie Planetennummer und Radius werden aus SDE-Universe-Daten in die DB uebernommen
 - API-/SDE-Eintraege wie `type.<id>.name` sind im Manager schreibgeschuetzt
 
 ## Deployment-Workflow

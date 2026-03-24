@@ -14,23 +14,24 @@ If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
 
 ## Highlights
 
-- Dashboard, Skyhooks, Characters, Corporation, System Analyzer, Compare, System Mix, and PI Chain Planner
-- DB-backed caches for market prices, dashboard values, skyhook values, and GUI translations
-- Dashboard extractor balance indicators, balanced/unbalanced filters, and adjustable extractor-rate filter
+- Dashboard, Skyhooks, Characters, Corporation, Jita Market, System Analyzer, Compare, System Mix, and PI Chain Planner
+- DB-backed caches for market prices, dashboard values, skyhook values, GUI translations, and static planet details
+- Dashboard extractor balance indicators, balance filters, extractor-rate filters, and tier filters
+- System Analyzer with single-planet recommendation filter and expandable planet details including planet number and radius
 - GUI languages: German, English, and Simplified Chinese
 - Linux, Docker Compose, and native Windows setup/update scripts
 
 ## Page Guides
 
-- `Dashboard`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `Skyhooks`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `Characters`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `Corporation`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `Jita Market`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `PI Chain Planner`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `System Analyzer`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `System Mix`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
-- `Compare`: [Deutsch](README.de.md#seiten-im-ui) | [English](README.en.md#ui-pages) | [Simplified Chinese](README.zh-Hans.md#界面页面)
+- `Dashboard`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `Skyhooks`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `Characters`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `Corporation`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `Jita Market`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `PI Chain Planner`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `System Analyzer`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `System Mix`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
+- `Compare`: [Deutsch](README.de.md) | [English](README.en.md) | [Simplified Chinese](README.zh-Hans.md)
 
 ## Update Scripts
 

@@ -8,28 +8,28 @@
 
 ## 功能
 
-- 主号与小号的 PI 殖民地管理
-- 市场价格、仪表盘数值与 Skyhook 数值的数据库缓存
+- 管理主号与小号的 PI 殖民地
+- 对市场价格、仪表盘数值、Skyhook 数值、GUI 翻译和静态行星信息使用数据库缓存
 - 每 15 分钟自动刷新价格与估值数据
-- 带状态筛选、ISK/天、到期提醒、提取器平衡指示、可调提取速率筛选与 Dotlan 链接的仪表盘
-- 带历史记录与数据库价值缓存的 Skyhook 库存
-- 角色 PI 技能卡片视图与列表视图
-- 公司总览、星系分析器、比较、星系组合、PI 生产链规划器
-- 管理面板，以及基于数据库的德语、英语、简体中文界面翻译
+- 仪表盘支持状态筛选、ISK/天、到期提醒、提取器平衡指示、提取速率筛选、Tier 筛选和 Dotlan 链接
+- Skyhook 库存支持历史记录与数据库价值缓存
+- 角色页面支持卡片视图与列表视图下的 PI 技能展示
+- 包含 Corporation、System Analyzer、Compare、System Mix 和 PI Chain Planner
+- Manager 页面支持数据库中的 GUI 翻译管理，语言包含德语、英语和简体中文
 
 ## 界面页面
 
-- `Dashboard`：显示全部 PI 殖民地、每日 ISK 数值、到期时间、仓储状态、Skyhook 信息，以及活跃、已过期、停滞、平衡、失衡和提取速率阈值筛选。
-- `Skyhooks`：可按行星编辑并保存 Skyhook 库存，同时查看历史记录和缓存价值。
-- `Characters`：显示所有已绑定角色、主号/小号关系、Token 状态以及卡片与列表视图中的 PI 技能。
-- `Corporation`：汇总自己军团的 PI 数据，并显示主角色、殖民地、PI 类型以及跨军团殖民地的产品搜索。
-- `Jita Market`：显示来自缓存 Jita / The Forge 市场数据的 PI 产品买价、卖价、价差、趋势和成交量。
+- `Dashboard`：显示全部 PI 殖民地、每日 ISK 价值、到期时间、仓储状态、Skyhook 信息，以及活跃、已过期、停滞、平衡、失衡、提取速率和 Tier 筛选。
+- `Skyhooks`：按行星编辑并保存 Skyhook 库存，同时查看历史记录和缓存价值。
+- `Characters`：显示所有已绑定角色、主号/小号关系、Token 状态，以及卡片和列表视图下的 PI 技能。
+- `Corporation`：汇总自己军团的 PI 数据，并显示主角色、殖民地、PI 类型和跨军团殖民地的产品搜索。
+- `Jita Market`：显示来自缓存的 Jita / The Forge 市场数据中的 PI 产品买价、卖价、价差、趋势和成交量。
 - `PI Chain Planner`：构建 P1-P4 完整生产链，并显示所需行星类型、P0 原料和适合的星系。
-- `System Analyzer`：分析单个星系，显示可用行星类型、P0 资源以及推导出的 PI 推荐。
+- `System Analyzer`：分析单个星系，显示可用行星类型、P0 资源、推荐的 PI 产品，以及可展开的行星详情表（包含行星编号和半径）。
 - `System Mix`：组合多个星系或星座，显示在共享行星组合下可以生产哪些 PI 产品。
 - `Compare`：将多个星系并排比较，直接对照行星类型和 PI 推荐。
 
-## 所需 ESI Scope
+## 所需 ESI Scopes
 
 - `esi-planets.manage_planets.v1`
 - `esi-planets.read_customs_offices.v1`
