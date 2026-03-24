@@ -968,7 +968,7 @@ def corp_view_page(
     if not access["has_access"]:
         raise HTTPException(
             status_code=403,
-            detail="Kein Zugriff - nur fuer CEO, Direktoren, Admins und Besitzer der eigenen Corporation",
+            detail="Kein Zugriff - nur fuer CEO, Direktoren, Manager und Administratoren der eigenen Corporation",
         )
 
     corp_name = access["corp_name"] or f"Corporation {active_corp_id}"

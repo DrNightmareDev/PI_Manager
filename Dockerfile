@@ -16,7 +16,7 @@ COPY . .
 
 # Entrypoint: run migrations then start server
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh /app/scripts/add_administrator.py /app/scripts/remove_administrator.py
 
 EXPOSE 8000
 

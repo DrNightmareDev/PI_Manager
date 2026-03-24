@@ -269,14 +269,14 @@ def callback(
     return response
 
 
-@router.get("/become-admin")
-def become_admin(
+@router.get("/become-manager")
+def become_manager(
     account=Depends(require_account),
     db: Session = Depends(get_db)
 ):
-    """Nur fÃ¼r den Besitzer: stellt Admin-Rechte wieder her."""
+    """Nur fuer den Administrator: stellt Manager-Rechte wieder her."""
     if not account.is_owner:
-        raise HTTPException(status_code=403, detail="Nur der Besitzer kann diesen Endpunkt nutzen")
+        raise HTTPException(status_code=403, detail="Nur der Administrator kann diesen Endpunkt nutzen")
     account.is_admin = True
     db.commit()
     return RedirectResponse(url="/dashboard", status_code=302)

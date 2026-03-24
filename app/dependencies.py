@@ -23,7 +23,7 @@ def require_account(request: Request, db: Session = Depends(get_db)) -> Account:
         raise HTTPException(
             status_code=303,
             headers={"Location": "/"},
-            detail="Nicht angemeldet"
+            detail="Nicht angemeldet",
         )
     return account
 
@@ -31,5 +31,5 @@ def require_account(request: Request, db: Session = Depends(get_db)) -> Account:
 def require_admin(request: Request, db: Session = Depends(get_db)) -> Account:
     account = require_account(request, db)
     if not account.is_admin:
-        raise HTTPException(status_code=403, detail="Zugriff verweigert – Admin-Rechte erforderlich")
+        raise HTTPException(status_code=403, detail="Zugriff verweigert - Manager-Rechte erforderlich")
     return account

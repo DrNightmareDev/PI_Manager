@@ -36,17 +36,6 @@
     });
 })();
 
-// ============ Navbar Active State ============
-(function setNavActive() {
-    const path = window.location.pathname;
-    document.querySelectorAll('.nav-link').forEach(link => {
-        const href = link.getAttribute('href');
-        if (href && path.startsWith(href) && href !== '/') {
-            link.classList.add('active');
-        }
-    });
-})();
-
 // ============ Auto-collapse navbar on mobile ============
 document.addEventListener('DOMContentLoaded', function() {
     const navLinks = document.querySelectorAll('.navbar-nav .nav-link:not(.dropdown-toggle)');

@@ -9,7 +9,7 @@ from app.models import Account, Character, IskSnapshot, AccessPolicy, AccessPoli
 from app.session import create_session, create_impersonate_session, read_session
 from app.templates_env import templates
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/manager", tags=["manager"])
 
 
 def _colony_count_per_account(db: Session) -> dict[int, int]:
@@ -90,17 +90,17 @@ def toggle_admin(
     if not target:
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
 
-    # Besitzer kann nur von sich selbst entfernt werden
+    # Administrator kann nur von sich selbst entfernt werden
     if target.is_owner and not account.is_owner:
-        raise HTTPException(status_code=403, detail="Admin-Rechte des Besitzers können nur vom Besitzer selbst geändert werden")
+        raise HTTPException(status_code=403, detail="Manager-Rechte des Administrators koennen nur vom Administrator selbst geaendert werden")
 
-    # Nicht-Besitzer können sich selbst nicht entfernen
+    # Nicht-Administratoren koennen sich selbst nicht entfernen
     if target_account_id == account.id and not account.is_owner:
-        raise HTTPException(status_code=400, detail="Du kannst deine eigenen Admin-Rechte nicht entziehen")
+        raise HTTPException(status_code=400, detail="Du kannst deine eigenen Manager-Rechte nicht entziehen")
 
     target.is_admin = not target.is_admin
     db.commit()
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="/manager", status_code=302)
 
 
 @router.get("/delete-account/{target_account_id}")
@@ -117,11 +117,11 @@ def delete_account(
         raise HTTPException(status_code=404, detail="Account nicht gefunden")
 
     if target.is_owner:
-        raise HTTPException(status_code=403, detail="Der Besitzer-Account kann nicht gelöscht werden")
+        raise HTTPException(status_code=403, detail="Der Administrator-Account kann nicht geloescht werden")
 
     db.delete(target)
     db.commit()
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="/manager", status_code=302)
 
 
 @router.get("/delete-character/{character_id}")
@@ -152,7 +152,7 @@ def admin_delete_character(
     if char.id == target_account.main_character_id:
         target_account.main_character_id = None
     db.commit()
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="/manager", status_code=302)
 
 
 @router.get("/impersonate/{target_account_id}")
@@ -163,7 +163,7 @@ def impersonate(
     db: Session = Depends(get_db)
 ):
     if not account.is_owner:
-        raise HTTPException(status_code=403, detail="Nur der Besitzer kann Accounts imitieren")
+        raise HTTPException(status_code=403, detail="Nur der Administrator kann Accounts imitieren")
     if target_account_id == account.id:
         raise HTTPException(status_code=400, detail="Du kannst dich nicht selbst imitieren")
     target = db.query(Account).filter(Account.id == target_account_id).first()
@@ -183,7 +183,7 @@ def impersonate_exit(request: Request, db: Session = Depends(get_db)):
     owner = db.query(Account).filter(Account.id == real_owner_id).first()
     if not owner or not owner.is_owner:
         return RedirectResponse(url="/dashboard", status_code=302)
-    response = RedirectResponse(url="/admin", status_code=302)
+    response = RedirectResponse(url="/manager", status_code=302)
     create_session(response, account_id=real_owner_id)
     return response
 
@@ -208,14 +208,14 @@ def admin_set_main(
 
     target_account.main_character_id = char.id
     db.commit()
-    return RedirectResponse(url="/admin", status_code=302)
+    return RedirectResponse(url="/manager", status_code=302)
 
 
-# ── Zugangspolitik (nur Besitzer) ─────────────────────────────────────────────
+# Zugangspolitik (nur Administrator)
 
 def _require_owner(account):
     if not account.is_owner:
-        raise HTTPException(status_code=403, detail="Nur der Besitzer kann die Zugangspolitik verwalten")
+        raise HTTPException(status_code=403, detail="Nur der Administrator kann die Zugangspolitik verwalten")
 
 
 @router.post("/access-policy/mode")
@@ -232,7 +232,7 @@ async def set_access_policy_mode(
     policy = db.get(AccessPolicy, 1)
     policy.mode = mode
     db.commit()
-    return RedirectResponse(url="/admin#access-policy", status_code=302)
+    return RedirectResponse(url="/manager#access-policy", status_code=302)
 
 
 @router.post("/access-policy/add")
@@ -265,7 +265,7 @@ async def add_access_policy_entry(
             entity_name=entity_name or None,
         ))
         db.commit()
-    return RedirectResponse(url="/admin#access-policy", status_code=302)
+    return RedirectResponse(url="/manager#access-policy", status_code=302)
 
 
 @router.get("/access-policy/remove/{entry_id}")
@@ -279,7 +279,7 @@ def remove_access_policy_entry(
     if entry:
         db.delete(entry)
         db.commit()
-    return RedirectResponse(url="/admin#access-policy", status_code=302)
+    return RedirectResponse(url="/manager#access-policy", status_code=302)
 
 
 @router.get("/access-policy/search")

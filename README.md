@@ -15,7 +15,7 @@ Wenn dir das Projekt hilft, freue ich mich ueber Ingame-ISK-Spenden an `DrNightm
 - Sortierbare Charakter-Liste in der Listenansicht
 - Corporation-Uebersicht mit Main-Tabelle und Pagination
 - System Analyzer, System Vergleich und PI Chain Planner
-- Admin Panel und Zugangspolitik
+- Manager Panel und Zugangspolitik
 - Globales Storage-Icon fuer letzte Preisaktualisierung
 
 ## Benoetigte ESI-Scopes
@@ -44,6 +44,16 @@ Danach entweder Docker Compose oder das LXC-Setup verwenden.
 docker compose up -d
 ```
 
+Administrator-Skripte im Compose-Setup:
+
+```bash
+docker compose exec app python /app/scripts/add_administrator.py --name "Charaktername"
+docker compose exec app python /app/scripts/add_administrator.py --eve-id 123456789
+
+docker compose exec app python /app/scripts/remove_administrator.py --name "Charaktername"
+docker compose exec app python /app/scripts/remove_administrator.py --eve-id 123456789
+```
+
 ### Proxmox LXC
 
 ```bash
@@ -70,6 +80,24 @@ bash ~/PI_Manager/scripts/update_lxc.sh
 ```
 
 Das Script zieht `main`, installiert Abhaengigkeiten, fuehrt Migrationen aus und startet den Service neu.
+
+## Administrator-Skripte
+
+Direkt auf dem Host:
+
+```bash
+cd /opt/eve-pi-manager
+./scripts/add_administrator.py --name "Charaktername"
+./scripts/add_administrator.py --eve-id 123456789
+
+./scripts/remove_administrator.py --name "Charaktername"
+./scripts/remove_administrator.py --eve-id 123456789
+```
+
+Wirkung:
+
+- `add_administrator.py` setzt den gefundenen Account auf `Administrator` und `Manager`
+- `remove_administrator.py` entfernt `Administrator` und `Manager` vom gefundenen Account
 
 ## Deployment-Workflow
 
