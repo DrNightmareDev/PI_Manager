@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import engine, get_db
 from app.dependencies import require_account
-from app.market import get_prices_by_mode
+from app.i18n import get_language_from_request, translate_type_name
+from app.market import get_prices_by_mode, PI_TYPE_IDS
 from app.models import SkyhookEntry, SkyhookItem, SkyhookValueCache
 from app.pi_data import ALL_P1, ALL_P2, ALL_P3, ALL_P4
+from app import sde
 from app.templates_env import templates
 
 router = APIRouter(prefix="/skyhook", tags=["skyhook"])
@@ -23,6 +25,17 @@ SkyhookValueCache.__table__.create(bind=engine, checkfirst=True)
 
 PI_PRODUCTS_BY_TIER = {"P4": ALL_P4, "P3": ALL_P3, "P2": ALL_P2, "P1": ALL_P1}
 PRICE_MODES = ("sell", "buy", "split")
+
+
+def _resolve_type_id(name: str) -> int | None:
+    return PI_TYPE_IDS.get(name) or sde.find_type_id_by_name(name)
+
+
+def _build_product_labels(names: set[str], lang: str) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for name in names:
+        labels[name] = translate_type_name(_resolve_type_id(name), fallback=name, lang=lang)
+    return labels
 
 
 def _load_latest(account_id: int, planet_ids: list[int], db: Session) -> dict:
@@ -221,6 +234,33 @@ def skyhook_page(
         for planet_details in value_details.values()
         for detail in planet_details
     }
+    lang = get_language_from_request(request)
+    product_names = {
+        item["product_name"]
+        for items in latest.values()
+        for item in items
+        if item.get("product_name")
+    }
+    product_names.update(
+        f.get("name")
+        for colony in colonies
+        for f in colony.get("factories", [])
+        if f.get("name")
+    )
+    product_names.update(
+        detail.get("product_name")
+        for planet_details in value_details.values()
+        for detail in planet_details
+        if detail.get("product_name")
+    )
+    product_names.update(
+        item.get("product_name")
+        for planet_history in history.values()
+        for entry in planet_history
+        for item in entry.get("items", [])
+        if item.get("product_name")
+    )
+    product_labels = _build_product_labels({name for name in product_names if name}, lang)
 
     return templates.TemplateResponse("skyhook.html", {
         "request": request,
@@ -232,6 +272,7 @@ def skyhook_page(
         "prices": prices,
         "values": values,
         "value_details": value_details,
+        "product_labels": product_labels,
         "total_value": total_value,
         "price_mode": price_mode,
         "market_last_updated_iso": (

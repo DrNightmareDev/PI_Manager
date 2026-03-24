@@ -297,7 +297,7 @@
                                 <td>
                                     <span class="badge eve-planet-badge"
                                           style="background-color: {{ colony.color }}20; color: {{ colony.color }}; border: 1px solid {{ colony.color }}40;">
-                                        {{ colony.planet_type }}
+                                        {{ t('planet_type.' ~ (colony.planet_type | lower)) }}
                                     </span>
                                 </td>
                                 <td>
@@ -312,7 +312,7 @@
                                         <div class="eve-hover-card">
                                             <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Produkte</div>
                                             {% for f in tier_products %}
-                                            <div style="color:#7ec8e3;">{{ f.name }}</div>
+                                            <div style="color:#7ec8e3;">{{ product_labels.get(f.name, f.name) }}</div>
                                             {% endfor %}
                                         </div>
                                         {% endif %}
@@ -411,7 +411,7 @@
                                             <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Skyhook</div>
                                             {% for it in sh_items %}
                                             <div class="d-flex justify-content-between gap-3" style="{% if not loop.last %}margin-bottom:3px;{% endif %}">
-                                                <span style="color:#7ec8e3;">{{ it.product_name }}</span>
+                                                <span style="color:#7ec8e3;">{{ product_labels.get(it.product_name, it.product_name) }}</span>
                                                 <span style="color:#7a9a6a;font-weight:600;">{{ "{:,}".format(it.quantity) }}</span>
                                             </div>
                                             {% endfor %}

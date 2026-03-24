@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache, get_character_roles, get_character_skills, get_corporation_info
-from app.market import get_prices_by_mode, get_market_last_updated
+from app.i18n import get_language_from_request, translate_type_name
+from app.market import get_prices_by_mode, get_market_last_updated, PI_TYPE_IDS
 from app.models import Account, Character, DashboardCache, IskSnapshot, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import joinedload as _joinedload
@@ -851,6 +852,24 @@ def dashboard(
         for colony in colonies
         if colony.get("expiry_hours") is None and colony.get("is_stalled") is True
     )
+    lang = get_language_from_request(request)
+    product_names = {
+        f.get("name")
+        for colony in colonies
+        for f in colony.get("factories", [])
+        if f.get("name")
+    }
+    product_names.update(
+        item.get("product_name")
+        for items in skyhook_data.values()
+        for item in items
+        if item.get("product_name")
+    )
+    product_labels = {
+        name: translate_type_name(PI_TYPE_IDS.get(name) or _sde.find_type_id_by_name(name), fallback=name, lang=lang)
+        for name in product_names
+        if name
+    }
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "account": account,
@@ -871,6 +890,7 @@ def dashboard(
         "cooldown_remaining": cooldown_remaining,
         "isk_history": isk_history,
         "skyhook_data": skyhook_data,
+        "product_labels": product_labels,
         "price_mode": current_price_mode,
         "refreshing": refreshing,
         "market_last_updated_iso": market_last_updated_iso,

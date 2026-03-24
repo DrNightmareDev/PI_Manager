@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Skyhook Inventar - EVE PI Manager{% endblock %}
+{% block title %}{{ t('skyhook.title') }} - EVE PI Manager{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -114,10 +114,10 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 
 {% block content %}
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
-    <h4 class="mb-0 eve-page-title"><i class="bi bi-box-seam me-2 eve-accent"></i>Skyhook Inventar</h4>
-    <span class="text-muted small">Bestand direkt editieren und mit Enter oder Speichern bestätigen</span>
+    <h4 class="mb-0 eve-page-title"><i class="bi bi-box-seam me-2 eve-accent"></i>{{ t('skyhook.title') }}</h4>
+    <span class="text-muted small">{{ t('skyhook.subtitle') }}</span>
     <a href="/dashboard" class="btn eve-btn-outline btn-sm ms-auto">
-        <i class="bi bi-arrow-left me-1"></i>Zurück
+        <i class="bi bi-arrow-left me-1"></i>{{ t('common.back') }}
     </a>
 </div>
 
@@ -125,8 +125,8 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 <div class="eve-card card border-0 text-center py-5">
     <div class="card-body">
         <i class="bi bi-box-seam fs-1 text-muted d-block mb-3"></i>
-        <p class="text-muted mb-1">Keine Kolonien geladen.</p>
-        <small class="text-muted">Öffne zuerst das <a href="/dashboard" class="eve-accent">Dashboard</a> um die Daten zu laden.</small>
+        <p class="text-muted mb-1">{{ t('skyhook.empty_title') }}</p>
+        <small class="text-muted">{{ t('skyhook.empty_prefix') }} <a href="/dashboard" class="eve-accent">{{ t('nav.dashboard') }}</a> {{ t('skyhook.empty_suffix') }}</small>
     </div>
 </div>
 {% else %}
@@ -137,7 +137,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-person-fill" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
             <select id="filterChar" class="form-select form-select-sm eve-select" onchange="applyFilters()">
-                <option value="">Alle Charaktere</option>
+                <option value="">{{ t('skyhook.filter_all_characters') }}</option>
                 {% for name in colonies | map(attribute='character_name') | unique | sort %}
                 <option>{{ name }}</option>
                 {% endfor %}
@@ -146,7 +146,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-globe2" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
             <select id="filterSystem" class="form-select form-select-sm eve-select" onchange="applyFilters()">
-                <option value="">Alle Systeme</option>
+                <option value="">{{ t('skyhook.filter_all_systems') }}</option>
                 {% for sys in colonies | map(attribute='solar_system_name') | unique | sort %}
                 {% if sys and sys != '&mdash;' %}<option>{{ sys }}</option>{% endif %}
                 {% endfor %}
@@ -155,14 +155,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-hexagon" style="color:var(--eve-text-muted);font-size:.8rem;"></i>
             <select id="filterType" class="form-select form-select-sm eve-select" onchange="applyFilters()">
-                <option value="">Alle Typen</option>
+                <option value="">{{ t('skyhook.filter_all_types') }}</option>
                 {% for pt in colonies | map(attribute='planet_type') | unique | sort %}
-                <option>{{ pt }}</option>
+                <option value="{{ pt }}">{{ t('planet_type.' ~ (pt | lower)) }}</option>
                 {% endfor %}
             </select>
         </div>
         <button id="filterResetBtn" class="btn btn-sm eve-btn-ghost d-none" onclick="resetFilters()">
-            <i class="bi bi-x-circle me-1"></i>Reset
+            <i class="bi bi-x-circle me-1"></i>{{ t('common.reset') }}
         </button>
         <div class="ms-auto d-flex align-items-center gap-3">
             <span id="filterCount" class="text-muted" style="font-size:.75rem;"></span>
@@ -176,14 +176,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
             <table class="table sh-table mb-0" id="sh-table">
                 <thead>
                     <tr>
-                        <th class="eve-sortable" data-col="char">Charakter <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                        <th>Planet</th>
-                        <th class="eve-sortable" data-col="type">Typ <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                        <th class="eve-sortable" data-col="system">System <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                        <th class="eve-sortable" data-col="product">Max. Produkt <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
-                        <th>Skyhook Bestand</th>
+                        <th class="eve-sortable" data-col="char">{{ t('skyhook.header_character') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th>{{ t('skyhook.header_planet') }}</th>
+                        <th class="eve-sortable" data-col="type">{{ t('common.type') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="system">{{ t('common.system') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th class="eve-sortable" data-col="product">{{ t('skyhook.header_max_product') }} <i class="bi bi-chevron-expand eve-sort-icon"></i></th>
+                        <th>{{ t('skyhook.header_inventory') }}</th>
                         <th style="white-space:nowrap;">
-                            Wert (ISK)
+                            {{ t('skyhook.header_value') }}
                             <div class="d-flex gap-1 mt-1" id="shPriceModeButtons" onclick="event.stopPropagation()" style="cursor:default">
                                 {% for lbl, val in [('Sell','sell'),('Buy','buy'),('Split','split')] %}
                                 <button class="sh-price-btn{% if price_mode == val %} active{% endif %}"
@@ -222,7 +222,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                     <td>
                         <span class="badge sh-tier-badge"
                               style="background:{{ colony.color }}18;color:{{ colony.color }};border:1px solid {{ colony.color }}35;">
-                            {{ colony.planet_type }}
+                            {{ t('planet_type.' ~ (colony.planet_type | lower)) }}
                         </span>
                     </td>
                     <td style="min-width:110px;">
@@ -238,7 +238,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                             {{ colony.highest_tier }}
                         </span>
                         {% for f in tier_products %}
-                        <div style="color:var(--eve-text-muted);font-size:.7rem;margin-top:2px;">{{ f.name }}</div>
+                        <div style="color:var(--eve-text-muted);font-size:.7rem;margin-top:2px;">{{ product_labels.get(f.name, f.name) }}</div>
                         {% endfor %}
                         {% else %}<span class="text-muted">&mdash;</span>{% endif %}
                     </td>
@@ -252,14 +252,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                              data-char="{{ colony.character_name | e }}">
                         </div>
                         <div class="d-flex gap-2 mt-1 flex-wrap">
-                            <button class="sh-add-btn" onclick="addRow({{ ri }})">+ Zeile</button>
+                            <button class="sh-add-btn" onclick="addRow({{ ri }})">{{ t('common.add_row') }}</button>
                             <button class="sh-save-btn" id="btn_{{ ri }}"
                                     onclick="saveEntry({{ ri }})">
-                                <i class="bi bi-floppy me-1"></i>Speichern
+                                <i class="bi bi-floppy me-1"></i>{{ t('common.save') }}
                             </button>
                             <button class="sh-save-btn d-none" id="undo_{{ ri }}"
-                                    onclick="undoEntry({{ ri }})" title="Änderungen rückgängig">
-                                <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
+                                    onclick="undoEntry({{ ri }})" title="{{ t('skyhook.undo_title') }}">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>{{ t('skyhook.undo') }}
                             </button>
                         </div>
                         <div style="margin-top:5px;">
@@ -283,7 +283,7 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                             <div class="eve-hover-card" id="val_det_{{ ri }}" style="min-width:220px;right:0;top:calc(100% + 4px);">
                                 {% for it in planet_details %}{% if it.unit_price > 0 and it.quantity > 0 %}
                                 <div class="d-flex justify-content-between gap-3" style="font-size:.75rem;margin-bottom:2px;">
-                                    <span style="color:var(--eve-text);">{{ it.product_name }}</span>
+                                    <span style="color:var(--eve-text);">{{ product_labels.get(it.product_name, it.product_name) }}</span>
                                     <span style="color:#7a9a6a;white-space:nowrap;">{{ it.line_value | format_isk }}</span>
                                 </div>
                                 {% endif %}{% endfor %}
@@ -295,20 +295,20 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
                     <td style="position:relative;" id="hist_cell_{{ ri }}">
                         <button class="sh-hist-btn{{ '' if hist else ' d-none' }}"
                                 id="hist_btn_{{ ri }}"
-                                onclick="toggleHist({{ ri }})" title="Letzte Einträge">
+                                onclick="toggleHist({{ ri }})" title="{{ t('skyhook.history_title') }}">
                             <i class="bi bi-clock-history"></i>
                             <span id="hist_count_{{ ri }}" style="font-size:.65rem;vertical-align:middle;margin-left:2px;">{{ hist | length }}</span>
                         </button>
                         <span id="hist_empty_{{ ri }}" class="text-muted" style="font-size:.7rem;{{ 'display:none;' if hist else '' }}">&mdash;</span>
                         <div class="sh-hist-popup" id="hist_{{ ri }}">
-                            <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">Letzte Einträge</div>
+                            <div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">{{ t('skyhook.history_title') }}</div>
                             {% for h in hist %}
                             <div class="{% if not loop.last %}mb-3 pb-2{% endif %}"
                                  {% if not loop.last %}style="border-bottom:1px solid var(--eve-card-border);"{% endif %}>
                                 <div style="color:var(--eve-text-muted);font-size:.65rem;margin-bottom:3px;">{{ h.recorded_at }}</div>
                                 {% for it in h['items'] %}
                                 <div class="d-flex justify-content-between gap-3">
-                                    <span style="color:var(--eve-text);font-size:.78rem;">{{ it.product_name }}</span>
+                                    <span style="color:var(--eve-text);font-size:.78rem;">{{ product_labels.get(it.product_name, it.product_name) }}</span>
                                     <span style="color:#7a9a6a;font-size:.78rem;font-weight:600;white-space:nowrap;">{{ "{:,}".format(it.quantity) }}</span>
                                 </div>
                                 {% endfor %}
@@ -329,6 +329,14 @@ html[data-theme="light"] .sh-hist-popup { background:#fff; box-shadow:0 8px 24px
 
 {% block extra_scripts %}
 <script>
+const SKYHOOK_I18N = {
+    historyTitle: {{ t('skyhook.history_title') | tojson }},
+    saved: {{ t('skyhook.saved') | tojson }},
+    saveError: {{ t('skyhook.save_error') | tojson }},
+    savedButton: {{ t('skyhook.saved_button') | tojson }}
+};
+const SKYHOOK_PRODUCT_LABELS = {{ product_labels | tojson }};
+
 // ri = row index (loop.index0) - unique per row even if same planet_id
 // planetId = EVE planet ID - used only for API calls
 const SH_PRODUCTS = {{ pi_products | tojson }};
@@ -376,6 +384,10 @@ function _fmtIsk(v) {
     return v.toFixed(0) + ' ISK';
 }
 
+function shProductLabel(name) {
+    return SKYHOOK_PRODUCT_LABELS[name] || name;
+}
+
 const _rowValues = {}; // ri → current ISK value
 
 function updateValueCell(ri) {
@@ -406,7 +418,7 @@ function updateValueCell(ri) {
     if (detEl) {
         detEl.innerHTML = lines.map(l =>
             `<div class="d-flex justify-content-between gap-3" style="font-size:.75rem;margin-bottom:2px;">
-                <span style="color:var(--eve-text);">${l.prod}</span>
+                <span style="color:var(--eve-text);">${shProductLabel(l.prod)}</span>
                 <span style="color:#7a9a6a;white-space:nowrap;">${_fmtIsk(l.lineVal)}</span>
             </div>`
         ).join('');
@@ -488,7 +500,7 @@ function buildOptions(selected) {
     for (const [tier, prods] of Object.entries(SH_PRODUCTS)) {
         html += `<optgroup label="${tier}">`;
         for (const p of prods) {
-            html += `<option value="${p}"${p === selected ? ' selected' : ''}>${p}</option>`;
+            html += `<option value="${p}"${p === selected ? ' selected' : ''}>${shProductLabel(p)}</option>`;
         }
         html += '</optgroup>';
     }
@@ -645,7 +657,7 @@ async function _refreshHistPopup(ri, planetId) {
         if (count) count.textContent = entries.length;
 
         if (popup) {
-            popup.innerHTML = '<div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">Letzte Einträge</div>';
+            popup.innerHTML = `<div style="color:var(--eve-text-muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.6rem;">${SKYHOOK_I18N.historyTitle}</div>`;
             entries.forEach((h, idx) => {
                 const div = document.createElement('div');
                 if (idx < entries.length - 1) {
@@ -655,7 +667,7 @@ async function _refreshHistPopup(ri, planetId) {
                 let html = `<div style="color:var(--eve-text-muted);font-size:.65rem;margin-bottom:3px;">${h.recorded_at}</div>`;
                 h.items.forEach(it => {
                     html += `<div class="d-flex justify-content-between gap-3">
-                        <span style="color:var(--eve-text);font-size:.78rem;">${it.product_name}</span>
+                        <span style="color:var(--eve-text);font-size:.78rem;">${shProductLabel(it.product_name)}</span>
                         <span style="color:#7a9a6a;font-size:.78rem;font-weight:600;white-space:nowrap;">${it.quantity.toLocaleString('de-DE')}</span>
                     </div>`;
                 });
@@ -693,9 +705,9 @@ async function saveEntry(ri) {
         if (!res.ok) throw new Error();
         const data = await res.json();
 
-        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Gespeichert';
+        btn.innerHTML = `<i class="bi bi-check-lg me-1"></i>${SKYHOOK_I18N.savedButton}`;
         btn.classList.add('saved');
-        showToast('Gespeichert.', 'success');
+        showToast(SKYHOOK_I18N.saved, 'success');
         if (typeof data.total_value === 'number') {
             _rowValues[ri] = data.total_value;
         }
@@ -715,7 +727,7 @@ async function saveEntry(ri) {
     } catch {
         btn.innerHTML = orig;
         btn.disabled = false;
-        showToast('Fehler beim Speichern.', 'error');
+        showToast(SKYHOOK_I18N.saveError, 'error');
     }
 }
 
