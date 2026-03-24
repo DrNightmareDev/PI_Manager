@@ -292,7 +292,7 @@
                                 data-sort-isk="{{ colony.isk_day }}"
                                 data-sort-storage="{{ colony.storage | map(attribute='fill_pct') | max if colony.storage else -1 }}"
                                 data-colony-idx="{{ loop.index0 }}"
-                                data-min-extractor-rate="{{ colony.get('extractor_rate_summary', {}).get('min_avg_per_hour', -1) }}"
+                                data-min-extractor-rate="{{ (colony.get('extractor_rate_summary') or {}).get('min_avg_per_hour', -1) }}"
                                 data-expired="{{ '1' if colony.expiry_hours is not none and colony.expiry_hours < 0 else '0' }}"
                                 data-stalled="{{ '1' if colony.expiry_hours is none and colony.is_stalled == true else '0' }}"
                                 data-active="{{ '1' if (colony.expiry_hours is not none and colony.expiry_hours > 0) or colony.is_stalled == false else '0' }}">
