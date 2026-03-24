@@ -252,9 +252,13 @@
                     <div id="forceLoadSpinner" class="spinner-border spinner-border-sm" style="color:var(--eve-accent);width:1rem;height:1rem;" role="status"></div>
                     <span class="small text-muted">Verbleibend: <strong id="forceLoadRemaining">-</strong></span>
                 </div>
+                <div id="forceLoadInfo" class="small text-muted mb-3"></div>
                 <div id="forceLoadList" style="font-size:.82rem;max-height:320px;overflow-y:auto;"></div>
             </div>
             <div class="modal-footer" style="border-color:var(--eve-card-border);">
+                <button id="forceLoadStartBtn" class="btn eve-btn-primary btn-sm">
+                    <i class="bi bi-play-fill me-1"></i>Starten
+                </button>
                 <button id="forceLoadDoneBtn" class="btn eve-btn-primary btn-sm d-none"
                         onclick="window.location.reload()">
                     <i class="bi bi-check-lg me-1"></i>Fertig - Seite neu laden
@@ -420,15 +424,27 @@ function selectCorpProduct(product) {
 
 {% if can_manage_cache %}
 const corpId = {{ corp_id or 'null' }};
+let forceLoadAccounts = [];
+let forceLoadRunning = false;
 
 async function openForceLoad() {
     if (!corpId) return;
     const modal = new bootstrap.Modal(document.getElementById('forceLoadModal'));
-    const res = await fetch(`/dashboard/corp/accounts?corp_id=${corpId}`);
-    const data = await res.json();
+    const [accountsRes, statusRes] = await Promise.all([
+        fetch(`/dashboard/corp/accounts?corp_id=${corpId}`),
+        fetch(`/dashboard/corp/load-all/status?corp_id=${corpId}`)
+    ]);
+    const data = await accountsRes.json();
+    const statusData = await statusRes.json();
     const accounts = data.accounts || [];
+    forceLoadAccounts = accounts;
+    forceLoadRunning = !!statusData.running;
 
     const list = document.getElementById('forceLoadList');
+    const info = document.getElementById('forceLoadInfo');
+    const startBtn = document.getElementById('forceLoadStartBtn');
+    const doneBtn = document.getElementById('forceLoadDoneBtn');
+    const spinner = document.getElementById('forceLoadSpinner');
     list.innerHTML = '';
     if (!accounts.length) {
         list.insertAdjacentHTML('beforeend', '<div class="text-muted small py-2">Keine Accounts gefunden.</div>');
@@ -445,11 +461,53 @@ async function openForceLoad() {
     });
 
     document.getElementById('forceLoadRemaining').textContent = accounts.length;
-    document.getElementById('forceLoadDoneBtn').classList.add('d-none');
-    document.getElementById('forceLoadSpinner').style.display = accounts.length ? '' : 'none';
+    doneBtn.classList.add('d-none');
+    startBtn.classList.remove('d-none');
+    spinner.style.display = 'none';
+    if (!accounts.length) {
+        info.textContent = 'Keine Accounts zum Laden gefunden.';
+        startBtn.disabled = true;
+    } else if (forceLoadRunning) {
+        info.textContent = 'Es laeuft bereits ein Ladevorgang. Ein neuer Durchgang kann momentan nicht gestartet werden.';
+        startBtn.disabled = true;
+    } else {
+        info.textContent = 'Die Liste ist vorbereitet. Starte den Ladevorgang manuell.';
+        startBtn.disabled = false;
+    }
     modal.show();
+}
+
+async function startForceLoad() {
+    if (!corpId || forceLoadRunning) return;
+    const info = document.getElementById('forceLoadInfo');
+    const startBtn = document.getElementById('forceLoadStartBtn');
+    const doneBtn = document.getElementById('forceLoadDoneBtn');
+    const spinner = document.getElementById('forceLoadSpinner');
+    const remainingNode = document.getElementById('forceLoadRemaining');
+    const accounts = forceLoadAccounts || [];
+    if (!accounts.length) {
+        info.textContent = 'Keine Accounts zum Laden gefunden.';
+        startBtn.disabled = true;
+        return;
+    }
+
+    startBtn.disabled = true;
+    const startRes = await fetch(`/dashboard/corp/load-all/start?corp_id=${corpId}`, { method: 'POST' });
+    const startData = await startRes.json().catch(() => ({}));
+    if (!startRes.ok || startData.running) {
+        forceLoadRunning = true;
+        info.textContent = 'Es laeuft bereits ein Ladevorgang. Ein neuer Durchgang kann momentan nicht gestartet werden.';
+        startBtn.disabled = true;
+        return;
+    }
+
+    forceLoadRunning = true;
+    info.textContent = 'Ladevorgang gestartet. Bereits geladene Accounts werden ebenfalls neu geladen.';
+    spinner.style.display = '';
+    doneBtn.classList.add('d-none');
 
     let remaining = accounts.length;
+    remainingNode.textContent = remaining;
     for (const acc of accounts) {
         document.getElementById(`spin_${acc.account_id}`).innerHTML =
             '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;border-width:2px;color:var(--eve-accent);"></span>';
@@ -468,12 +526,18 @@ async function openForceLoad() {
             document.getElementById(`status_${acc.account_id}`).textContent = 'Fehler';
         }
         remaining--;
-        document.getElementById('forceLoadRemaining').textContent = remaining;
+        remainingNode.textContent = remaining;
     }
-    document.getElementById('forceLoadSpinner').style.display = 'none';
-    document.getElementById('forceLoadRemaining').textContent = '0';
-    document.getElementById('forceLoadDoneBtn').classList.remove('d-none');
+    await fetch(`/dashboard/corp/load-all/finish?corp_id=${corpId}`, { method: 'POST' }).catch(() => null);
+    forceLoadRunning = false;
+    spinner.style.display = 'none';
+    remainingNode.textContent = '0';
+    info.textContent = 'Ladevorgang abgeschlossen.';
+    doneBtn.classList.remove('d-none');
+    startBtn.classList.add('d-none');
 }
+
+document.getElementById('forceLoadStartBtn')?.addEventListener('click', startForceLoad);
 {% endif %}
 
 enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);

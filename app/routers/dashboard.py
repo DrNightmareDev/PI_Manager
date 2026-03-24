@@ -51,6 +51,23 @@ _bg_refresh_running: dict[int, bool] = {} # account_id -> True wenn Hintergrund-
 _bg_refresh_done: dict[int, bool] = {}    # account_id -> True wenn gerade fertig geworden
 
 
+_corp_load_running: dict[int, dict] = {}  # corp_id -> lock/status
+_CORP_LOAD_LOCK_TTL = 60 * 30
+
+
+def _get_corp_load_lock(corp_id: int | None) -> dict | None:
+    if not corp_id:
+        return None
+    lock = _corp_load_running.get(corp_id)
+    if not lock:
+        return None
+    started_at = float(lock.get("started_at") or 0.0)
+    if started_at and (_time.time() - started_at) > _CORP_LOAD_LOCK_TTL:
+        _corp_load_running.pop(corp_id, None)
+        return None
+    return lock
+
+
 def invalidate_dashboard_cache(account_id: int) -> None:
     """Cache für einen Account sofort verwerfen (in-memory + DB)."""
     _dashboard_cache.pop(account_id, None)
@@ -1112,7 +1129,7 @@ def _corp_access_flags(account: Account, main_char: Character | None, db: Sessio
         "is_director": is_director,
         "roles_scope_missing": roles_scope_missing,
         "has_access": has_access,
-        "can_manage": bool(own_corp_id and (account.is_owner or account.is_admin)),
+        "can_manage": bool(own_corp_id and account.is_owner),
     }
 
 
@@ -1274,6 +1291,68 @@ def corp_accounts_api(
             "is_cached": _load_colony_cache(acc_id, db) is not None,
         })
     return JSONResponse({"accounts": result})
+
+
+@router.get("/corp/load-all/status")
+def corp_load_all_status(
+    corp_id: int,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Returns whether a corp-wide force-load is already running."""
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    access = _corp_access_flags(account, main_char, db)
+    if not access["can_manage"] or access["corp_id"] != corp_id:
+        raise HTTPException(status_code=403)
+    lock = _get_corp_load_lock(corp_id)
+    return JSONResponse({
+        "running": bool(lock),
+        "started_by": lock.get("started_by") if lock else None,
+        "started_at": lock.get("started_at") if lock else None,
+    })
+
+
+@router.post("/corp/load-all/start")
+def corp_load_all_start(
+    corp_id: int,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Acquires a corp-wide load lock before the UI starts processing accounts."""
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    access = _corp_access_flags(account, main_char, db)
+    if not access["can_manage"] or access["corp_id"] != corp_id:
+        raise HTTPException(status_code=403)
+    lock = _get_corp_load_lock(corp_id)
+    if lock:
+        return JSONResponse({
+            "ok": False,
+            "running": True,
+            "started_by": lock.get("started_by"),
+            "started_at": lock.get("started_at"),
+        }, status_code=409)
+    _corp_load_running[corp_id] = {
+        "started_by": account.id,
+        "started_at": _time.time(),
+    }
+    return JSONResponse({"ok": True, "running": False})
+
+
+@router.post("/corp/load-all/finish")
+def corp_load_all_finish(
+    corp_id: int,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Releases the corp-wide load lock after the UI finishes processing."""
+    main_char = db.query(Character).filter(Character.id == account.main_character_id).first() if account.main_character_id else None
+    access = _corp_access_flags(account, main_char, db)
+    if not access["can_manage"] or access["corp_id"] != corp_id:
+        raise HTTPException(status_code=403)
+    lock = _get_corp_load_lock(corp_id)
+    if lock and lock.get("started_by") == account.id:
+        _corp_load_running.pop(corp_id, None)
+    return JSONResponse({"ok": True})
 
 
 @router.post("/corp/load-account/{target_account_id}")
