@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DrNightmare\SeatPiManager;
 
+use DrNightmare\SeatPiManager\Console\Commands\ImportStaticPlanetsCommand;
 use Illuminate\Routing\Router;
 use Seat\Services\AbstractSeatPlugin;
 
@@ -28,6 +29,9 @@ class PiManagerServiceProvider extends AbstractSeatPlugin
         $this->mergeConfigFrom(__DIR__ . '/../config/pi_manager.php', 'seat-pi-manager');
         $this->mergeConfigFrom(__DIR__ . '/Config/package.sidebar.php', 'package.sidebar');
         $this->registerPermissions(__DIR__ . '/Config/Permissions/package.permissions.php', 'seat-pi-manager');
+        $this->commands([
+            ImportStaticPlanetsCommand::class,
+        ]);
     }
 
     public function getName(): string
@@ -40,9 +44,14 @@ class PiManagerServiceProvider extends AbstractSeatPlugin
         return 'https://github.com/DrNightmareDev/PI_Manager';
     }
 
+    public function getPackagistVendorName(): string
+    {
+        return 'drnightmare';
+    }
+
     public function getPackagistPackageName(): string
     {
-        return 'drnightmare/seat-pi-manager';
+        return 'seat-pi-manager';
     }
 
     protected function registerRoutes(): void

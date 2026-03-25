@@ -20,5 +20,6 @@ return [
     'sde' => [
         'source' => 'local-seat-import',
         'import_static_planets' => true,
+        'fuzzwork_denormalize_url' => 'https://www.fuzzwork.co.uk/dump/latest/mapDenormalize.sql.bz2',
     ],
 ];

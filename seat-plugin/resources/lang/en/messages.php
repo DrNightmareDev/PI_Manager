@@ -15,11 +15,15 @@ return [
         'bootstrap' => 'Bootstrap',
         'enabled' => 'Enabled',
         'planned' => 'Planned',
+        'not_run' => 'Not run yet',
     ],
     'fields' => [
         'plugin' => 'Plugin',
         'languages' => 'Languages',
         'next_focus' => 'Next focus',
+        'static_planets' => 'Static planets',
+        'last_import' => 'Last import',
+        'last_status' => 'Last status',
     ],
     'mvp' => [
         'shell' => 'SeAT-native plugin shell with menu entry and permissions',
@@ -39,6 +43,9 @@ return [
             'features_title' => 'Current bootstrap features',
             'feature_flags_title' => 'Planned module flags',
             'next_focus' => 'System Analyzer, static planets, and SeAT-native data flows',
+            'imports_title' => 'Static data import',
+            'command_title' => 'Import command:',
+            'analyzer_title' => 'System Analyzer track',
         ],
     ],
 ];

@@ -58,6 +58,51 @@
                         </div>
                     </div>
 
+                    <div class="row g-3 mt-1">
+                        <div class="col-lg-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    {{ trans('seat-pi-manager::messages.pages.index.imports_title') }}
+                                </div>
+                                <div class="card-body">
+                                    <dl class="row mb-3">
+                                        <dt class="col-sm-5">{{ trans('seat-pi-manager::messages.fields.static_planets') }}</dt>
+                                        <dd class="col-sm-7">{{ number_format((int) ($static_planets['planet_count'] ?? 0)) }}</dd>
+
+                                        <dt class="col-sm-5">{{ trans('seat-pi-manager::messages.fields.last_import') }}</dt>
+                                        <dd class="col-sm-7">
+                                            @if(!empty($static_planets['last_run_finished_at']))
+                                                {{ \Illuminate\Support\Carbon::parse($static_planets['last_run_finished_at'])->diffForHumans() }}
+                                            @else
+                                                {{ trans('seat-pi-manager::messages.status.not_run') }}
+                                            @endif
+                                        </dd>
+
+                                        <dt class="col-sm-5">{{ trans('seat-pi-manager::messages.fields.last_status') }}</dt>
+                                        <dd class="col-sm-7">{{ $static_planets['last_run_status'] ?? trans('seat-pi-manager::messages.status.not_run') }}</dd>
+                                    </dl>
+
+                                    <div class="alert alert-info mb-0" role="alert">
+                                        <strong>{{ trans('seat-pi-manager::messages.pages.index.command_title') }}</strong>
+                                        <code>php artisan seat-pi-manager:import-static-planets --force</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    {{ trans('seat-pi-manager::messages.pages.index.analyzer_title') }}
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-2">{{ $system_analyzer['message'] ?? '' }}</p>
+                                    <p class="text-muted mb-0">{{ $system_analyzer['next_step'] ?? '' }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card mt-3">
                         <div class="card-header">
                             {{ trans('seat-pi-manager::messages.pages.index.feature_flags_title') }}

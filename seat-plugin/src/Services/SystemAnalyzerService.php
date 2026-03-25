@@ -10,7 +10,8 @@ class SystemAnalyzerService
     {
         return [
             'status' => 'bootstrap',
-            'message' => 'System Analyzer PHP service skeleton is ready for implementation.',
+            'message' => 'System Analyzer PHP service skeleton is ready for SeAT-native implementation.',
+            'next_step' => 'Import static planets and static systems, then build the first analyzer screen.',
         ];
     }
 }
