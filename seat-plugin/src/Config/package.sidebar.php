@@ -3,12 +3,12 @@
 return [
     'seat-pi-manager' => [
         'permission'    => 'seat-pi-manager.view',
-        'name'          => 'seat-pi-manager::messages.sidebar.title',
+        'name'          => 'PI Manager',
         'icon'          => 'fas fa-globe',
         'route_segment' => 'pi-manager',
         'entries'       => [
             [
-                'name'  => 'seat-pi-manager::messages.sidebar.overview',
+                'name'  => 'Overview',
                 'icon'  => 'fas fa-satellite-dish',
                 'route' => 'seat-pi-manager.index',
             ],
