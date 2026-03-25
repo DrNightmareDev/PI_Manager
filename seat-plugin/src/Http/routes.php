@@ -10,7 +10,17 @@ Route::group([
     'prefix'     => config('seat-pi-manager.route_prefix', 'pi-manager'),
 ], function () {
     Route::get('/', [
-        'as'   => 'seat-pi-manager.index',
-        'uses' => 'HomeController@index',
+        'as'   => 'seat-pi-manager.overview',
+        'uses' => 'OverviewController@index',
+    ]);
+
+    Route::get('/system-analyzer', [
+        'as'   => 'seat-pi-manager.system-analyzer',
+        'uses' => 'SystemAnalyzerController@index',
+    ]);
+
+    Route::get('/planner', [
+        'as'   => 'seat-pi-manager.planner',
+        'uses' => 'PlannerController@index',
     ]);
 });
