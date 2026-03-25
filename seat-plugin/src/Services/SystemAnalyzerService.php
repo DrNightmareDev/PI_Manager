@@ -8,12 +8,18 @@ use Illuminate\Support\Facades\DB;
 
 class SystemAnalyzerService
 {
+    public function __construct(
+        private readonly PiCatalogService $catalog,
+        private readonly PiRecommendationService $recommendations,
+    ) {
+    }
+
     public function getBootstrapSummary(): array
     {
         return [
             'status' => 'active',
-            'message' => 'The first SeAT-native System Analyzer data flow is active.',
-            'next_step' => 'Search a system to inspect security, region, constellation, and static planet details.',
+            'message' => 'The SeAT-native analyzer is backed by static planet data and PI recommendation logic.',
+            'next_step' => 'Search a system to inspect planets, available P0 resources, and feasible PI products.',
         ];
     }
 
@@ -98,6 +104,40 @@ class SystemAnalyzerService
             'constellation_name' => $row->constellation_name,
             'planet_count' => count($planets),
             'planets' => $planets,
+            'planet_type_summary' => $this->buildPlanetTypeSummary($planets),
+            'recommendations' => $this->recommendations->analyzePlanetTypes(array_map(
+                static fn (array $planet): string => (string) ($planet['type_name'] ?? ''),
+                array_filter($planets, static fn (array $planet): bool => ! empty($planet['type_name']))
+            )),
+        ];
+    }
+
+    public function analyzeSystemMix(array $queries): array
+    {
+        $systems = [];
+        $allPlanets = [];
+
+        foreach ($queries as $query) {
+            $details = $this->getSystemDetails($query);
+            if (! $details) {
+                continue;
+            }
+            $systems[] = $details;
+            foreach ($details['planets'] as $planet) {
+                $allPlanets[] = $planet;
+            }
+        }
+
+        $planetTypes = array_map(
+            static fn (array $planet): string => (string) ($planet['type_name'] ?? ''),
+            array_filter($allPlanets, static fn (array $planet): bool => ! empty($planet['type_name']))
+        );
+
+        return [
+            'systems' => $systems,
+            'planet_type_summary' => $this->buildPlanetTypeSummary($allPlanets),
+            'planet_count' => count($allPlanets),
+            'recommendations' => $this->recommendations->analyzePlanetTypes($planetTypes),
         ];
     }
 
@@ -152,5 +192,34 @@ class SystemAnalyzerService
             73911 => 'Storm',
             default => 'Type ' . $typeId,
         };
+    }
+
+    private function buildPlanetTypeSummary(array $planets): array
+    {
+        $counts = [];
+        $colors = $this->catalog->getPlanetTypeColors();
+        $resources = $this->catalog->getPlanetResources();
+
+        foreach ($planets as $planet) {
+            $typeName = $planet['type_name'] ?? null;
+            if (! $typeName) {
+                continue;
+            }
+            $counts[$typeName] = ($counts[$typeName] ?? 0) + 1;
+        }
+
+        $summary = [];
+        foreach ($counts as $typeName => $count) {
+            $summary[] = [
+                'type' => $typeName,
+                'count' => $count,
+                'color' => $colors[$typeName] ?? '#6c757d',
+                'resources' => $resources[$typeName] ?? [],
+            ];
+        }
+
+        usort($summary, static fn (array $a, array $b): int => $b['count'] <=> $a['count']);
+
+        return $summary;
     }
 }

@@ -5,17 +5,24 @@ declare(strict_types=1);
 namespace DrNightmare\SeatPiManager\Http\Controllers;
 
 use DrNightmare\SeatPiManager\Services\PiCatalogService;
+use DrNightmare\SeatPiManager\Services\SeatPiDataService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 
 class PlannerController extends Controller
 {
-    public function index(Request $request, PiCatalogService $piCatalogService): View
+    public function index(
+        Request $request,
+        PiCatalogService $piCatalogService,
+        SeatPiDataService $seatPiDataService,
+    ): View
     {
         $productQuery = trim((string) $request->query('product', ''));
+        $systemQuery = trim((string) $request->query('system', ''));
         $catalog = $piCatalogService->getAllProducts();
         $selected = $productQuery !== '' ? $piCatalogService->getPlannerSummary($productQuery) : null;
+        $systemCapability = null;
 
         $matchingProducts = [];
         if ($productQuery !== '') {
@@ -31,14 +38,19 @@ class PlannerController extends Controller
             }
         }
 
+        if ($selected && $systemQuery !== '') {
+            $systemCapability = $seatPiDataService->getSystemCapabilityForProduct($systemQuery, $selected['name']);
+        }
+
         return view('seat-pi-manager::pages.planner', [
             'catalog' => $catalog,
             'selected_product' => $selected,
             'product_query' => $productQuery,
+            'system_query' => $systemQuery,
+            'system_capability' => $systemCapability,
             'matching_products' => $matchingProducts,
             'planet_type_colors' => $piCatalogService->getPlanetTypeColors(),
             'planet_resources' => $piCatalogService->getPlanetResources(),
         ]);
     }
 }
-

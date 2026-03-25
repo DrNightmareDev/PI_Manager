@@ -9,6 +9,11 @@ Route::group([
     'middleware' => ['web', 'auth', 'can:seat-pi-manager.view'],
     'prefix'     => config('seat-pi-manager.route_prefix', 'pi-manager'),
 ], function () {
+    Route::get('/dashboard', [
+        'as'   => 'seat-pi-manager.dashboard',
+        'uses' => 'DashboardController@index',
+    ]);
+
     Route::get('/', [
         'as'   => 'seat-pi-manager.overview',
         'uses' => 'OverviewController@index',
@@ -22,5 +27,10 @@ Route::group([
     Route::get('/planner', [
         'as'   => 'seat-pi-manager.planner',
         'uses' => 'PlannerController@index',
+    ]);
+
+    Route::get('/system-mix', [
+        'as'   => 'seat-pi-manager.system-mix',
+        'uses' => 'SystemMixController@index',
     ]);
 });
