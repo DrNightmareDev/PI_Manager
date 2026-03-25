@@ -13,45 +13,6 @@
     @endphp
 
     <div class="pi-shell">
-        <section class="pi-hero">
-            <div class="pi-hero__body">
-                <div class="pi-kicker">
-                    <i class="fas fa-table"></i>
-                    <span>{{ trans('seat-pi-manager::messages.pages.dashboard.title') }}</span>
-                </div>
-                <h1 class="pi-title">{{ trans('seat-pi-manager::messages.pages.dashboard.header') }}</h1>
-                <p class="pi-subtitle">{{ trans('seat-pi-manager::messages.pages.dashboard.subtitle') }}</p>
-            </div>
-        </section>
-
-        <section class="pi-panel pi-panel--dark">
-            <div class="pi-panel__body">
-                <div class="pi-stepper">
-                    <div class="pi-stepper__item">
-                        <div class="pi-stepper__badge">1</div>
-                        <div>
-                            <p class="pi-stepper__title">{{ trans('seat-pi-manager::messages.pages.dashboard.flow_filter_title') }}</p>
-                            <p class="pi-stepper__text">{{ trans('seat-pi-manager::messages.pages.dashboard.flow_filter_text') }}</p>
-                        </div>
-                    </div>
-                    <div class="pi-stepper__item">
-                        <div class="pi-stepper__badge">2</div>
-                        <div>
-                            <p class="pi-stepper__title">{{ trans('seat-pi-manager::messages.pages.dashboard.flow_review_title') }}</p>
-                            <p class="pi-stepper__text">{{ trans('seat-pi-manager::messages.pages.dashboard.flow_review_text') }}</p>
-                        </div>
-                    </div>
-                    <div class="pi-stepper__item">
-                        <div class="pi-stepper__badge">3</div>
-                        <div>
-                            <p class="pi-stepper__title">{{ trans('seat-pi-manager::messages.pages.dashboard.flow_open_title') }}</p>
-                            <p class="pi-stepper__text">{{ trans('seat-pi-manager::messages.pages.dashboard.flow_open_text') }}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <div class="pi-grid pi-grid--stats">
             <div class="pi-stat">
                 <div class="pi-stat__label">{{ trans('seat-pi-manager::messages.pages.dashboard.character_count') }}</div>
@@ -75,100 +36,58 @@
             </div>
         </div>
 
-        <div class="pi-grid pi-grid--two">
-            <section class="pi-panel">
-                <div class="pi-panel__header">
-                    <div>
-                        <h2 class="pi-panel__title">
-                            <i class="fas fa-sliders-h text-primary"></i>
-                            <span>{{ trans('seat-pi-manager::messages.pages.dashboard.filters_title') }}</span>
-                        </h2>
-                        <p class="pi-panel__subtitle">{{ trans('seat-pi-manager::messages.pages.dashboard.filters_subtitle') }}</p>
-                    </div>
-                    <a href="{{ route('seat-pi-manager.system-analyzer') }}" class="btn btn-sm btn-outline-primary">{{ trans('seat-pi-manager::messages.pages.dashboard.open_analyzer') }}</a>
-                </div>
-                <div class="pi-panel__body">
-                    <form method="get" action="{{ route('seat-pi-manager.dashboard') }}" class="pi-stack">
-                        <div class="pi-inline-form">
-                            <div class="pi-inline-form__grow">
-                                <label class="form-label">{{ trans('seat-pi-manager::messages.pages.dashboard.character_filter') }}</label>
-                                <select class="form-select" name="character">
-                                    <option value="">{{ trans('seat-pi-manager::messages.common.all') }}</option>
-                                    @foreach($dashboard['characters'] as $characterName)
-                                        <option value="{{ $characterName }}" @selected(($filters['character'] ?? '') === $characterName)>{{ $characterName }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
+        <section class="pi-panel">
+            <div class="pi-panel__body--slim">
+                @php
+                    $statusHints = [
+                        'active'  => trans('seat-pi-manager::messages.pages.dashboard.status_active_hint'),
+                        'expired' => trans('seat-pi-manager::messages.pages.dashboard.status_expired_hint'),
+                        'stalled' => trans('seat-pi-manager::messages.pages.dashboard.status_stalled_hint'),
+                    ];
+                @endphp
+                <form method="get" action="{{ route('seat-pi-manager.dashboard') }}" class="pi-filter-bar">
 
-                        <div class="pi-stack">
-                            <div>
-                                <div class="form-label mb-2">{{ trans('seat-pi-manager::messages.pages.dashboard.status_filter') }}</div>
-                                <div class="pi-chip-row">
-                                    @foreach(['active', 'expired', 'stalled'] as $status)
-                                        <label class="pi-pill-toggle @if(in_array($status, $activeStatuses, true)) is-active @endif">
-                                            <input type="checkbox" class="d-none" name="status[]" value="{{ $status }}" @checked(in_array($status, $activeStatuses, true))>
-                                            {{ trans('seat-pi-manager::messages.status.' . $status) }}
-                                        </label>
-                                    @endforeach
-                                </div>
-                            </div>
+                    <select class="form-select pi-filter-bar__select" name="character"
+                            title="{{ trans('seat-pi-manager::messages.pages.dashboard.character_filter') }}">
+                        <option value="">{{ trans('seat-pi-manager::messages.common.all') }}</option>
+                        @foreach($dashboard['characters'] as $characterName)
+                            <option value="{{ $characterName }}" @selected(($filters['character'] ?? '') === $characterName)>{{ $characterName }}</option>
+                        @endforeach
+                    </select>
 
-                            <div>
-                                <div class="form-label mb-2">{{ trans('seat-pi-manager::messages.pages.dashboard.tier_filter') }}</div>
-                                <div class="pi-chip-row">
-                                    @foreach(['P1', 'P2', 'P3', 'P4'] as $tier)
-                                        <label class="pi-pill-toggle @if(in_array($tier, $activeTiers, true)) is-active @endif">
-                                            <input type="checkbox" class="d-none" name="tier[]" value="{{ $tier }}" @checked(in_array($tier, $activeTiers, true))>
-                                            {{ $tier }}
-                                        </label>
-                                    @endforeach
-                                </div>
-                            </div>
-                        </div>
+                    <div class="pi-filter-bar__sep"></div>
 
-                        <div class="pi-toolbar">
-                            <div class="pi-muted small">{{ trans('seat-pi-manager::messages.pages.dashboard.filters_hint') }}</div>
-                            <div class="pi-toolbar__group">
-                                <a href="{{ route('seat-pi-manager.dashboard') }}" class="btn btn-light">{{ trans('seat-pi-manager::messages.common.reset') }}</a>
-                                <button type="submit" class="btn btn-primary">{{ trans('seat-pi-manager::messages.common.apply') }}</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </section>
-
-            <section class="pi-panel">
-                <div class="pi-panel__header">
-                    <div>
-                        <h2 class="pi-panel__title">
-                            <i class="fas fa-traffic-light text-success"></i>
-                            <span>{{ trans('seat-pi-manager::messages.pages.dashboard.status_title') }}</span>
-                        </h2>
-                        <p class="pi-panel__subtitle">{{ trans('seat-pi-manager::messages.pages.dashboard.status_subtitle') }}</p>
-                    </div>
-                </div>
-                <div class="pi-panel__body">
-                    <div class="pi-grid pi-grid--three">
+                    <div class="pi-filter-bar__group">
                         @foreach(['active', 'expired', 'stalled'] as $status)
-                            <div class="pi-flow__step">
-                                <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.status.' . $status) }}</div>
-                                <strong style="font-size: 1.6rem;">{{ $dashboard['summary']['status_counts'][$status] ?? 0 }}</strong>
-                                <div class="pi-muted small">
-                                    @if($status === 'active')
-                                        {{ trans('seat-pi-manager::messages.pages.dashboard.status_active_hint') }}
-                                    @elseif($status === 'expired')
-                                        {{ trans('seat-pi-manager::messages.pages.dashboard.status_expired_hint') }}
-                                    @else
-                                        {{ trans('seat-pi-manager::messages.pages.dashboard.status_stalled_hint') }}
-                                    @endif
-                                </div>
-                            </div>
+                            <label class="pi-pill-toggle pi-pill-toggle--sm pi-pill-toggle--{{ $status }} @if(in_array($status, $activeStatuses, true)) is-active @endif"
+                                   title="{{ $statusHints[$status] }}">
+                                <input type="checkbox" class="d-none" name="status[]" value="{{ $status }}" @checked(in_array($status, $activeStatuses, true))>
+                                {{ trans('seat-pi-manager::messages.status.' . $status) }}
+                                <span class="pi-pill-count">{{ $dashboard['summary']['status_counts'][$status] ?? 0 }}</span>
+                            </label>
                         @endforeach
                     </div>
-                </div>
-            </section>
-        </div>
+
+                    <div class="pi-filter-bar__sep"></div>
+
+                    <div class="pi-filter-bar__group">
+                        @foreach(['P1', 'P2', 'P3', 'P4'] as $tier)
+                            <label class="pi-pill-toggle pi-pill-toggle--sm @if(in_array($tier, $activeTiers, true)) is-active @endif">
+                                <input type="checkbox" class="d-none" name="tier[]" value="{{ $tier }}" @checked(in_array($tier, $activeTiers, true))>
+                                {{ $tier }}
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <div class="pi-filter-bar__group ms-auto">
+                        <a href="{{ route('seat-pi-manager.dashboard') }}" class="btn btn-sm btn-light">{{ trans('seat-pi-manager::messages.common.reset') }}</a>
+                        <button type="submit" class="btn btn-sm btn-primary">{{ trans('seat-pi-manager::messages.common.apply') }}</button>
+                        <a href="{{ route('seat-pi-manager.system-analyzer') }}" class="btn btn-sm btn-outline-secondary">{{ trans('seat-pi-manager::messages.pages.dashboard.open_analyzer') }}</a>
+                    </div>
+
+                </form>
+            </div>
+        </section>
 
         <section class="pi-panel">
             <div class="pi-panel__header">
