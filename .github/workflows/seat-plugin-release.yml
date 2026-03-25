@@ -1,0 +1,40 @@
+name: seat-plugin-release
+
+on:
+  push:
+    tags:
+      - 'seat-v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: seat-plugin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+
+      - name: Validate composer
+        run: composer validate --no-check-lock
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Build release archive
+        run: |
+          mkdir -p dist
+          zip -r "dist/seat-pi-manager-${GITHUB_REF_NAME}.zip" . -x "vendor/*" "dist/*" ".git/*"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: seat-plugin/dist/seat-pi-manager-${{ github.ref_name }}.zip
+          generate_release_notes: true

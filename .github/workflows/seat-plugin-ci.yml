@@ -1,0 +1,52 @@
+name: seat-plugin-ci
+
+on:
+  pull_request:
+    paths:
+      - 'seat-plugin/**'
+      - 'scripts/seat/**'
+      - '.github/workflows/seat-plugin-ci.yml'
+      - '.github/workflows/seat-plugin-release.yml'
+  push:
+    branches:
+      - main
+      - 'feature/**'
+    paths:
+      - 'seat-plugin/**'
+      - 'scripts/seat/**'
+      - '.github/workflows/seat-plugin-ci.yml'
+      - '.github/workflows/seat-plugin-release.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: seat-plugin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+          coverage: none
+
+      - name: Validate composer
+        run: composer validate --no-check-lock
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Archive plugin skeleton
+        run: |
+          mkdir -p dist
+          zip -r "dist/seat-pi-manager-ci.zip" . -x "vendor/*" "dist/*" ".git/*"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seat-pi-manager-ci
+          path: seat-plugin/dist/seat-pi-manager-ci.zip

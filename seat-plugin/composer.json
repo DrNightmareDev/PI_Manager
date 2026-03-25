@@ -1,0 +1,49 @@
+{
+    "name": "drnightmare/seat-pi-manager",
+    "description": "Planetary Industry management and analysis plugin for SeAT.",
+    "type": "library",
+    "license": "GPL-2.0-or-later",
+    "keywords": [
+        "seat",
+        "eve-online",
+        "planetary-industry",
+        "pi",
+        "plugin"
+    ],
+    "homepage": "https://github.com/DrNightmareDev/PI_Manager",
+    "authors": [
+        {
+            "name": "DrNightmare",
+            "role": "Maintainer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "eveseat/web": "^5.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "DrNightmare\\SeatPiManager\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "DrNightmare\\SeatPiManager\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "DrNightmare\\SeatPiManager\\PiManagerServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
