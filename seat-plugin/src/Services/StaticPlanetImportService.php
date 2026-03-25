@@ -6,7 +6,6 @@ namespace DrNightmare\SeatPiManager\Services;
 
 use DrNightmare\SeatPiManager\Models\ImportRun;
 use DrNightmare\SeatPiManager\Models\StaticPlanet;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Throwable;
@@ -49,13 +48,11 @@ class StaticPlanetImportService
 
             $rows = $this->parseRows($decompressed);
 
-            DB::transaction(function () use ($rows): void {
-                StaticPlanet::query()->truncate();
+            StaticPlanet::query()->truncate();
 
-                foreach (array_chunk($rows, 1000) as $chunk) {
-                    StaticPlanet::query()->insert($chunk);
-                }
-            });
+            foreach (array_chunk($rows, 1000) as $chunk) {
+                StaticPlanet::query()->insert($chunk);
+            }
 
             $count = count($rows);
 
