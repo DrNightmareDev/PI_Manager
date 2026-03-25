@@ -32,6 +32,9 @@ php "${SEAT_ROOT}/artisan" vendor:publish --tag=seat-pi-manager-config --force |
 echo "[seat-plugin] running migrations"
 php "${SEAT_ROOT}/artisan" migrate --force
 
+echo "[seat-plugin] importing static planet dataset"
+php "${SEAT_ROOT}/artisan" seat-pi-manager:import-static-planets || true
+
 echo "[seat-plugin] clearing caches"
 php "${SEAT_ROOT}/artisan" optimize:clear
 
