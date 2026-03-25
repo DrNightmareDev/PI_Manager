@@ -18,54 +18,99 @@
             </div>
         </section>
 
+        <section class="pi-panel pi-panel--dark">
+            <div class="pi-panel__body">
+                <div class="pi-stepper">
+                    <div class="pi-stepper__item">
+                        <div class="pi-stepper__badge">1</div>
+                        <div>
+                            <p class="pi-stepper__title">{{ trans('seat-pi-manager::messages.pages.planner.flow_pick_title') }}</p>
+                            <p class="pi-stepper__text">{{ trans('seat-pi-manager::messages.pages.planner.flow_pick_text') }}</p>
+                        </div>
+                    </div>
+                    <div class="pi-stepper__item">
+                        <div class="pi-stepper__badge">2</div>
+                        <div>
+                            <p class="pi-stepper__title">{{ trans('seat-pi-manager::messages.pages.planner.flow_requirements_title') }}</p>
+                            <p class="pi-stepper__text">{{ trans('seat-pi-manager::messages.pages.planner.flow_requirements_text') }}</p>
+                        </div>
+                    </div>
+                    <div class="pi-stepper__item">
+                        <div class="pi-stepper__badge">3</div>
+                        <div>
+                            <p class="pi-stepper__title">{{ trans('seat-pi-manager::messages.pages.planner.flow_validate_title') }}</p>
+                            <p class="pi-stepper__text">{{ trans('seat-pi-manager::messages.pages.planner.flow_validate_text') }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <div class="pi-grid pi-grid--two">
             <section class="pi-panel">
                 <div class="pi-panel__header">
-                    <h2 class="pi-panel__title">
-                        <i class="fas fa-search text-primary"></i>
-                        <span>{{ trans('seat-pi-manager::messages.pages.planner.search_title') }}</span>
-                    </h2>
+                    <div>
+                        <h2 class="pi-panel__title">
+                            <i class="fas fa-search text-primary"></i>
+                            <span>{{ trans('seat-pi-manager::messages.pages.planner.search_title') }}</span>
+                        </h2>
+                        <p class="pi-panel__subtitle">{{ trans('seat-pi-manager::messages.pages.planner.search_subtitle') }}</p>
+                    </div>
                 </div>
                 <div class="pi-panel__body">
-                    <form method="get" action="{{ route('seat-pi-manager.planner') }}" class="row g-2">
-                        <div class="col-12">
-                            <input type="text" class="form-control" name="product" value="{{ $product_query }}" placeholder="{{ trans('seat-pi-manager::messages.pages.planner.search_placeholder') }}">
+                    <form method="get" action="{{ route('seat-pi-manager.planner') }}" class="pi-stack">
+                        <div class="pi-inline-form">
+                            <div class="pi-inline-form__grow">
+                                <input type="text" class="form-control" name="product" value="{{ $product_query }}" placeholder="{{ trans('seat-pi-manager::messages.pages.planner.search_placeholder') }}">
+                            </div>
+                            <div class="pi-inline-form__narrow">
+                                <input type="text" class="form-control" name="system" value="{{ $system_query }}" placeholder="{{ trans('seat-pi-manager::messages.pages.planner.system_placeholder') }}">
+                            </div>
+                            <div class="pi-toolbar__group">
+                                <button type="submit" class="btn btn-primary">{{ trans('seat-pi-manager::messages.pages.planner.search_action') }}</button>
+                                @if($product_query !== '' || $system_query !== '')
+                                    <a href="{{ route('seat-pi-manager.planner') }}" class="btn btn-light">{{ trans('seat-pi-manager::messages.common.reset') }}</a>
+                                @endif
+                            </div>
                         </div>
-                        <div class="col-12">
-                            <input type="text" class="form-control" name="system" value="{{ $system_query }}" placeholder="{{ trans('seat-pi-manager::messages.pages.planner.system_placeholder') }}">
-                        </div>
-                        <div class="col-12 d-grid">
-                            <button type="submit" class="btn btn-primary">{{ trans('seat-pi-manager::messages.pages.planner.search_action') }}</button>
-                        </div>
-                    </form>
 
-                    @if(count($matching_products) > 0)
-                        <div class="pi-flow mt-3">
-                            @foreach($matching_products as $match)
-                                <a href="{{ route('seat-pi-manager.planner', ['product' => $match['name'], 'system' => $system_query]) }}" class="pi-list-card text-decoration-none @if(($selected_product['name'] ?? null) === $match['name']) border-primary @endif">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="fw-semibold">{{ $match['name'] }}</span>
-                                        <span class="pi-chip">{{ $match['tier'] }}</span>
-                                    </div>
-                                </a>
-                            @endforeach
-                        </div>
-                    @endif
+                        @if(count($matching_products) > 0)
+                            <div class="pi-stack">
+                                <div class="pi-muted small">{{ trans('seat-pi-manager::messages.pages.planner.matches_title') }}</div>
+                                <div class="pi-flow">
+                                    @foreach($matching_products as $match)
+                                        <a href="{{ route('seat-pi-manager.planner', ['product' => $match['name'], 'system' => $system_query]) }}" class="pi-list-card text-decoration-none @if(($selected_product['name'] ?? null) === $match['name']) pi-list-card--active @endif">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="fw-semibold">{{ $match['name'] }}</span>
+                                                <span class="pi-chip pi-chip--soft">{{ $match['tier'] }}</span>
+                                            </div>
+                                        </a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                    </form>
                 </div>
             </section>
 
             <section class="pi-panel">
                 <div class="pi-panel__header">
-                    <h2 class="pi-panel__title">
-                        <i class="fas fa-book-open text-info"></i>
-                        <span>{{ trans('seat-pi-manager::messages.pages.planner.catalog_title') }}</span>
-                    </h2>
+                    <div>
+                        <h2 class="pi-panel__title">
+                            <i class="fas fa-book-open text-info"></i>
+                            <span>{{ trans('seat-pi-manager::messages.pages.planner.catalog_title') }}</span>
+                        </h2>
+                        <p class="pi-panel__subtitle">{{ trans('seat-pi-manager::messages.pages.planner.catalog_subtitle') }}</p>
+                    </div>
                 </div>
                 <div class="pi-panel__body">
                     <div class="pi-flow">
                         @foreach($catalog as $tier => $products)
                             <div class="pi-list-card">
-                                <div class="pi-flow__step-title">{{ $tier }}</div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <strong>{{ $tier }}</strong>
+                                    <span class="pi-chip pi-chip--soft">{{ count($products) }}</span>
+                                </div>
                                 <div class="pi-chip-row">
                                     @foreach($products as $product)
                                         <a href="{{ route('seat-pi-manager.planner', ['product' => $product, 'system' => $system_query]) }}" class="pi-chip text-decoration-none">{{ $product }}</a>
@@ -81,28 +126,31 @@
         @if($selected_product)
             <section class="pi-panel">
                 <div class="pi-panel__header">
-                    <h2 class="pi-panel__title">
-                        <i class="fas fa-cube text-warning"></i>
-                        <span>{{ $selected_product['name'] }}</span>
-                    </h2>
+                    <div>
+                        <h2 class="pi-panel__title">
+                            <i class="fas fa-cube text-warning"></i>
+                            <span>{{ $selected_product['name'] }}</span>
+                        </h2>
+                        <p class="pi-panel__subtitle">{{ trans('seat-pi-manager::messages.pages.planner.summary_subtitle') }}</p>
+                    </div>
                     <span class="pi-chip pi-chip--soft">{{ $selected_product['tier'] }}</span>
                 </div>
                 <div class="pi-panel__body">
-                    <div class="pi-grid pi-grid--stats">
-                        <div class="pi-flow__step">
-                            <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.pages.planner.inputs_title') }}</div>
-                            <strong>{{ count($selected_product['inputs']) }}</strong>
-                            <div class="pi-note">{{ implode(', ', $selected_product['inputs']) ?: '—' }}</div>
+                    <div class="pi-grid pi-grid--three">
+                        <div class="pi-stat">
+                            <div class="pi-stat__label">{{ trans('seat-pi-manager::messages.pages.planner.inputs_title') }}</div>
+                            <div class="pi-stat__value">{{ count($selected_product['inputs']) }}</div>
+                            <div class="pi-stat__meta">{{ implode(', ', $selected_product['inputs']) ?: '-' }}</div>
                         </div>
-                        <div class="pi-flow__step">
-                            <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.pages.planner.p0_title') }}</div>
-                            <strong>{{ count($selected_product['required_p0']) }}</strong>
-                            <div class="pi-note">{{ implode(', ', $selected_product['required_p0']) ?: '—' }}</div>
+                        <div class="pi-stat">
+                            <div class="pi-stat__label">{{ trans('seat-pi-manager::messages.pages.planner.p0_title') }}</div>
+                            <div class="pi-stat__value">{{ count($selected_product['required_p0']) }}</div>
+                            <div class="pi-stat__meta">{{ implode(', ', $selected_product['required_p0']) ?: '-' }}</div>
                         </div>
-                        <div class="pi-flow__step">
-                            <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.pages.planner.planets_title') }}</div>
-                            <strong>{{ count($selected_product['required_planet_types']) }}</strong>
-                            <div class="pi-chip-row mt-2">
+                        <div class="pi-stat">
+                            <div class="pi-stat__label">{{ trans('seat-pi-manager::messages.pages.planner.planets_title') }}</div>
+                            <div class="pi-stat__value">{{ count($selected_product['required_planet_types']) }}</div>
+                            <div class="pi-stat__group">
                                 @foreach($selected_product['required_planet_types'] as $planetType)
                                     <span class="pi-chip" style="background-color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }}15; border-color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }}55; color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }};">{{ $planetType }}</span>
                                 @endforeach
@@ -112,29 +160,37 @@
                 </div>
             </section>
 
-            @if($system_query !== '')
-                <section class="pi-panel">
-                    <div class="pi-panel__header">
-                        <h2 class="pi-panel__title">
-                            <i class="fas fa-map-marked-alt text-success"></i>
-                            <span>{{ trans('seat-pi-manager::messages.pages.planner.system_check_title') }}</span>
-                        </h2>
-                    </div>
-                    <div class="pi-panel__body">
-                        @if($system_capability && $system_capability['system'])
-                            <div class="pi-grid pi-grid--two">
-                                <div class="pi-flow">
-                                    <div class="pi-flow__step">
-                                        <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.pages.dashboard.location') }}</div>
-                                        <strong>{{ $system_capability['system']['name'] }}</strong>
-                                        <div class="pi-note">{{ $system_capability['system']['region_name'] ?? '-' }} · {{ $system_capability['system']['constellation_name'] ?? '-' }}</div>
+            <div class="pi-grid pi-grid--two">
+                @if($system_query !== '')
+                    <section class="pi-panel">
+                        <div class="pi-panel__header">
+                            <div>
+                                <h2 class="pi-panel__title">
+                                    <i class="fas fa-map-marked-alt text-success"></i>
+                                    <span>{{ trans('seat-pi-manager::messages.pages.planner.system_check_title') }}</span>
+                                </h2>
+                                <p class="pi-panel__subtitle">{{ trans('seat-pi-manager::messages.pages.planner.system_check_subtitle') }}</p>
+                            </div>
+                        </div>
+                        <div class="pi-panel__body">
+                            @if($system_capability && $system_capability['system'])
+                                <div class="pi-stack">
+                                    <div class="pi-grid pi-grid--three">
+                                        <div class="pi-flow__step">
+                                            <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.pages.dashboard.location') }}</div>
+                                            <strong>{{ $system_capability['system']['name'] }}</strong>
+                                            <div class="pi-muted small">{{ $system_capability['system']['region_name'] ?? '-' }} / {{ $system_capability['system']['constellation_name'] ?? '-' }}</div>
+                                        </div>
+                                        <div class="pi-flow__step">
+                                            <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.fields.planet_count') }}</div>
+                                            <strong>{{ $system_capability['system']['planet_count'] }}</strong>
+                                        </div>
+                                        <div class="pi-flow__step">
+                                            <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.fields.single_planet') }}</div>
+                                            <strong>{{ $system_capability['recommendation']['single_planet_viable'] ?? false ? trans('seat-pi-manager::messages.status.enabled') : '-' }}</strong>
+                                        </div>
                                     </div>
-                                    <div class="pi-flow__step">
-                                        <div class="pi-flow__step-title">{{ trans('seat-pi-manager::messages.fields.planet_count') }}</div>
-                                        <strong>{{ $system_capability['system']['planet_count'] }}</strong>
-                                    </div>
-                                </div>
-                                <div class="pi-flow">
+
                                     @if($system_capability['can_build'])
                                         <div class="alert alert-success mb-0">{{ trans('seat-pi-manager::messages.pages.planner.system_can_build') }}</div>
                                         <div class="pi-list-card">
@@ -157,39 +213,42 @@
                                         {{ trans('seat-pi-manager::messages.pages.planner.open_in_analyzer') }}
                                     </a>
                                 </div>
-                            </div>
-                        @else
-                            <div class="alert alert-warning mb-0">{{ trans('seat-pi-manager::messages.pages.planner.system_not_found') }}</div>
-                        @endif
+                            @else
+                                <div class="pi-empty">{{ trans('seat-pi-manager::messages.pages.planner.system_not_found') }}</div>
+                            @endif
+                        </div>
+                    </section>
+                @endif
+
+                <section class="pi-panel">
+                    <div class="pi-panel__header">
+                        <div>
+                            <h2 class="pi-panel__title">
+                                <i class="fas fa-layer-group text-secondary"></i>
+                                <span>{{ trans('seat-pi-manager::messages.pages.planner.resources_by_planet_title') }}</span>
+                            </h2>
+                            <p class="pi-panel__subtitle">{{ trans('seat-pi-manager::messages.pages.planner.resources_by_planet_subtitle') }}</p>
+                        </div>
+                    </div>
+                    <div class="pi-panel__body">
+                        <div class="pi-flow">
+                            @foreach($selected_product['required_planet_types'] as $planetType)
+                                <div class="pi-list-card">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <strong>{{ $planetType }}</strong>
+                                        <span class="pi-chip" style="background-color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }}15; border-color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }}55; color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }};">{{ $planetType }}</span>
+                                    </div>
+                                    <div class="pi-chip-row">
+                                        @foreach($planet_resources[$planetType] ?? [] as $resource)
+                                            <span class="pi-chip pi-chip--soft">{{ $resource }}</span>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 </section>
-            @endif
-
-            <section class="pi-panel">
-                <div class="pi-panel__header">
-                    <h2 class="pi-panel__title">
-                        <i class="fas fa-layer-group text-secondary"></i>
-                        <span>{{ trans('seat-pi-manager::messages.pages.planner.resources_by_planet_title') }}</span>
-                    </h2>
-                </div>
-                <div class="pi-panel__body">
-                    <div class="pi-grid pi-grid--stats">
-                        @foreach($selected_product['required_planet_types'] as $planetType)
-                            <div class="pi-list-card">
-                                <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <strong>{{ $planetType }}</strong>
-                                    <span class="pi-chip" style="background-color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }}15; border-color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }}55; color: {{ $planet_type_colors[$planetType] ?? '#6c757d' }};">{{ $planetType }}</span>
-                                </div>
-                                <div class="pi-chip-row">
-                                    @foreach($planet_resources[$planetType] ?? [] as $resource)
-                                        <span class="pi-chip pi-chip--soft">{{ $resource }}</span>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-            </section>
+            </div>
         @endif
     </div>
 @endsection
