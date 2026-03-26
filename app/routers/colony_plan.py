@@ -238,7 +238,7 @@ def _select_assignment(
     preferred_chars: set[int] | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     preferred_chars = preferred_chars or set()
-    best: tuple[tuple[int, int, int], dict[str, Any], dict[str, Any]] | None = None
+    eligible: list[tuple[dict[str, Any], dict[str, Any], bool]] = []
 
     for planet in candidates:
         planet_id = int(planet["planet_id"])
@@ -260,27 +260,37 @@ def _select_assignment(
                     continue
                 if not include_unassigned and state["selected_system_existing"] == 0:
                     continue
+            eligible.append((planet, state, existing_planet))
 
-            score = 0
-            if existing_planet:
-                score += 1000
-            if char_id in preferred_chars:
-                score += 200
-            if state.get("same_corp_as_main"):
-                score += 90
-            if int(planet["system_id"]) in state["systems_with_colonies"]:
-                score += 75
-            score += min(state["remaining_slots"], 20)
-            score -= state["new_assignments"]
-            score -= state["existing_reuse_assignments"]
+    if not eligible:
+        return None, None
 
-            tiebreak = (
-                score,
-                1 if existing_planet else 0,
-                state["remaining_slots"],
-            )
-            if not best or tiebreak > best[0]:
-                best = (tiebreak, planet, state)
+    same_corp_eligible = [item for item in eligible if item[1].get("same_corp_as_main")]
+    if same_corp_eligible:
+        eligible = same_corp_eligible
+
+    best: tuple[tuple[int, int, int], dict[str, Any], dict[str, Any]] | None = None
+    for planet, state, existing_planet in eligible:
+        score = 0
+        if existing_planet:
+            score += 1000
+        if state["id"] in preferred_chars:
+            score += 200
+        if state.get("same_corp_as_main"):
+            score += 90
+        if int(planet["system_id"]) in state["systems_with_colonies"]:
+            score += 75
+        score += min(state["remaining_slots"], 20)
+        score -= state["new_assignments"]
+        score -= state["existing_reuse_assignments"]
+
+        tiebreak = (
+            score,
+            1 if existing_planet else 0,
+            state["remaining_slots"],
+        )
+        if not best or tiebreak > best[0]:
+            best = (tiebreak, planet, state)
 
     if not best:
         return None, None

@@ -136,53 +136,47 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
 
             {# Product #}
             <div class="col-xl-3 col-md-6">
-                <div id="productFavStrip" class="d-flex flex-wrap gap-1 mb-2" style="display:none!important;"></div>
-                <div class="d-flex gap-1 align-items-center">
+                <div id="productFavStrip" class="d-flex flex-wrap gap-1 mb-2"></div>
+                <div class="position-relative">
                     <input class="form-control eve-input flex-grow-1"
                            id="productInput"
-                           list="colonyPlanProducts"
-                           name="product"
-                           value="{{ selected_product or '' }}"
+                           value="{{ product_labels.get(selected_product, selected_product) if selected_product else '' }}"
                            placeholder="{{ t('colony_plan.product_placeholder') }}"
                            autocomplete="off">
-                    <button type="button" class="btn eve-btn-ghost btn-sm px-2"
+                    <input type="hidden" name="product" id="productValueInput" value="{{ selected_product or '' }}">
+                    <div id="productDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                    <button type="button" class="btn eve-btn-ghost btn-sm px-2 position-absolute"
+                            style="right:8px;top:50%;transform:translateY(-50%);z-index:5;"
                             title="Save as favorite" onclick="toggleProductFav()">
                         <i class="bi bi-star" id="productFavIcon" style="font-size:.95rem;"></i>
                     </button>
                 </div>
-                <datalist id="colonyPlanProducts">
-                    {% for p in all_products %}
-                    <option value="{{ p.name }}">{{ p.display_name }} ({{ p.tier }})</option>
-                    {% endfor %}
-                </datalist>
             </div>
 
             {# Systems #}
             <div class="col-xl-3 col-md-6">
-                <div id="systemFavStrip" class="d-flex flex-wrap gap-1 mb-2" style="display:none!important;"></div>
-                <div class="eve-input p-2 position-relative">
-                    <div class="d-flex flex-wrap gap-1 mb-1" id="selectedSystems">
-                        {% for system in selected_systems %}
-                        <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;font-weight:500;">
-                            {{ system.name }}
-                            <button class="btn btn-sm p-0 ms-1 border-0 bg-transparent" style="color:inherit;"
-                                    type="button" onclick="removeSystem({{ system.id }})">&times;</button>
-                        </span>
-                        {% endfor %}
-                    </div>
-                    <div class="d-flex align-items-center gap-1">
-                        <input type="text" id="systemSearchInput"
-                               class="form-control border-0 bg-transparent px-0 py-0 flex-grow-1"
-                               style="min-height:22px;font-size:.85rem;"
-                               placeholder="{{ t('colony_plan.system_placeholder') }}"
-                               autocomplete="off">
-                        <button type="button" class="btn eve-btn-ghost btn-sm px-1"
-                                title="Save selected systems as favorites"
-                                onclick="saveCurrentSystemsAsFav()">
-                            <i class="bi bi-star" style="font-size:.85rem;"></i>
-                        </button>
-                    </div>
-                    <div id="systemSearchResults" class="list-group mt-1"></div>
+                <div id="systemFavStrip" class="d-flex flex-wrap gap-1 mb-2"></div>
+                <div class="position-relative mb-2">
+                    <input type="text" id="systemSearchInput"
+                           class="form-control eve-input pe-5"
+                           placeholder="{{ t('colony_plan.system_placeholder') }}"
+                           autocomplete="off">
+                    <button type="button" class="btn eve-btn-ghost btn-sm px-1 position-absolute"
+                            style="right:8px;top:50%;transform:translateY(-50%);z-index:5;"
+                            title="Save selected systems as favorites"
+                            onclick="saveCurrentSystemsAsFav()">
+                        <i class="bi bi-star" style="font-size:.85rem;"></i>
+                    </button>
+                    <div id="systemSearchResults" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                </div>
+                <div class="d-flex flex-wrap gap-1" id="selectedSystems">
+                    {% for system in selected_systems %}
+                    <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;font-weight:500;">
+                        {{ system.name }}
+                        <button class="btn btn-sm p-0 ms-1 border-0 bg-transparent" style="color:inherit;"
+                                type="button" onclick="removeSystem({{ system.id }})">&times;</button>
+                    </span>
+                    {% endfor %}
                 </div>
                 <input type="hidden" name="system_ids" id="systemIdsInput" value="{{ selected_system_ids | join(',') }}">
             </div>
@@ -326,6 +320,43 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
 {% endif %}
 
 {# ── Assignment table ────────────────────────────────────────── #}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3 d-flex flex-column gap-3">
+        <div>
+            <div class="text-muted small mb-2">{{ t('colony_plan.current_basis') }}</div>
+            <div class="fw-semibold" style="font-size:1.05rem;">
+                {{ product_labels.get(selected_product, selected_product) }}
+                | {{ selected_systems | length }} {{ t('common.systems', default='Systeme') }}
+                | {% if use_all_characters %}{{ t('colony_plan.all_characters') }}{% else %}{{ selected_character_ids | length }} {{ t('common.characters', default='Charaktere') }}{% endif %}
+                | {% if single_system %}{{ t('colony_plan.single_system_mode') }}{% else %}{{ t('colony_plan.cross_system_mode', default='Systemuebergreifende Kette erlauben') }}{% endif %}
+            </div>
+        </div>
+        {% if plan.unused_characters %}
+        <div style="border-top:1px solid var(--eve-card-border);padding-top:.85rem;">
+            <div class="text-muted small mb-2">{{ t('colony_plan.unused_characters_title', default='Ausgewaehlte, aber ungenutzte Charaktere') }}</div>
+            <div class="d-flex flex-wrap gap-2">
+                {% for char in plan.unused_characters %}
+                <span class="fav-chip" style="padding:5px 10px;border-radius:999px;cursor:default;gap:6px;">
+                    <img src="{{ char.portrait or '/static/img/default_char.svg' }}"
+                         class="rounded-circle" style="width:20px;height:20px;object-fit:cover;"
+                         onerror="this.src='/static/img/default_char.svg'">
+                    <span style="font-size:.78rem;font-weight:600;color:#dce8f2;">{{ char.name }}</span>
+                    <span class="text-muted" style="font-size:.72rem;">{{ char.existing_total }}/{{ char.max_planets }}</span>
+                    {% if char.reason == 'no_slots' %}
+                    <span class="text-warning" style="font-size:.72rem;">{{ t('colony_plan.unused_no_slots_short', default='voll') }}</span>
+                    {% elif char.reason == 'excluded_unassigned' %}
+                    <span class="text-warning" style="font-size:.72rem;">{{ t('colony_plan.unused_excluded_short', default='ausgeschlossen') }}</span>
+                    {% else %}
+                    <span class="text-muted" style="font-size:.72rem;">{{ t('colony_plan.unused_not_needed_short', default='nicht benoetigt') }}</span>
+                    {% endif %}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <div class="eve-card card border-0 mb-4">
     <div class="card-body p-3">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -483,7 +514,7 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
 {% endif %}
 
 {# ── Capacity + Unused characters ────────────────────────────── #}
-<div class="row g-4 mb-4">
+<div class="row g-4 mb-4 d-none">
     <div class="{{ 'col-xl-6' if plan.unused_characters else 'col-12' }}">
         <div class="eve-card card border-0 h-100">
             <div class="card-body p-3">
