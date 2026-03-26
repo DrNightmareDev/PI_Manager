@@ -359,10 +359,6 @@ def _select_assignment(
     if not eligible:
         return None, None, False
 
-    same_corp_eligible = [item for item in eligible if item[1].get("same_corp_as_main")]
-    if same_corp_eligible:
-        eligible = same_corp_eligible
-
     best: tuple[tuple[int, int, int], dict[str, Any], dict[str, Any], bool] | None = None
     for planet, state, existing_planet, is_relocation in eligible:
         score = 0
