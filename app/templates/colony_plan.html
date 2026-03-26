@@ -674,7 +674,7 @@ function removeSystem(id) {
 
 async function searchSystems(q) {
     const results = document.getElementById('systemSearchResults');
-    if (!q || q.length < 2) { results.style.display = 'none'; results.innerHTML = ''; return; }
+    if (!q || q.length < 2) { results.classList.add('d-none'); results.innerHTML = ''; return; }
     try {
         const res = await fetch('/system/search?q=' + encodeURIComponent(q));
         const data = await res.json();
@@ -683,21 +683,108 @@ async function searchSystems(q) {
             if (selectedSystems.has(sys.id)) return;
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'list-group-item list-group-item-action';
-            btn.textContent = `${sys.name}${sys.region ? ' | ' + sys.region : ''}`;
+            btn.className = 'eve-search-item';
+            btn.innerHTML = `
+                <span>${sys.name}</span>
+                <span class="text-muted" style="font-size:.72rem;">${sys.region || ''}</span>
+            `;
             btn.onclick = () => {
                 selectedSystems.set(sys.id, sys);
                 renderSelectedSystems();
-                results.innerHTML = ''; results.style.display = 'none';
+                results.innerHTML = ''; results.classList.add('d-none');
                 document.getElementById('systemSearchInput').value = '';
             };
             results.appendChild(btn);
         });
-        results.style.display = results.children.length ? 'block' : 'none';
+        results.classList.toggle('d-none', !results.children.length);
     } catch {}
 }
 
 document.getElementById('systemSearchInput')?.addEventListener('input', e => searchSystems(e.target.value));
+
+// ── Product search/dropdown ───────────────────────────────────────────────────
+function productLabel(name) {
+    return PRODUCT_LABELS[name] || name || '';
+}
+
+function productTier(name) {
+    const item = ALL_PRODUCTS.find(p => p.name === name);
+    return item?.tier || '';
+}
+
+function setSelectedProduct(name) {
+    const visible = document.getElementById('productInput');
+    const hidden = document.getElementById('productValueInput');
+    const dropdown = document.getElementById('productDropdown');
+    if (hidden) hidden.value = name || '';
+    if (visible) visible.value = name ? productLabel(name) : '';
+    if (dropdown) {
+        dropdown.innerHTML = '';
+        dropdown.classList.add('d-none');
+    }
+    updateProductFavIcon();
+    updateBtnText();
+}
+
+function filterProducts(query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return ALL_PRODUCTS.slice(0, 20);
+    return ALL_PRODUCTS
+        .filter(item => {
+            const canonical = (item.name || '').toLowerCase();
+            const label = (item.display_name || '').toLowerCase();
+            return canonical.includes(q) || label.includes(q);
+        })
+        .slice(0, 20);
+}
+
+function renderProductDropdown(query) {
+    const dropdown = document.getElementById('productDropdown');
+    if (!dropdown) return;
+    const matches = filterProducts(query);
+    dropdown.innerHTML = '';
+    if (!matches.length) {
+        dropdown.classList.add('d-none');
+        return;
+    }
+    matches.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'eve-search-item';
+        btn.innerHTML = `
+            <span>${item.display_name}</span>
+            <span class="badge" style="background:${TIER_COLORS[item.tier] || '#586e75'}22;color:${TIER_COLORS[item.tier] || '#586e75'};border:1px solid ${TIER_COLORS[item.tier] || '#586e75'}40;font-size:.68rem;">${item.tier}</span>
+        `;
+        btn.onclick = () => setSelectedProduct(item.name);
+        dropdown.appendChild(btn);
+    });
+    dropdown.classList.remove('d-none');
+}
+
+document.getElementById('productInput')?.addEventListener('input', e => {
+    const hidden = document.getElementById('productValueInput');
+    if (hidden) hidden.value = '';
+    renderProductDropdown(e.target.value);
+    updateProductFavIcon();
+    updateBtnText();
+});
+
+document.getElementById('productInput')?.addEventListener('focus', e => {
+    renderProductDropdown(e.target.value);
+});
+
+document.addEventListener('click', e => {
+    const productWrap = document.getElementById('productInput')?.closest('.position-relative');
+    const productDropdown = document.getElementById('productDropdown');
+    if (productWrap && productDropdown && !productWrap.contains(e.target)) {
+        productDropdown.classList.add('d-none');
+    }
+    const systemWrap = document.getElementById('systemSearchInput')?.closest('.position-relative');
+    const systemDropdown = document.getElementById('systemSearchResults');
+    if (systemWrap && systemDropdown && !systemWrap.contains(e.target)) {
+        systemDropdown.classList.add('d-none');
+    }
+});
 
 // ── Character grid ────────────────────────────────────────────────────────────
 function toggleChar(card) {
@@ -741,7 +828,7 @@ function updateBtnText() {
     {% if plan %}
     btn.textContent = 'Update Plan';
     {% else %}
-    const product = (document.getElementById('productInput')?.value || '').trim();
+    const product = (document.getElementById('productValueInput')?.value || '').trim();
     const sysIds  = (document.getElementById('systemIdsInput')?.value || '').trim();
     if (product && sysIds)  btn.textContent = '{{ t("colony_plan.generate") }}';
     else if (product)       btn.textContent = 'Add a system';
@@ -750,22 +837,19 @@ function updateBtnText() {
     {% endif %}
 }
 
-document.getElementById('productInput')?.addEventListener('input', updateBtnText);
-
 // ── Product favorites ─────────────────────────────────────────────────────────
 const PROD_FAV_KEY = 'pi-colony-product-favs';
 const getProdFavs = () => { try { return JSON.parse(localStorage.getItem(PROD_FAV_KEY) || '[]'); } catch { return []; } };
 const saveProdFavs = v => localStorage.setItem(PROD_FAV_KEY, JSON.stringify(v));
 
 function toggleProductFav() {
-    const val = (document.getElementById('productInput')?.value || '').trim();
+    const val = (document.getElementById('productValueInput')?.value || '').trim();
     if (!val) return;
     const favs = getProdFavs();
     const idx = favs.findIndex(f => f.name === val);
     if (idx >= 0) favs.splice(idx, 1);
     else {
-        const opt = document.querySelector(`#colonyPlanProducts option[value="${val}"]`);
-        favs.push({ name: val, label: opt ? opt.textContent : val });
+        favs.push({ name: val, label: productLabel(val), tier: productTier(val) });
     }
     saveProdFavs(favs);
     renderProductFavs();
@@ -773,7 +857,7 @@ function toggleProductFav() {
 }
 
 function updateProductFavIcon() {
-    const val = (document.getElementById('productInput')?.value || '').trim();
+    const val = (document.getElementById('productValueInput')?.value || '').trim();
     const icon = document.getElementById('productFavIcon');
     if (!icon) return;
     icon.className = getProdFavs().some(f => f.name === val) ? 'bi bi-star-fill eve-accent' : 'bi bi-star';
@@ -787,10 +871,10 @@ function renderProductFavs() {
     favs.forEach(fav => {
         const chip = document.createElement('span');
         chip.className = 'fav-chip';
-        chip.innerHTML = `<i class="bi bi-star-fill" style="font-size:.58rem;color:#f4a300;"></i>${fav.label || fav.name}<span class="fav-chip-remove" onclick="event.stopPropagation();removeProdFav(${JSON.stringify(fav.name)})">&#x2715;</span>`;
+        const tier = fav.tier || productTier(fav.name);
+        chip.innerHTML = `<span class="badge" style="background:${TIER_COLORS[tier] || '#586e75'}22;color:${TIER_COLORS[tier] || '#586e75'};border:1px solid ${TIER_COLORS[tier] || '#586e75'}40;font-size:.62rem;">${tier || ''}</span>${fav.label || productLabel(fav.name)}<span class="fav-chip-remove" onclick="event.stopPropagation();removeProdFav(${JSON.stringify(fav.name)})">&#x2715;</span>`;
         chip.onclick = () => {
-            const inp = document.getElementById('productInput');
-            if (inp) { inp.value = fav.name; updateProductFavIcon(); updateBtnText(); }
+            setSelectedProduct(fav.name);
         };
         strip.appendChild(chip);
     });
@@ -802,7 +886,9 @@ function removeProdFav(name) {
     renderProductFavs(); updateProductFavIcon();
 }
 
-document.getElementById('productInput')?.addEventListener('input', updateProductFavIcon);
+if (document.getElementById('productValueInput')?.value && !document.getElementById('productInput')?.value) {
+    setSelectedProduct(document.getElementById('productValueInput').value);
+}
 
 // ── System favorites ──────────────────────────────────────────────────────────
 const SYS_FAV_KEY = 'pi-colony-system-favs';
