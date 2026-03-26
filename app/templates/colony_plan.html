@@ -335,6 +335,12 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                             <i class="bi bi-x-lg me-1"></i>{{ p0 }}
                         </span>
                         {% endfor %}
+                        {% for p0 in feas.insufficient_p0 %}
+                        <span class="badge" style="background:rgba(230,100,0,.12);border:1px solid rgba(230,100,0,.4);color:#f4a300;font-weight:400;font-size:.68rem;"
+                              title="{{ t('colony_plan.feasibility_insufficient_hint') }}">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ p0 }}
+                        </span>
+                        {% endfor %}
                     </div>
                     {% if feas.blocked_p0 %}
                     {% for item in feas.blocked_p0 %}
@@ -349,6 +355,11 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                     {% if feas.uncoverable_p0 %}
                     <div class="small text-danger mt-1">
                         <i class="bi bi-info-circle me-1"></i>{{ t('colony_plan.feasibility_uncoverable') }}: {{ feas.uncoverable_p0 | join(', ') }}
+                    </div>
+                    {% endif %}
+                    {% if feas.insufficient_p0 %}
+                    <div class="small mt-1" style="color:#f4a300;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.feasibility_insufficient') }}: {{ feas.insufficient_p0 | join(', ') }}
                     </div>
                     {% endif %}
                 </div>

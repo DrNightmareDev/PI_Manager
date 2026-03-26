@@ -290,9 +290,29 @@ def _feasibility_analysis(
     covered: list[str] = []
     blocked_p0: list[dict[str, Any]] = []
     uncoverable_p0: list[str] = []
+    insufficient_p0: list[str] = []  # planet exists but consumed by a higher-priority P0
+
+    # Greedy simulation in the same sorted order used by the assignment algorithm.
+    # Detects planet-count conflicts (e.g. two P0s that both need the only Lava planet).
+    simulated_used: set[int] = set()
+    insufficient_set: set[str] = set()
+    for p0_name in chain["p0_needed"]:
+        candidates = [
+            p for p in planet_pool
+            if p0_name in p.get("resources", [])
+            and int(p["planet_id"]) not in simulated_used
+        ]
+        if candidates:
+            simulated_used.add(int(candidates[0]["planet_id"]))
+        elif p0_name in available_resources:
+            # A planet exists for this resource but it was already claimed by an
+            # earlier P0 in the assignment order.
+            insufficient_set.add(p0_name)
 
     for p0_name in chain["p0_needed"]:
-        if p0_name in available_resources:
+        if p0_name in insufficient_set:
+            insufficient_p0.append(p0_name)
+        elif p0_name in available_resources:
             covered.append(p0_name)
         elif p0_name in all_system_resources:
             hints = []
@@ -313,11 +333,12 @@ def _feasibility_analysis(
         "planets_needed": planets_needed,
         "total_capacity": total_capacity,
         "capacity_ok": capacity_ok,
-        "p0_ok": not blocked_p0 and not uncoverable_p0,
-        "feasible": capacity_ok and not blocked_p0 and not uncoverable_p0,
+        "p0_ok": not blocked_p0 and not uncoverable_p0 and not insufficient_p0,
+        "feasible": capacity_ok and not blocked_p0 and not uncoverable_p0 and not insufficient_p0,
         "covered_p0": covered,
         "blocked_p0": blocked_p0,
         "uncoverable_p0": uncoverable_p0,
+        "insufficient_p0": insufficient_p0,
     }
 
 

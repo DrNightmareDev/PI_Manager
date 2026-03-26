@@ -215,6 +215,8 @@
   "colony_plan.feasibility_p0": "Rohstoffe (P0)",
   "colony_plan.feasibility_blocked_by": "blockiert durch",
   "colony_plan.feasibility_uncoverable": "Nicht in ausgewaehlten Systemen",
+  "colony_plan.feasibility_insufficient": "Nicht genug Planeten (Konflikt mit anderem P0)",
+  "colony_plan.feasibility_insufficient_hint": "Ein Planet existiert, wird aber bereits von einem anderen P0-Extraktor in dieser Kette benoetigt",
   "system.title": "System Analyzer",
   "system.subtitle": "PI-Potential eines Systems analysieren",
   "system.enter_via_search": "Bitte System ueber die Suche eingeben.",
