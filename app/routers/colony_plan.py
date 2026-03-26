@@ -352,7 +352,18 @@ def _select_assignment(
             if not state:
                 continue
             existing_planet = occupied_char_id == char_id
-            if not existing_planet:
+            if existing_planet:
+                # Cap existing-reuse at max_planets too — the char can't hold
+                # more colonies than their skill allows.
+                total_plan = (
+                    state["existing_reuse_assignments"]
+                    + state["new_assignments"]
+                    + state["relocation_assignments"]
+                )
+                if total_plan >= state["max_planets"]:
+                    continue
+                is_relocation = False
+            else:
                 can_new = state["remaining_slots"] > 0
                 # existing_reuse assignments already commit a colony slot in-place,
                 # so they reduce available relocation capacity too
@@ -367,8 +378,6 @@ def _select_assignment(
                 if not include_unassigned and state["selected_system_existing"] == 0:
                     continue
                 is_relocation = not can_new
-            else:
-                is_relocation = False
             eligible.append((planet, state, existing_planet, is_relocation))
 
     if not eligible:
