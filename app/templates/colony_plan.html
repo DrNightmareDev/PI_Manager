@@ -374,6 +374,7 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                 <option value="">All Status</option>
                 <option value="existing">Existing</option>
                 <option value="new">New</option>
+                {% if plan.missing %}<option value="missing">Missing</option>{% endif %}
             </select>
         </div>
         <div class="table-responsive">
@@ -428,7 +429,34 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                         </td>
                     </tr>
                     {% endfor %}
-                    {% if not plan.assignments %}
+                    {% for item in plan.missing %}
+                    <tr data-char="" data-system="" data-role="{{ item.kind | capitalize }}" data-status="missing"
+                        style="opacity:.8;">
+                        <td data-sort="">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width:28px;height:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                                    <i class="bi bi-question-circle" style="color:#586e75;font-size:1rem;"></i>
+                                </div>
+                                <div class="text-muted" style="font-size:.82rem;">—</div>
+                            </div>
+                        </td>
+                        <td data-sort=""><span class="text-muted" style="font-size:.82rem;">—</span></td>
+                        <td data-sort="{{ item.kind | capitalize }}">
+                            {% if item.kind == 'extractor' %}
+                            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">{{ t('colony_plan.role_extractor') }}</span>
+                            {% else %}
+                            <span class="badge" style="background:rgba(244,163,0,.12);border:1px solid rgba(244,163,0,.35);color:#f0b74d;">{{ t('colony_plan.role_factory') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-semibold" style="font-size:.83rem;">{{ item.display_label }}</div>
+                        </td>
+                        <td data-sort="missing">
+                            <span class="text-danger" style="font-size:.8rem;"><i class="bi bi-x-circle me-1"></i>{{ t('colony_plan.status_missing') }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not plan.assignments and not plan.missing %}
                     <tr><td colspan="5" class="text-center text-muted py-4">{{ t('colony_plan.no_assignments') }}</td></tr>
                     {% endif %}
                 </tbody>
