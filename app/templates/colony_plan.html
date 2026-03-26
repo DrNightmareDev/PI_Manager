@@ -2,7 +2,7 @@
 {% block title %}{{ t('colony_plan.title') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <div>
         <h2 class="eve-page-title mb-1">
             <i class="bi bi-diagram-2-fill me-2 eve-accent"></i>{{ t('colony_plan.title') }}
@@ -16,8 +16,8 @@
     {% endif %}
 </div>
 
-<form method="get" action="/colony-plan" class="eve-card mb-4">
-    <div class="card-body">
+<form method="get" action="/colony-plan" class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
         <div class="row g-3">
             <div class="col-xl-4">
                 <label class="form-label text-muted small">{{ t('colony_plan.end_product') }}</label>
@@ -57,7 +57,7 @@
 
             <div class="col-xl-4">
                 <label class="form-label text-muted small">{{ t('colony_plan.characters') }}</label>
-                <div class="eve-card" style="padding:0.85rem;">
+                <div class="eve-card card border-0 p-3">
                     <div class="form-check form-switch mb-2">
                         <input class="form-check-input" type="checkbox" id="allCharactersToggle" name="all_characters" value="1" {% if use_all_characters %}checked{% endif %}>
                         <label class="form-check-label small" for="allCharactersToggle">{{ t('colony_plan.all_characters') }}</label>
@@ -76,7 +76,7 @@
 
             <div class="col-lg-4">
                 <label class="form-label text-muted small">{{ t('colony_plan.chain_mode') }}</label>
-                <div class="eve-card d-flex gap-3 p-3 flex-wrap">
+                <div class="eve-card card border-0 p-3 d-flex gap-3 flex-wrap">
                     <label class="form-check d-flex align-items-center gap-2 mb-0">
                         <input class="form-check-input" type="radio" name="single_system" value="1" {% if single_system %}checked{% endif %}>
                         <span>{{ t('colony_plan.single_system_mode') }}</span>
@@ -90,7 +90,7 @@
 
             <div class="col-lg-4">
                 <label class="form-label text-muted small">{{ t('colony_plan.unassigned_characters') }}</label>
-                <div class="eve-card d-flex align-items-center gap-2 p-3">
+                <div class="eve-card card border-0 p-3 d-flex align-items-center gap-2">
                     <input class="form-check-input" type="checkbox" id="includeUnassigned" name="include_unassigned" value="1" {% if include_unassigned %}checked{% endif %}>
                     <label class="small mb-0" for="includeUnassigned">{{ t('colony_plan.include_unassigned') }}</label>
                 </div>
@@ -111,21 +111,20 @@
 </form>
 
 {% if plan_error %}
-<div class="alert alert-danger eve-card mb-4">
-    <div class="card-body">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ plan_error }}
-    </div>
+<div class="alert d-flex align-items-center gap-2 mb-4" role="alert" style="background:#dc354520;border:1px solid #dc354540;color:#f07075;">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span>{{ plan_error }}</span>
 </div>
 {% elif not plan and selected_product %}
-<div class="eve-card">
-    <div class="card-body text-center text-muted py-5">
+<div class="eve-card card border-0">
+    <div class="card-body p-3 text-center text-muted py-5">
         <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
         {{ t('colony_plan.empty_hint') }}
     </div>
 </div>
 {% elif not plan %}
-<div class="eve-card">
-    <div class="card-body text-center text-muted py-5">
+<div class="eve-card card border-0">
+    <div class="card-body p-3 text-center text-muted py-5">
         <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
         {{ t('colony_plan.initial_hint') }}
     </div>
@@ -133,34 +132,42 @@
 {% else %}
 <div class="row g-3 mb-4">
     <div class="col-md-3">
-        <div class="eve-stat-card">
-            <div class="eve-stat-label">{{ t('colony_plan.stat_systems') }}</div>
-            <div class="eve-stat-value">{{ plan.used_systems | length }}</div>
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value">{{ plan.used_systems | length }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_systems') }}</div>
+            </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="eve-stat-card">
-            <div class="eve-stat-label">{{ t('colony_plan.stat_assignments') }}</div>
-            <div class="eve-stat-value">{{ plan.assignments | length }}</div>
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value">{{ plan.assignments | length }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_assignments') }}</div>
+            </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="eve-stat-card">
-            <div class="eve-stat-label">{{ t('colony_plan.stat_missing') }}</div>
-            <div class="eve-stat-value">{{ plan.missing_planets }}</div>
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value">{{ plan.missing_planets }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_missing') }}</div>
+            </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="eve-stat-card">
-            <div class="eve-stat-label">{{ t('colony_plan.stat_extra_chars') }}</div>
-            <div class="eve-stat-value">{{ plan.additional_characters_needed }}</div>
+        <div class="eve-stat-card card border-0">
+            <div class="card-body text-center p-3">
+                <div class="eve-stat-value">{{ plan.additional_characters_needed }}</div>
+                <div class="eve-stat-label">{{ t('colony_plan.stat_extra_chars') }}</div>
+            </div>
         </div>
     </div>
 </div>
 
 {% if plan.system_mode.single_system_mode %}
-<div class="eve-card mb-4">
-    <div class="card-body">
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-3">
         {% if plan.system_mode.viable %}
         <div class="d-flex align-items-center gap-2">
             <span class="badge eve-filter-badge active">{{ t('colony_plan.single_system_mode') }}</span>
@@ -177,8 +184,8 @@
 
 <div class="row g-4">
     <div class="col-12">
-        <div class="eve-card">
-            <div class="card-body">
+        <div class="eve-card card border-0">
+            <div class="card-body p-3">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                     <div>
                         <div class="fw-semibold">{{ t('colony_plan.assignment_table') }}</div>
@@ -242,8 +249,8 @@
     </div>
 
     <div class="col-xl-7">
-        <div class="eve-card h-100">
-            <div class="card-body">
+        <div class="eve-card card border-0 h-100">
+            <div class="card-body p-3">
                 <div class="fw-semibold mb-3">{{ t('colony_plan.flow_summary') }}</div>
                 <div class="table-responsive">
                     <table class="table table-dark table-sm align-middle mb-0">
@@ -287,8 +294,8 @@
     </div>
 
     <div class="col-xl-5">
-        <div class="eve-card h-100">
-            <div class="card-body">
+        <div class="eve-card card border-0 h-100">
+            <div class="card-body p-3">
                 <div class="fw-semibold mb-3">{{ t('colony_plan.capacity_summary') }}</div>
                 <div class="table-responsive">
                     <table class="table table-dark table-sm align-middle mb-0">
@@ -322,8 +329,8 @@
     <div class="col-12">
         <div class="row g-4">
             <div class="col-xl-5">
-                <div class="eve-card h-100">
-                    <div class="card-body">
+                <div class="eve-card card border-0 h-100">
+                    <div class="card-body p-3">
                         <div class="fw-semibold mb-3">{{ t('colony_plan.materials_needed') }}</div>
                         <div class="d-flex flex-wrap gap-2">
                             {% for p0 in plan.chain.p0_needed %}
@@ -334,8 +341,8 @@
                 </div>
             </div>
             <div class="col-xl-7">
-                <div class="eve-card h-100">
-                    <div class="card-body">
+                <div class="eve-card card border-0 h-100">
+                    <div class="card-body p-3">
                         <div class="fw-semibold mb-3">{{ t('colony_plan.missing_title') }}</div>
                         {% if plan.missing %}
                         <ul class="mb-0">
@@ -360,8 +367,8 @@
     </div>
 
     <div class="col-12">
-        <div class="eve-card">
-            <div class="card-body">
+        <div class="eve-card card border-0">
+            <div class="card-body p-3">
                 <div class="fw-semibold mb-3">{{ t('colony_plan.export_title') }}</div>
                 <textarea class="form-control eve-input" id="assignmentSummaryText" rows="10" readonly>{{ plan.summary_text }}</textarea>
             </div>
