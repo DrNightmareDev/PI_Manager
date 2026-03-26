@@ -116,7 +116,13 @@
 
                     <div id="characterGrid" class="eve-character-grid mb-4">
                         {% for char in characters %}
-                        <label class="eve-character-pill{% if use_all_characters or char.id in selected_character_ids %} is-active{% endif %}" data-character-id="{{ char.id }}">
+                        {% set char_capacity = (plan.characters | selectattr('id', 'equalto', char.id) | list | first) if plan else character_capacity_map.get(char.id) %}
+                        <label class="eve-character-pill{% if use_all_characters or char.id in selected_character_ids %} is-active{% endif %}"
+                               data-character-id="{{ char.id }}"
+                               data-character-name="{{ char.character_name }}"
+                               data-character-portrait="{{ char.portrait_url }}"
+                               data-capacity-used="{{ char_capacity.existing_total if char_capacity else 0 }}"
+                               data-capacity-max="{{ char_capacity.max_planets if char_capacity else 0 }}">
                             <input type="checkbox"
                                    class="character-checkbox"
                                    name="character_ids"
@@ -129,9 +135,19 @@
                                     {{ char.corporation_name or t('common.unknown') }}
                                     {% if char.is_main %}<span class="badge ms-1" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">Main</span>{% endif %}
                                 </span>
+                                {% if char_capacity %}
+                                <span class="eve-character-pill-capacity">
+                                    {{ char_capacity.existing_total }}/{{ char_capacity.max_planets }}
+                                </span>
+                                {% endif %}
                             </span>
                         </label>
                         {% endfor %}
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="text-muted small mb-2">{{ t('colony_plan.selected_characters_label') }}</div>
+                        <div id="selectedCharacterSummary" class="d-flex flex-wrap gap-2"></div>
                     </div>
 
                     <div class="row g-3 mb-4">
@@ -346,38 +362,6 @@
     <div class="col-xl-5">
         <div class="eve-card card border-0 mb-4">
             <div class="card-header eve-card-header d-flex align-items-center gap-2">
-                <i class="bi bi-people eve-accent"></i>
-                <span class="fw-medium">{{ t('colony_plan.capacity_summary') }}</span>
-            </div>
-            <div class="card-body p-3">
-                <div class="d-flex flex-column gap-3">
-                    {% for char in plan.characters %}
-                    <div class="eve-capacity-row">
-                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                            <div>
-                                <div class="fw-semibold">{{ char.name }}</div>
-                                <div class="text-muted small">
-                                    {{ t('colony_plan.capacity_used') }} {{ char.existing_total }}
-                                    |
-                                    {{ t('colony_plan.capacity_remaining') }} {{ char.remaining_slots }}
-                                </div>
-                            </div>
-                            <span class="badge" style="background:#0f1f30;border:1px solid #1a3a5a;color:#9adcf0;">{{ char.max_planets }}</span>
-                        </div>
-                        <div class="progress" style="height:8px;background:#0b151f;">
-                            <div class="progress-bar" role="progressbar" style="width: {{ ((char.max_planets - char.remaining_slots) / (char.max_planets or 1) * 100) | round(0, 'ceil') }}%;background:linear-gradient(90deg,#00b4d8,#2dc653);"></div>
-                        </div>
-                        {% if not char.scope_based %}
-                        <div class="text-muted small mt-2">{{ t('colony_plan.capacity_estimated') }}</div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        <div class="eve-card card border-0 mb-4">
-            <div class="card-header eve-card-header d-flex align-items-center gap-2">
                 <i class="bi bi-exclamation-triangle eve-accent"></i>
                 <span class="fw-medium">{{ t('colony_plan.missing_title') }}</span>
             </div>
@@ -442,6 +426,30 @@
 .eve-character-pill-body { min-width:0; display:flex; flex-direction:column; }
 .eve-character-pill-name { color:#e6edf3; font-weight:600; }
 .eve-character-pill-meta { color:#7f95a8; font-size:.78rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.eve-character-pill-capacity {
+    display:inline-flex;
+    align-items:center;
+    align-self:flex-start;
+    margin-top:6px;
+    padding:2px 7px;
+    border-radius:999px;
+    background:#00b4d818;
+    border:1px solid #00b4d840;
+    color:#9adcf0;
+    font-size:.72rem;
+    font-weight:600;
+}
+.eve-inline-capacity {
+    display:inline-flex;
+    align-items:center;
+    padding:2px 7px;
+    border-radius:999px;
+    background:#00b4d818;
+    border:1px solid #00b4d840;
+    color:#9adcf0;
+    font-size:.72rem;
+    font-weight:600;
+}
 .eve-toggle-row { display:flex; align-items:flex-start; gap:10px; background:#0b151f; border:1px solid #1a2d3d; border-radius:12px; padding:10px 12px; cursor:pointer; }
 .eve-toggle-row input { margin-top:4px; accent-color:#00b4d8; }
 .eve-option-stack { display:flex; flex-direction:column; gap:8px; }
@@ -449,7 +457,7 @@
 .eve-mode-btn:hover { border-color:#2a5a8a; color:#c9d1d9; }
 .eve-mode-btn.is-active { border-color:#00b4d860; background:rgba(0,180,216,.08); color:#9adcf0; }
 .eve-callout { background:linear-gradient(180deg, rgba(15,31,48,.88), rgba(11,21,31,.95)); border:1px solid #1a2d3d; border-radius:14px; padding:14px 16px; }
-.eve-flow-row, .eve-missing-row, .eve-capacity-row { background:#0b151f; border:1px solid #1a2d3d; border-radius:12px; padding:12px 14px; }
+.eve-flow-row, .eve-missing-row { background:#0b151f; border:1px solid #1a2d3d; border-radius:12px; padding:12px 14px; }
 </style>
 <script>
 const ALL_PRODUCTS = {{ all_products | tojson }};
@@ -499,6 +507,7 @@ const includeUnassignedInput = document.getElementById('includeUnassignedInput')
 const singleSystemInput = document.getElementById('singleSystemInput');
 const selectionSummaryText = document.getElementById('selectionSummaryText');
 const characterSelectionCount = document.getElementById('characterSelectionCount');
+const selectedCharacterSummary = document.getElementById('selectedCharacterSummary');
 
 function escapeHtml(value) {
     return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -530,6 +539,30 @@ function updateSelectionSummary() {
     pieces.push(allCharactersToggle.checked ? COLONY_PLAN_I18N.allCharacters : `${charCount} ${COLONY_PLAN_I18N.charactersSelected}`);
     pieces.push(singleSystemInput.value === '1' ? COLONY_PLAN_I18N.singleSystemMode : COLONY_PLAN_I18N.crossSystemMode);
     selectionSummaryText.textContent = pieces.join(' | ') || COLONY_PLAN_I18N.initialHint;
+}
+
+function renderSelectedCharacterSummary() {
+    if (!selectedCharacterSummary) return;
+    const allSelected = allCharactersToggle.checked;
+    const activePills = Array.from(document.querySelectorAll('.eve-character-pill')).filter((pill) => {
+        const checkbox = pill.querySelector('.character-checkbox');
+        return allSelected || checkbox.checked;
+    });
+    if (!activePills.length) {
+        selectedCharacterSummary.innerHTML = `<span class="text-muted small">${escapeHtml(COLONY_PLAN_I18N.initialHint)}</span>`;
+        return;
+    }
+    selectedCharacterSummary.innerHTML = activePills.map((pill) => {
+        const name = pill.dataset.characterName || '';
+        const portrait = pill.dataset.characterPortrait || '';
+        const used = pill.dataset.capacityUsed || '0';
+        const max = pill.dataset.capacityMax || '0';
+        return `<span class="eve-system-pill is-active">
+            <img src="${escapeHtml(portrait)}" alt="${escapeHtml(name)}" style="width:20px;height:20px;border-radius:999px;object-fit:cover;border:1px solid #1a2d3d;">
+            <span>${escapeHtml(name)}</span>
+            <span class="eve-inline-capacity">${escapeHtml(used)}/${escapeHtml(max)}</span>
+        </span>`;
+    }).join('');
 }
 
 function syncHiddenInputs() {
@@ -701,6 +734,7 @@ function updateCharacterPills() {
     });
     const count = allSelected ? {{ characters|length }} : getSelectedCharacterIds().length;
     characterSelectionCount.textContent = `${count}`;
+    renderSelectedCharacterSummary();
     syncHiddenInputs();
     updateSelectionSummary();
     persistState();
@@ -826,6 +860,7 @@ form.addEventListener('submit', () => { syncHiddenInputs(); persistState(); });
     renderSelectedSystems();
     renderSystemFavorites();
     updateCharacterPills();
+    renderSelectedCharacterSummary();
     syncHiddenInputs();
     updateSelectionSummary();
     loadPlannerFavorites();

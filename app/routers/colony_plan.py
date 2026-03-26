@@ -559,6 +559,8 @@ def colony_plan_page(
     lang = get_language_from_request(request)
     characters = db.query(Character).filter(Character.account_id == account.id).all()
     _attach_pi_skills(characters, db)
+    all_colonies = _load_cached_colonies(account, characters, db) if characters else []
+    all_counts = Counter(colony.get("character_name") for colony in all_colonies if colony.get("character_name"))
 
     product_labels = _build_product_labels(lang)
     planet_type_labels = _build_planet_type_labels(lang)
@@ -578,6 +580,12 @@ def colony_plan_page(
     use_all_characters = bool(all_characters) or not selected_character_ids
     selected_characters = characters if use_all_characters else [char for char in characters if char.id in selected_character_ids]
     selected_character_ids = {char.id for char in selected_characters}
+    character_capacity_rows = []
+    character_capacity_map: dict[int, dict[str, Any]] = {}
+    for char in characters:
+        capacity = _character_capacity(char, int(all_counts.get(char.character_name, 0) or 0))
+        character_capacity_rows.append(capacity)
+        character_capacity_map[char.id] = capacity
 
     selected_systems: list[dict[str, Any]] = []
     for system_id in selected_system_ids:
@@ -598,7 +606,6 @@ def colony_plan_page(
     if product and product not in valid_product_names:
         plan_error = translate("colony_plan.invalid_product", lang=lang)
     elif product and selected_systems and selected_characters:
-        all_colonies = _load_cached_colonies(account, characters, db)
         plan = _build_assignment_plan(
             product_name=product,
             selected_systems=selected_systems,
@@ -628,6 +635,8 @@ def colony_plan_page(
         "selected_system_ids": selected_system_ids,
         "selected_systems": selected_systems,
         "characters": characters,
+        "character_capacity_rows": character_capacity_rows,
+        "character_capacity_map": character_capacity_map,
         "selected_character_ids": selected_character_ids,
         "use_all_characters": use_all_characters,
         "single_system": bool(single_system),
