@@ -379,12 +379,23 @@ def _feasibility_analysis(
         else:
             uncoverable_p0.append(p0_name)
 
+    # Check that P4 products have at least one Barren or Temperate planet available.
+    # The Advanced Production Plant can only be built on those two types.
+    p4_ok = True
+    no_p4_planet = len(chain["tiers"].get("P4", [])) > 0 and not any(
+        p.get("planet_type") in ("Barren", "Temperate") for p in planet_pool
+    )
+    if no_p4_planet:
+        p4_ok = False
+
     return {
         "planets_needed": planets_needed,
         "total_capacity": total_capacity,
         "capacity_ok": capacity_ok,
+        "p4_ok": p4_ok,
+        "no_p4_planet": no_p4_planet,
         "p0_ok": not blocked_p0 and not uncoverable_p0 and not insufficient_p0,
-        "feasible": capacity_ok and not blocked_p0 and not uncoverable_p0 and not insufficient_p0,
+        "feasible": capacity_ok and not blocked_p0 and not uncoverable_p0 and not insufficient_p0 and p4_ok,
         "covered_p0": covered,
         "blocked_p0": blocked_p0,
         "uncoverable_p0": uncoverable_p0,
@@ -745,8 +756,14 @@ def _build_assignment_plan(
             for item in inputs
             if item in output_task_by_product
         }
+        # P4 Advanced Production Plants can only be built on Barren or Temperate planets.
+        factory_candidates = (
+            [p for p in planet_pool if p.get("planet_type") in ("Barren", "Temperate")]
+            if tier == "P4"
+            else planet_pool
+        )
         chosen_planet, chosen_char, is_relocation = _select_assignment(
-            candidates=planet_pool,
+            candidates=factory_candidates,
             char_state=char_state,
             assigned_planet_chars=assigned_planet_chars,
             include_unassigned=include_unassigned,

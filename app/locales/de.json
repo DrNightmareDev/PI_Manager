@@ -217,6 +217,7 @@
   "colony_plan.feasibility_p0": "Rohstoffe (P0)",
   "colony_plan.feasibility_blocked_by": "blockiert durch",
   "colony_plan.feasibility_uncoverable": "Nicht in ausgewaehlten Systemen",
+  "colony_plan.feasibility_no_p4_planet": "Kein Oeden- oder Gemaessigter Planet in den ausgewaehlten Systemen — die Hochentwickelte Produktionsanlage (P4) benoetigt einen dieser Typen",
   "colony_plan.feasibility_insufficient": "Nicht genug Planeten (Konflikt mit anderem P0)",
   "colony_plan.feasibility_insufficient_hint": "Ein Planet existiert, wird aber bereits von einem anderen P0-Extraktor in dieser Kette benoetigt",
   "system.title": "System Analyzer",

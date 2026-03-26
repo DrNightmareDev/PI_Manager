@@ -217,6 +217,7 @@
   "colony_plan.feasibility_p0": "Raw Materials (P0)",
   "colony_plan.feasibility_blocked_by": "blocked by",
   "colony_plan.feasibility_uncoverable": "Not in any selected system",
+  "colony_plan.feasibility_no_p4_planet": "No Barren or Temperate planet in selected systems — P4 Advanced Production Plant requires one of these types",
   "colony_plan.feasibility_insufficient": "Not enough planets (conflict with another P0)",
   "colony_plan.feasibility_insufficient_hint": "A planet exists for this resource but is already needed by another P0 extraction in this chain",
   "system.title": "System Analyzer",
