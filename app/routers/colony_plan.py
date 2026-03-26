@@ -229,6 +229,86 @@ def _make_planet_pool(
     return pool, occupied_by_selected, blocked_planets
 
 
+def _feasibility_analysis(
+    *,
+    chain: dict[str, Any],
+    scoped_systems: list[dict],
+    char_state: dict[int, dict],
+    planet_pool: list[dict],
+    blocked_planets: set[int],
+    all_colonies: list[dict],
+    char_id_by_name: dict[str, int],
+    selected_char_ids: set[int],
+) -> dict[str, Any]:
+    p0_count = len(chain["p0_needed"])
+    factory_count = 0 if chain["tier"] == "P1" else sum(len(chain["tiers"][tier]) for tier in ("P2", "P3", "P4"))
+    planets_needed = p0_count + factory_count
+
+    total_capacity = sum(state["remaining_slots"] for state in char_state.values())
+    capacity_ok = total_capacity >= planets_needed
+
+    available_resources: set[str] = set()
+    for planet in planet_pool:
+        available_resources.update(planet.get("resources", []))
+
+    all_system_resources: set[str] = set()
+    blocked_planet_type: dict[int, str] = {}
+    blocked_planet_name: dict[int, str] = {}
+    blocked_planet_system: dict[int, str] = {}
+    for system in scoped_systems:
+        for planet in system["planets"]:
+            pid = int(planet["planet_id"])
+            planet_resources = PLANET_RESOURCES.get(planet.get("planet_type", ""), [])
+            all_system_resources.update(planet_resources)
+            if pid in blocked_planets:
+                blocked_planet_type[pid] = planet.get("planet_type", "")
+                blocked_planet_name[pid] = planet.get("planet_name", f"Planet {pid}")
+                blocked_planet_system[pid] = system.get("name", "")
+
+    blocked_by: dict[int, str] = {}
+    for colony in all_colonies:
+        pid = int(colony.get("planet_id") or 0)
+        if not pid:
+            continue
+        char_name = colony.get("character_name") or ""
+        cid = char_id_by_name.get(char_name)
+        if cid not in selected_char_ids and pid in blocked_planets:
+            blocked_by[pid] = char_name
+
+    covered: list[str] = []
+    blocked_p0: list[dict[str, Any]] = []
+    uncoverable_p0: list[str] = []
+
+    for p0_name in chain["p0_needed"]:
+        if p0_name in available_resources:
+            covered.append(p0_name)
+        elif p0_name in all_system_resources:
+            hints = []
+            for pid in blocked_planets:
+                ptype = blocked_planet_type.get(pid)
+                if ptype and p0_name in PLANET_RESOURCES.get(ptype, []):
+                    hints.append({
+                        "planet_id": pid,
+                        "planet_name": blocked_planet_name.get(pid, f"Planet {pid}"),
+                        "system_name": blocked_planet_system.get(pid, ""),
+                        "blocked_by": blocked_by.get(pid, "unknown"),
+                    })
+            blocked_p0.append({"p0": p0_name, "hints": hints})
+        else:
+            uncoverable_p0.append(p0_name)
+
+    return {
+        "planets_needed": planets_needed,
+        "total_capacity": total_capacity,
+        "capacity_ok": capacity_ok,
+        "p0_ok": not blocked_p0 and not uncoverable_p0,
+        "feasible": capacity_ok and not blocked_p0 and not uncoverable_p0,
+        "covered_p0": covered,
+        "blocked_p0": blocked_p0,
+        "uncoverable_p0": uncoverable_p0,
+    }
+
+
 def _select_assignment(
     *,
     candidates: list[dict],
@@ -236,6 +316,7 @@ def _select_assignment(
     assigned_planets: set[int],
     include_unassigned: bool,
     preferred_chars: set[int] | None = None,
+    preferred_systems: set[int] | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     preferred_chars = preferred_chars or set()
     eligible: list[tuple[dict[str, Any], dict[str, Any], bool]] = []
@@ -280,6 +361,8 @@ def _select_assignment(
             score += 90
         if int(planet["system_id"]) in state["systems_with_colonies"]:
             score += 75
+        if preferred_systems and int(planet["system_id"]) in preferred_systems:
+            score += 40
         score += min(state["remaining_slots"], 20)
         score -= state["new_assignments"]
         score -= state["existing_reuse_assignments"]
@@ -408,8 +491,19 @@ def _build_assignment_plan(
         char_state[char.id] = state
 
     planet_pool, occupied_by_selected, _blocked = _make_planet_pool(scoped_systems, selected_char_ids, all_colonies, char_id_by_name)
+    feasibility = _feasibility_analysis(
+        chain=chain,
+        scoped_systems=scoped_systems,
+        char_state=char_state,
+        planet_pool=planet_pool,
+        blocked_planets=_blocked,
+        all_colonies=all_colonies,
+        char_id_by_name=char_id_by_name,
+        selected_char_ids=selected_char_ids,
+    )
     assignments: list[dict[str, Any]] = []
     assigned_planets: set[int] = set()
+    assigned_system_ids: set[int] = set()
     output_task_by_product: dict[str, dict[str, Any]] = {}
     missing: list[dict[str, Any]] = []
 
@@ -421,12 +515,14 @@ def _build_assignment_plan(
             char_state=char_state,
             assigned_planets=assigned_planets,
             include_unassigned=include_unassigned,
+            preferred_systems=assigned_system_ids,
         )
         if not chosen_planet or not chosen_char:
             missing.append({"kind": "extractor", "label": p0_name})
             continue
 
         assigned_planets.add(int(chosen_planet["planet_id"]))
+        assigned_system_ids.add(int(chosen_planet["system_id"]))
         existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
         if existing_planet:
             chosen_char["existing_reuse_assignments"] += 1
@@ -482,12 +578,14 @@ def _build_assignment_plan(
             assigned_planets=assigned_planets,
             include_unassigned=include_unassigned,
             preferred_chars=preferred_chars,
+            preferred_systems=assigned_system_ids,
         )
         if not chosen_planet or not chosen_char:
             missing.append({"kind": "factory", "label": product})
             continue
 
         assigned_planets.add(int(chosen_planet["planet_id"]))
+        assigned_system_ids.add(int(chosen_planet["system_id"]))
         existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
         if existing_planet:
             chosen_char["existing_reuse_assignments"] += 1
@@ -578,6 +676,7 @@ def _build_assignment_plan(
         "summary_text": _assignment_summary_text(assignments, flow_items, missing),
         "missing_planets": missing_planets,
         "additional_characters_needed": additional_characters_needed,
+        "feasibility": feasibility,
     }
 
 
