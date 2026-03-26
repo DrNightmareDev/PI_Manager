@@ -624,6 +624,7 @@ def colony_plan_page(
         "product_labels": product_labels,
         "planet_type_labels": planet_type_labels,
         "selected_product": product,
+        "selected_product_display": product_labels.get(product, product) if product else None,
         "selected_system_ids": selected_system_ids,
         "selected_systems": selected_systems,
         "characters": characters,

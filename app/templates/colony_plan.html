@@ -3,201 +3,230 @@
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
-    <div>
-        <h2 class="eve-page-title mb-1">
-            <i class="bi bi-diagram-2-fill me-2 eve-accent"></i>{{ t('colony_plan.title') }}
-        </h2>
-        <div class="text-muted small">{{ t('colony_plan.subtitle') }}</div>
-    </div>
-    {% if plan %}
-    <button class="btn eve-btn-outline" type="button" onclick="copyAssignmentSummary()">
-        <i class="bi bi-clipboard me-1"></i>{{ t('colony_plan.copy_summary') }}
-    </button>
-    {% endif %}
+    <h2 class="eve-page-title mb-0">
+        <i class="bi bi-diagram-3 me-2 eve-accent"></i>{{ t('colony_plan.title') }}
+    </h2>
+    <div class="text-muted small">{{ t('colony_plan.subtitle') }}</div>
 </div>
 
-<form method="get" action="/colony-plan" class="eve-card card border-0 mb-4">
-    <div class="card-body p-3">
-        <div class="row g-3">
-            <div class="col-xl-4">
-                <label class="form-label text-muted small">{{ t('colony_plan.end_product') }}</label>
-                <input class="form-control eve-input"
-                       list="colonyPlanProducts"
-                       name="product"
-                       value="{{ selected_product or '' }}"
-                       placeholder="{{ t('colony_plan.product_placeholder') }}"
-                       autocomplete="off">
-                <datalist id="colonyPlanProducts">
-                    {% for product in all_products %}
-                    <option value="{{ product.name }}">{{ product.display_name }} ({{ product.tier }})</option>
-                    {% endfor %}
-                </datalist>
-            </div>
+{% if plan_error %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-4" role="alert" style="background:#f4a30018;border:1px solid #f4a30040;color:#f4a300;">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span>{{ plan_error }}</span>
+</div>
+{% endif %}
 
-            <div class="col-xl-4">
-                <label class="form-label text-muted small">{{ t('colony_plan.systems') }}</label>
-                <div class="eve-input p-2">
-                    <div class="d-flex flex-wrap gap-2 mb-2" id="selectedSystems">
-                        {% for system in selected_systems %}
-                        <span class="badge eve-filter-badge active">
-                            {{ system.name }}
-                            <button class="btn btn-sm p-0 ms-1 text-white border-0 bg-transparent" type="button" onclick="removeSystem({{ system.id }})">&times;</button>
-                        </span>
-                        {% endfor %}
+<form id="colonyPlanForm" method="get" action="/colony-plan">
+    <input type="hidden" name="product" id="selectedProductInput" value="{{ selected_product or '' }}">
+    <input type="hidden" name="system_ids" id="selectedSystemIdsInput" value="{{ selected_system_ids | join(',') }}">
+    <input type="hidden" name="all_characters" id="allCharactersInput" value="{{ 1 if use_all_characters else 0 }}">
+    <input type="hidden" name="single_system" id="singleSystemInput" value="{{ 1 if single_system else 0 }}">
+    <input type="hidden" name="include_unassigned" id="includeUnassignedInput" value="{{ 1 if include_unassigned else 0 }}">
+
+    <div class="row g-4">
+        <div class="col-xl-7">
+            <div class="eve-card card border-0 h-100">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <div>
+                            <div class="text-muted small mb-1">{{ t('colony_plan.end_product') }}</div>
+                            <div class="fw-semibold">{{ t('colony_plan.selected_target') }}</div>
+                        </div>
+                        <button type="button" class="btn eve-btn-ghost btn-sm" id="clearStateBtn">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>{{ t('colony_plan.clear_state') }}
+                        </button>
                     </div>
-                    <input type="text"
-                           id="systemSearchInput"
-                           class="form-control border-0 bg-transparent px-0"
-                           placeholder="{{ t('colony_plan.system_placeholder') }}"
-                           autocomplete="off">
-                    <div id="systemSearchResults" class="list-group mt-2" style="display:none;max-height:220px;overflow:auto;"></div>
+
+                    <div class="position-relative mb-3">
+                        <input type="text"
+                               id="productSearch"
+                               class="form-control eve-input"
+                               placeholder="{{ t('colony_plan.product_placeholder') }}"
+                               autocomplete="off"
+                               value="{{ selected_product_display or '' }}">
+                        <div id="productDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                    </div>
+
+                    <div id="selectedProductWrap" class="mb-3{% if not selected_product %} d-none{% endif %}">
+                        <div class="eve-selected-bar d-flex align-items-center gap-2 flex-wrap">
+                            <span id="selectedProductBadge"></span>
+                            <span class="fw-semibold" id="selectedProductName">{{ selected_product_display or '' }}</span>
+                            <button type="button" class="btn btn-sm eve-btn-ghost p-0" id="selectedProductFavBtn" title="{{ t('system_mix.favorites') }}">
+                                <span id="selectedProductFavIcon" style="font-size:1.1rem;line-height:1;">&#9734;</span>
+                            </button>
+                            <button type="button" class="btn btn-sm eve-btn-ghost ms-auto" id="clearProductBtn">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="productFavoritesCard" class="mb-4 d-none">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-star-fill" style="color:#f4a300;"></i>
+                            <span class="text-muted small">{{ t('colony_plan.product_favorites') }}</span>
+                        </div>
+                        <div id="productFavoritesList" class="d-flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                        <div>
+                            <div class="text-muted small mb-1">{{ t('colony_plan.systems') }}</div>
+                            <div class="fw-semibold">{{ t('colony_plan.selected_systems_label') }}</div>
+                        </div>
+                        <div class="text-muted small" id="systemSelectionCount">0</div>
+                    </div>
+
+                    <div class="position-relative mb-3">
+                        <input type="text"
+                               id="systemSearch"
+                               class="form-control eve-input"
+                               placeholder="{{ t('colony_plan.system_placeholder') }}"
+                               autocomplete="off">
+                        <div id="systemDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                    </div>
+
+                    <div id="systemFavoritesCard" class="mb-3 d-none">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-star-fill" style="color:#f4a300;"></i>
+                            <span class="text-muted small">{{ t('colony_plan.system_favorites') }}</span>
+                        </div>
+                        <div id="systemFavoritesList" class="d-flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div id="selectedSystemsList" class="d-flex flex-wrap gap-2"></div>
                 </div>
-                <input type="hidden" name="system_ids" id="systemIdsInput" value="{{ selected_system_ids | join(',') }}">
             </div>
+        </div>
 
-            <div class="col-xl-4">
-                <label class="form-label text-muted small">{{ t('colony_plan.characters') }}</label>
-                <div class="eve-card card border-0 p-3">
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" id="allCharactersToggle" name="all_characters" value="1" {% if use_all_characters %}checked{% endif %}>
-                        <label class="form-check-label small" for="allCharactersToggle">{{ t('colony_plan.all_characters') }}</label>
+        <div class="col-xl-5">
+            <div class="eve-card card border-0 h-100">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <div>
+                            <div class="text-muted small mb-1">{{ t('colony_plan.characters') }}</div>
+                            <div class="fw-semibold">{{ t('colony_plan.selected_characters_label') }}</div>
+                        </div>
+                        <div class="text-muted small" id="characterSelectionCount">{{ characters|length }}</div>
                     </div>
-                    <div id="characterSelectionBox" class="d-flex flex-column gap-2" {% if use_all_characters %}style="opacity:.55;"{% endif %}>
+
+                    <label class="eve-toggle-row mb-3">
+                        <input type="checkbox" id="allCharactersToggle" {% if use_all_characters %}checked{% endif %}>
+                        <span>{{ t('colony_plan.all_characters') }}</span>
+                    </label>
+
+                    <div id="characterGrid" class="eve-character-grid mb-4">
                         {% for char in characters %}
-                        <label class="d-flex align-items-center gap-2 small">
-                            <input class="form-check-input colony-plan-char" type="checkbox" name="character_ids" value="{{ char.id }}" {% if char.id in selected_character_ids %}checked{% endif %} {% if use_all_characters %}disabled{% endif %}>
-                            <img src="{{ char.portrait_url }}" class="rounded-circle" style="width:24px;height:24px;object-fit:cover;" onerror="this.src='/static/img/default_char.svg'">
-                            <span>{{ char.character_name }}</span>
+                        <label class="eve-character-pill{% if use_all_characters or char.id in selected_character_ids %} is-active{% endif %}" data-character-id="{{ char.id }}">
+                            <input type="checkbox"
+                                   class="character-checkbox"
+                                   name="character_ids"
+                                   value="{{ char.id }}"
+                                   {% if use_all_characters or char.id in selected_character_ids %}checked{% endif %}>
+                            <img src="{{ char.portrait_url }}" alt="{{ char.character_name }}">
+                            <span class="eve-character-pill-body">
+                                <span class="eve-character-pill-name">{{ char.character_name }}</span>
+                                <span class="eve-character-pill-meta">
+                                    {{ char.corporation_name or t('common.unknown') }}
+                                    {% if char.is_main %}<span class="badge ms-1" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">Main</span>{% endif %}
+                                </span>
+                            </span>
                         </label>
                         {% endfor %}
                     </div>
-                </div>
-            </div>
 
-            <div class="col-lg-4">
-                <label class="form-label text-muted small">{{ t('colony_plan.chain_mode') }}</label>
-                <div class="eve-card card border-0 p-3 d-flex gap-3 flex-wrap">
-                    <label class="form-check d-flex align-items-center gap-2 mb-0">
-                        <input class="form-check-input" type="radio" name="single_system" value="1" {% if single_system %}checked{% endif %}>
-                        <span>{{ t('colony_plan.single_system_mode') }}</span>
-                    </label>
-                    <label class="form-check d-flex align-items-center gap-2 mb-0">
-                        <input class="form-check-input" type="radio" name="single_system" value="0" {% if not single_system %}checked{% endif %}>
-                        <span>{{ t('colony_plan.cross_system_mode') }}</span>
-                    </label>
-                </div>
-            </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6">
+                            <label class="form-label text-muted small">{{ t('colony_plan.chain_mode') }}</label>
+                            <div class="eve-option-stack">
+                                <button type="button" class="eve-mode-btn{% if single_system %} is-active{% endif %}" data-mode="single">
+                                    <i class="bi bi-bullseye me-1"></i>{{ t('colony_plan.single_system_mode') }}
+                                </button>
+                                <button type="button" class="eve-mode-btn{% if not single_system %} is-active{% endif %}" data-mode="cross">
+                                    <i class="bi bi-globe-europe-africa me-1"></i>{{ t('colony_plan.cross_system_mode') }}
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label text-muted small">{{ t('colony_plan.unassigned_characters') }}</label>
+                            <label class="eve-toggle-row h-auto">
+                                <input type="checkbox" id="includeUnassignedToggle" {% if include_unassigned %}checked{% endif %}>
+                                <span>{{ t('colony_plan.include_unassigned') }}</span>
+                            </label>
+                        </div>
+                    </div>
 
-            <div class="col-lg-4">
-                <label class="form-label text-muted small">{{ t('colony_plan.unassigned_characters') }}</label>
-                <div class="eve-card card border-0 p-3 d-flex align-items-center gap-2">
-                    <input class="form-check-input" type="checkbox" id="includeUnassigned" name="include_unassigned" value="1" {% if include_unassigned %}checked{% endif %}>
-                    <label class="small mb-0" for="includeUnassigned">{{ t('colony_plan.include_unassigned') }}</label>
-                </div>
-            </div>
+                    <div class="eve-callout mb-4">
+                        <div class="text-muted small mb-1">{{ t('colony_plan.selection_summary') }}</div>
+                        <div id="selectionSummaryText" class="fw-medium">{{ t('colony_plan.initial_hint') }}</div>
+                    </div>
 
-            <div class="col-lg-4 d-flex align-items-end">
-                <div class="d-flex gap-2 w-100">
-                    <button class="btn eve-btn-primary flex-grow-1" type="submit">
-                        <i class="bi bi-magic me-1"></i>{{ t('colony_plan.generate') }}
-                    </button>
-                    <a class="btn eve-btn-ghost" href="/colony-plan">
-                        <i class="bi bi-arrow-counterclockwise"></i>
-                    </a>
+                    <div class="d-grid">
+                        <button type="submit" class="btn eve-btn-primary btn-lg" id="generatePlanBtn">
+                            <i class="bi bi-play-circle me-2"></i>{{ t('colony_plan.generate') }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </form>
 
-{% if plan_error %}
-<div class="alert d-flex align-items-center gap-2 mb-4" role="alert" style="background:#dc354520;border:1px solid #dc354540;color:#f07075;">
-    <i class="bi bi-exclamation-triangle-fill"></i>
-    <span>{{ plan_error }}</span>
-</div>
-{% elif not plan and selected_product %}
-<div class="eve-card card border-0">
-    <div class="card-body p-3 text-center text-muted py-5">
-        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
-        {{ t('colony_plan.empty_hint') }}
-    </div>
-</div>
-{% elif not plan %}
-<div class="eve-card card border-0">
-    <div class="card-body p-3 text-center text-muted py-5">
-        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
-        {{ t('colony_plan.initial_hint') }}
-    </div>
-</div>
-{% else %}
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="eve-stat-card card border-0">
+<div class="row g-3 my-4">
+    <div class="col-6 col-lg-3">
+        <div class="eve-stat-card card border-0 h-100">
             <div class="card-body text-center p-3">
-                <div class="eve-stat-value">{{ plan.used_systems | length }}</div>
+                <div class="eve-stat-value">{{ plan.used_systems|length if plan else selected_systems|length }}</div>
                 <div class="eve-stat-label">{{ t('colony_plan.stat_systems') }}</div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="eve-stat-card card border-0">
+    <div class="col-6 col-lg-3">
+        <div class="eve-stat-card card border-0 h-100">
             <div class="card-body text-center p-3">
-                <div class="eve-stat-value">{{ plan.assignments | length }}</div>
+                <div class="eve-stat-value">{{ plan.assignments|length if plan else 0 }}</div>
                 <div class="eve-stat-label">{{ t('colony_plan.stat_assignments') }}</div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="eve-stat-card card border-0">
+    <div class="col-6 col-lg-3">
+        <div class="eve-stat-card card border-0 h-100">
             <div class="card-body text-center p-3">
-                <div class="eve-stat-value">{{ plan.missing_planets }}</div>
+                <div class="eve-stat-value">{{ plan.missing_planets if plan else 0 }}</div>
                 <div class="eve-stat-label">{{ t('colony_plan.stat_missing') }}</div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="eve-stat-card card border-0">
+    <div class="col-6 col-lg-3">
+        <div class="eve-stat-card card border-0 h-100">
             <div class="card-body text-center p-3">
-                <div class="eve-stat-value">{{ plan.additional_characters_needed }}</div>
+                <div class="eve-stat-value">{{ plan.additional_characters_needed if plan else 0 }}</div>
                 <div class="eve-stat-label">{{ t('colony_plan.stat_extra_chars') }}</div>
             </div>
         </div>
     </div>
 </div>
 
-{% if plan.system_mode.single_system_mode %}
-<div class="eve-card card border-0 mb-4">
-    <div class="card-body p-3">
-        {% if plan.system_mode.viable %}
-        <div class="d-flex align-items-center gap-2">
-            <span class="badge eve-filter-badge active">{{ t('colony_plan.single_system_mode') }}</span>
-            <span class="text-muted small">{{ t('colony_plan.single_system_selected') }} <strong>{{ plan.system_mode.chosen_system.name }}</strong></span>
-        </div>
-        {% else %}
-        <div class="text-danger small">
-            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.single_system_unavailable') }}
-        </div>
-        {% endif %}
-    </div>
+{% if plan and plan.system_mode.single_system_mode and plan.system_mode.viable and plan.system_mode.chosen_system %}
+<div class="alert d-flex align-items-center gap-2 mb-4" style="background:#00b4d818;border:1px solid #00b4d840;color:#9adcf0;">
+    <i class="bi bi-info-circle-fill"></i>
+    <span>{{ t('colony_plan.single_system_selected') }} <strong>{{ plan.system_mode.chosen_system.name }}</strong></span>
 </div>
 {% endif %}
 
+{% if plan %}
 <div class="row g-4">
     <div class="col-12">
         <div class="eve-card card border-0">
-            <div class="card-body p-3">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-                    <div>
-                        <div class="fw-semibold">{{ t('colony_plan.assignment_table') }}</div>
-                        <div class="text-muted small">{{ product_labels.get(selected_product, selected_product) }}</div>
-                    </div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span class="badge eve-filter-badge active">{{ t('colony_plan.status_existing') }}</span>
-                        <span class="badge eve-filter-badge">{{ t('colony_plan.status_new') }}</span>
-                    </div>
+            <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-table eve-accent"></i>
+                    <span class="fw-medium">{{ t('colony_plan.assignment_table') }}</span>
                 </div>
+                <span class="text-muted small">{{ t('colony_plan.assignment_hint') }}</span>
+            </div>
+            <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle mb-0">
+                    <table class="table eve-table mb-0">
                         <thead>
                             <tr>
                                 <th>{{ t('colony_plan.col_character') }}</th>
@@ -208,38 +237,34 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for item in plan.assignments %}
-                            <tr>
-                                <td>
-                                    <div class="fw-semibold">{{ item.character_name }}</div>
-                                    <div class="text-muted small">{{ item.system_name }}</div>
-                                </td>
-                                <td>
-                                    <div>{{ item.planet_name }}</div>
-                                    <div class="small text-muted">{{ planet_type_labels.get(item.planet_type, item.planet_type) }}</div>
-                                </td>
-                                <td>
-                                    {% if item.role == 'Extractor' %}
-                                    <span class="badge eve-filter-badge active">{{ t('colony_plan.role_extractor') }}</span>
-                                    {% else %}
-                                    <span class="badge eve-filter-badge">{{ t('colony_plan.role_factory') }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="fw-semibold">{{ item.output_display }}</div>
-                                    <div class="small text-muted">{{ item.summary_display }}</div>
-                                </td>
-                                <td>
-                                    {% if item.status == 'existing' %}
-                                    <span class="text-success small"><i class="bi bi-arrow-repeat me-1"></i>{{ t('colony_plan.status_existing') }}</span>
-                                    {% else %}
-                                    <span class="text-warning small"><i class="bi bi-plus-circle me-1"></i>{{ t('colony_plan.status_new') }}</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                            {% if not plan.assignments %}
-                            <tr><td colspan="5" class="text-center text-muted py-4">{{ t('colony_plan.no_assignments') }}</td></tr>
+                            {% if plan.assignments %}
+                                {% for item in plan.assignments %}
+                                <tr>
+                                    <td><span class="fw-semibold">{{ item.character_name }}</span></td>
+                                    <td>
+                                        <div class="fw-semibold">{{ item.planet_name }}</div>
+                                        <div class="text-muted small">{{ item.system_name }} | {{ planet_type_labels.get(item.planet_type, item.planet_type) }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge" style="background:{{ '#2dc65318' if item.role == 'Extractor' else '#00b4d818' }};color:{{ '#2dc653' if item.role == 'Extractor' else '#00b4d8' }};border:1px solid {{ '#2dc65340' if item.role == 'Extractor' else '#00b4d840' }};">
+                                            {{ t('colony_plan.role_extractor') if item.role == 'Extractor' else t('colony_plan.role_factory') }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold">{{ item.output_display }}</div>
+                                        <div class="text-muted small">{{ item.summary_display or item.summary }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge" style="background:{{ '#f4a30018' if item.status == 'existing' else '#1a2d3d' }};color:{{ '#f4a300' if item.status == 'existing' else '#9adcf0' }};border:1px solid {{ '#f4a30040' if item.status == 'existing' else '#2b4458' }};">
+                                            {{ t('colony_plan.status_existing') if item.status == 'existing' else t('colony_plan.status_new') }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">{{ t('colony_plan.no_assignments') }}</td>
+                                </tr>
                             {% endif %}
                         </tbody>
                     </table>
@@ -249,226 +274,542 @@
     </div>
 
     <div class="col-xl-7">
-        <div class="eve-card card border-0 h-100">
+        <div class="eve-card card border-0 mb-4">
+            <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                <i class="bi bi-bezier2 eve-accent"></i>
+                <span class="fw-medium">{{ t('colony_plan.flow_summary') }}</span>
+            </div>
             <div class="card-body p-3">
-                <div class="fw-semibold mb-3">{{ t('colony_plan.flow_summary') }}</div>
-                <div class="table-responsive">
-                    <table class="table table-dark table-sm align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>{{ t('colony_plan.flow_from') }}</th>
-                                <th>{{ t('colony_plan.flow_to') }}</th>
-                                <th>{{ t('colony_plan.flow_transport') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for flow in plan.flows %}
-                            <tr>
-                                <td>
-                                    <div>{{ flow.from_product_display }}</div>
-                                    <div class="small text-muted">{{ flow.from_character }} | {{ flow.from_planet }}</div>
-                                </td>
-                                <td>
-                                    <div>{{ flow.to_product_display }}</div>
-                                    <div class="small text-muted">{{ flow.to_character }} | {{ flow.to_planet }}</div>
-                                </td>
-                                <td>
-                                    {% if flow.transport_label == 'same_character' %}
-                                    <span class="text-success small">{{ t('colony_plan.transport_same_character') }}</span>
-                                    {% elif flow.transport_label == 'cross_system' %}
-                                    <span class="text-warning small">{{ t('colony_plan.transport_cross_system') }}</span>
-                                    {% else %}
-                                    <span class="text-info small">{{ t('colony_plan.transport_customs') }}</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                            {% if not plan.flows %}
-                            <tr><td colspan="3" class="text-center text-muted py-4">{{ t('colony_plan.no_flow') }}</td></tr>
+                {% if plan.flows %}
+                <div class="d-flex flex-column gap-2">
+                    {% for flow in plan.flows %}
+                    <div class="eve-flow-row">
+                        <div>
+                            <div class="fw-semibold">{{ flow.from_product_display }} <i class="bi bi-arrow-right mx-1"></i> {{ flow.to_product_display }}</div>
+                            <div class="text-muted small">{{ flow.from_character }} | {{ flow.from_planet }} -> {{ flow.to_character }} | {{ flow.to_planet }}</div>
+                        </div>
+                        <span class="badge" style="background:{{ '#2dc65318' if flow.transport_label == 'same_character' else '#e6394618' if flow.transport_label == 'cross_system' else '#f4a30018' }};color:{{ '#2dc653' if flow.transport_label == 'same_character' else '#e63946' if flow.transport_label == 'cross_system' else '#f4a300' }};border:1px solid {{ '#2dc65340' if flow.transport_label == 'same_character' else '#e6394640' if flow.transport_label == 'cross_system' else '#f4a30040' }};">
+                            {% if flow.transport_label == 'same_character' %}
+                                {{ t('colony_plan.transport_same_character') }}
+                            {% elif flow.transport_label == 'cross_system' %}
+                                {{ t('colony_plan.transport_cross_system') }}
+                            {% else %}
+                                {{ t('colony_plan.transport_customs') }}
                             {% endif %}
-                        </tbody>
-                    </table>
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-muted">{{ t('colony_plan.no_flow') }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="eve-card card border-0">
+            <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                <i class="bi bi-box-seam eve-accent"></i>
+                <span class="fw-medium">{{ t('colony_plan.materials_needed') }}</span>
+            </div>
+            <div class="card-body p-3">
+                <div class="d-flex flex-wrap gap-2">
+                    {% for material in plan.chain.p0_needed %}
+                    <span class="badge" style="background:#0f1f30;border:1px solid #1a3a5a;color:#9adcf0;">{{ product_labels.get(material, material) }}</span>
+                    {% endfor %}
                 </div>
             </div>
         </div>
     </div>
 
     <div class="col-xl-5">
-        <div class="eve-card card border-0 h-100">
+        <div class="eve-card card border-0 mb-4">
+            <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                <i class="bi bi-people eve-accent"></i>
+                <span class="fw-medium">{{ t('colony_plan.capacity_summary') }}</span>
+            </div>
             <div class="card-body p-3">
-                <div class="fw-semibold mb-3">{{ t('colony_plan.capacity_summary') }}</div>
-                <div class="table-responsive">
-                    <table class="table table-dark table-sm align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>{{ t('colony_plan.col_character') }}</th>
-                                <th>{{ t('colony_plan.capacity_used') }}</th>
-                                <th>{{ t('colony_plan.capacity_remaining') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for char in plan.characters %}
-                            <tr>
-                                <td>
-                                    <div>{{ char.name }}</div>
-                                    {% if not char.scope_based %}
-                                    <div class="small text-muted">{{ t('colony_plan.capacity_estimated') }}</div>
-                                    {% endif %}
-                                </td>
-                                <td>{{ char.existing_total }}/{{ char.max_planets }}</td>
-                                <td>{{ char.remaining_slots }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12">
-        <div class="row g-4">
-            <div class="col-xl-5">
-                <div class="eve-card card border-0 h-100">
-                    <div class="card-body p-3">
-                        <div class="fw-semibold mb-3">{{ t('colony_plan.materials_needed') }}</div>
-                        <div class="d-flex flex-wrap gap-2">
-                            {% for p0 in plan.chain.p0_needed %}
-                            <span class="badge eve-filter-badge">{{ product_labels.get(p0, p0) }}</span>
-                            {% endfor %}
+                <div class="d-flex flex-column gap-3">
+                    {% for char in plan.characters %}
+                    <div class="eve-capacity-row">
+                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                            <div>
+                                <div class="fw-semibold">{{ char.name }}</div>
+                                <div class="text-muted small">
+                                    {{ t('colony_plan.capacity_used') }} {{ char.existing_total }}
+                                    |
+                                    {{ t('colony_plan.capacity_remaining') }} {{ char.remaining_slots }}
+                                </div>
+                            </div>
+                            <span class="badge" style="background:#0f1f30;border:1px solid #1a3a5a;color:#9adcf0;">{{ char.max_planets }}</span>
                         </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xl-7">
-                <div class="eve-card card border-0 h-100">
-                    <div class="card-body p-3">
-                        <div class="fw-semibold mb-3">{{ t('colony_plan.missing_title') }}</div>
-                        {% if plan.missing %}
-                        <ul class="mb-0">
-                            {% for item in plan.missing %}
-                            <li class="mb-1">
-                                <strong>{{ item.kind_display }}</strong>: {{ item.display_label }}
-                            </li>
-                            {% endfor %}
-                        </ul>
-                        <div class="text-muted small mt-3">
-                            {{ t('colony_plan.additional_characters_needed') }}: <strong>{{ plan.additional_characters_needed }}</strong>
+                        <div class="progress" style="height:8px;background:#0b151f;">
+                            <div class="progress-bar" role="progressbar" style="width: {{ ((char.max_planets - char.remaining_slots) / (char.max_planets or 1) * 100) | round(0, 'ceil') }}%;background:linear-gradient(90deg,#00b4d8,#2dc653);"></div>
                         </div>
-                        {% else %}
-                        <div class="text-success">
-                            <i class="bi bi-check-circle-fill me-1"></i>{{ t('colony_plan.no_missing') }}
-                        </div>
+                        {% if not char.scope_based %}
+                        <div class="text-muted small mt-2">{{ t('colony_plan.capacity_estimated') }}</div>
                         {% endif %}
                     </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="col-12">
-        <div class="eve-card card border-0">
+        <div class="eve-card card border-0 mb-4">
+            <div class="card-header eve-card-header d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-triangle eve-accent"></i>
+                <span class="fw-medium">{{ t('colony_plan.missing_title') }}</span>
+            </div>
             <div class="card-body p-3">
-                <div class="fw-semibold mb-3">{{ t('colony_plan.export_title') }}</div>
-                <textarea class="form-control eve-input" id="assignmentSummaryText" rows="10" readonly>{{ plan.summary_text }}</textarea>
+                {% if plan.missing %}
+                <div class="d-flex flex-column gap-2">
+                    {% for item in plan.missing %}
+                    <div class="eve-missing-row">
+                        <span class="badge" style="background:#e6394618;border:1px solid #e6394640;color:#e63946;">{{ item.kind_display }}</span>
+                        <span>{{ item.display_label }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="text-muted small mt-3">{{ t('colony_plan.additional_characters_needed') }}: <strong>{{ plan.additional_characters_needed }}</strong></div>
+                {% else %}
+                <div class="text-muted">{{ t('colony_plan.no_missing') }}</div>
+                {% endif %}
             </div>
         </div>
+
+        <div class="eve-card card border-0">
+            <div class="card-header eve-card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-clipboard-data eve-accent"></i>
+                    <span class="fw-medium">{{ t('colony_plan.export_title') }}</span>
+                </div>
+                <button type="button" class="btn eve-btn-outline btn-sm" id="copySummaryBtn">
+                    <i class="bi bi-clipboard me-1"></i>{{ t('colony_plan.copy_summary') }}
+                </button>
+            </div>
+            <div class="card-body p-3">
+                <textarea id="summaryText" class="form-control eve-input" rows="10" readonly>{{ plan.summary_text }}</textarea>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="eve-card card border-0 mt-4">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-3"></i>
+        <p class="text-muted mb-2">{{ t('colony_plan.initial_hint') }}</p>
+        <p class="text-muted small mb-0">{{ t('colony_plan.empty_hint') }}</p>
     </div>
 </div>
 {% endif %}
 {% endblock %}
 
-{% block extra_head %}
-<style>
-    #systemSearchResults .list-group-item {
-        background: #111c26;
-        color: #c9d8e8;
-        border-color: #1a2d3d;
-        cursor: pointer;
-    }
-    #systemSearchResults .list-group-item:hover {
-        background: #152433;
-    }
-</style>
-{% endblock %}
-
 {% block extra_scripts %}
+<style>
+.eve-selected-bar { background:#0b151f; border:1px solid #1a2d3d; border-radius:10px; padding:10px 12px; }
+.eve-fav-pill, .eve-system-pill { display:inline-flex; align-items:center; gap:8px; background:#0a1520; border:1px solid #1a3a5a; border-radius:999px; padding:6px 10px; cursor:pointer; color:#c9d1d9; font-size:.82rem; transition:border-color .15s, background .15s, transform .15s; }
+.eve-fav-pill:hover, .eve-system-pill:hover { background:#0f1f30; border-color:#2a5a8a; transform:translateY(-1px); }
+.eve-fav-pill.is-active, .eve-system-pill.is-active { box-shadow:0 0 10px rgba(0,180,216,.18); }
+.eve-system-pill-remove { color:#5b7083; font-size:.9rem; line-height:1; }
+.eve-system-pill-remove:hover { color:#e74c3c; }
+.eve-character-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; max-height:340px; overflow:auto; }
+.eve-character-pill { display:flex; align-items:center; gap:12px; background:#0b151f; border:1px solid #1a2d3d; border-radius:12px; padding:10px 12px; cursor:pointer; transition:border-color .15s, background .15s, transform .15s; }
+.eve-character-pill input { display:none; }
+.eve-character-pill img { width:42px; height:42px; border-radius:10px; object-fit:cover; border:1px solid #1a2d3d; }
+.eve-character-pill.is-active { background:linear-gradient(180deg, rgba(0,180,216,.08), rgba(11,21,31,.95)); border-color:#00b4d860; box-shadow:0 0 10px rgba(0,180,216,.1); }
+.eve-character-pill:hover { border-color:#2a5a8a; transform:translateY(-1px); }
+.eve-character-pill-body { min-width:0; display:flex; flex-direction:column; }
+.eve-character-pill-name { color:#e6edf3; font-weight:600; }
+.eve-character-pill-meta { color:#7f95a8; font-size:.78rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.eve-toggle-row { display:flex; align-items:flex-start; gap:10px; background:#0b151f; border:1px solid #1a2d3d; border-radius:12px; padding:10px 12px; cursor:pointer; }
+.eve-toggle-row input { margin-top:4px; accent-color:#00b4d8; }
+.eve-option-stack { display:flex; flex-direction:column; gap:8px; }
+.eve-mode-btn { width:100%; text-align:left; background:#0b151f; color:#93a7b8; border:1px solid #1a2d3d; border-radius:12px; padding:10px 12px; transition:border-color .15s, background .15s, color .15s; }
+.eve-mode-btn:hover { border-color:#2a5a8a; color:#c9d1d9; }
+.eve-mode-btn.is-active { border-color:#00b4d860; background:rgba(0,180,216,.08); color:#9adcf0; }
+.eve-callout { background:linear-gradient(180deg, rgba(15,31,48,.88), rgba(11,21,31,.95)); border:1px solid #1a2d3d; border-radius:14px; padding:14px 16px; }
+.eve-flow-row, .eve-missing-row, .eve-capacity-row { background:#0b151f; border:1px solid #1a2d3d; border-radius:12px; padding:12px 14px; }
+</style>
 <script>
-const selectedSystems = new Map();
-{% for system in selected_systems %}
-selectedSystems.set({{ system.id }}, {{ system | tojson }});
-{% endfor %}
+const ALL_PRODUCTS = {{ all_products | tojson }};
+const PRODUCT_LABELS = {{ product_labels | tojson }};
+const SELECTED_SYSTEMS = {{ selected_systems | tojson }};
+const HAS_SERVER_STATE = {{ 'true' if selected_product or selected_system_ids or (not use_all_characters) or single_system or (not include_unassigned) else 'false' }};
+const SYSTEM_FAV_KEY = 'pi_fav_systems';
+const STATE_KEY = 'colony_plan_state_v1';
+const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const COLONY_PLAN_I18N = {
+    systems: {{ t('colony_plan.systems') | tojson }},
+    allCharacters: {{ t('colony_plan.all_characters') | tojson }},
+    initialHint: {{ t('colony_plan.initial_hint') | tojson }},
+    singleSystemMode: {{ t('colony_plan.single_system_mode') | tojson }},
+    crossSystemMode: {{ t('colony_plan.cross_system_mode') | tojson }},
+    copyDone: {{ t('colony_plan.copy_done') | tojson }},
+    charactersSelected: {{ t('colony_plan.characters_selected') | tojson }}
+};
 
-function syncSystemIds() {
-    document.getElementById('systemIdsInput').value = Array.from(selectedSystems.keys()).join(',');
+let selectedProduct = {{ selected_product | tojson }};
+let selectedSystems = Array.isArray(SELECTED_SYSTEMS) ? [...SELECTED_SYSTEMS] : [];
+let plannerFavorites = new Set();
+let systemSearchTimer = null;
+
+const form = document.getElementById('colonyPlanForm');
+const productInput = document.getElementById('productSearch');
+const productDropdown = document.getElementById('productDropdown');
+const selectedProductInput = document.getElementById('selectedProductInput');
+const selectedProductWrap = document.getElementById('selectedProductWrap');
+const selectedProductName = document.getElementById('selectedProductName');
+const selectedProductBadge = document.getElementById('selectedProductBadge');
+const selectedProductFavBtn = document.getElementById('selectedProductFavBtn');
+const selectedProductFavIcon = document.getElementById('selectedProductFavIcon');
+const systemSearch = document.getElementById('systemSearch');
+const systemDropdown = document.getElementById('systemDropdown');
+const selectedSystemsList = document.getElementById('selectedSystemsList');
+const selectedSystemIdsInput = document.getElementById('selectedSystemIdsInput');
+const systemSelectionCount = document.getElementById('systemSelectionCount');
+const productFavoritesCard = document.getElementById('productFavoritesCard');
+const productFavoritesList = document.getElementById('productFavoritesList');
+const systemFavoritesCard = document.getElementById('systemFavoritesCard');
+const systemFavoritesList = document.getElementById('systemFavoritesList');
+const allCharactersToggle = document.getElementById('allCharactersToggle');
+const allCharactersInput = document.getElementById('allCharactersInput');
+const includeUnassignedToggle = document.getElementById('includeUnassignedToggle');
+const includeUnassignedInput = document.getElementById('includeUnassignedInput');
+const singleSystemInput = document.getElementById('singleSystemInput');
+const selectionSummaryText = document.getElementById('selectionSummaryText');
+const characterSelectionCount = document.getElementById('characterSelectionCount');
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function productLabel(name) { return PRODUCT_LABELS[name] || name || ''; }
+function getProductByName(name) { return ALL_PRODUCTS.find((item) => item.name === name) || null; }
+function getSystemFavorites() { try { return JSON.parse(localStorage.getItem(SYSTEM_FAV_KEY) || '[]'); } catch (_) { return []; } }
+function getSelectedCharacterIds() { return Array.from(document.querySelectorAll('.character-checkbox:checked')).map((checkbox) => Number(checkbox.value)); }
+
+function persistState() {
+    const state = {
+        product: selectedProduct || '',
+        systems: selectedSystems.map((system) => ({ id: Number(system.id), name: system.name, security: Number(system.security || 0), region: system.region || '', constellation: system.constellation || '' })),
+        all_characters: allCharactersToggle.checked,
+        character_ids: getSelectedCharacterIds(),
+        single_system: singleSystemInput.value === '1',
+        include_unassigned: includeUnassignedToggle.checked,
+    };
+    try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (_) {}
 }
 
-function renderSelectedSystems() {
-    const wrap = document.getElementById('selectedSystems');
-    wrap.innerHTML = '';
-    selectedSystems.forEach((system, id) => {
-        const chip = document.createElement('span');
-        chip.className = 'badge eve-filter-badge active';
-        chip.innerHTML = `${system.name} <button class="btn btn-sm p-0 ms-1 text-white border-0 bg-transparent" type="button" onclick="removeSystem(${id})">&times;</button>`;
-        wrap.appendChild(chip);
-    });
-    syncSystemIds();
+function restoreState() { try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (_) { return {}; } }
+
+function updateSelectionSummary() {
+    const charCount = allCharactersToggle.checked ? {{ characters|length }} : getSelectedCharacterIds().length;
+    const pieces = [];
+    if (selectedProduct) pieces.push(productLabel(selectedProduct));
+    if (selectedSystems.length) pieces.push(`${selectedSystems.length} ${COLONY_PLAN_I18N.systems.toLowerCase()}`);
+    pieces.push(allCharactersToggle.checked ? COLONY_PLAN_I18N.allCharacters : `${charCount} ${COLONY_PLAN_I18N.charactersSelected}`);
+    pieces.push(singleSystemInput.value === '1' ? COLONY_PLAN_I18N.singleSystemMode : COLONY_PLAN_I18N.crossSystemMode);
+    selectionSummaryText.textContent = pieces.join(' | ') || COLONY_PLAN_I18N.initialHint;
 }
 
-function removeSystem(id) {
-    selectedSystems.delete(id);
+function syncHiddenInputs() {
+    selectedProductInput.value = selectedProduct || '';
+    selectedSystemIdsInput.value = selectedSystems.map((system) => system.id).join(',');
+    allCharactersInput.value = allCharactersToggle.checked ? '1' : '0';
+    includeUnassignedInput.value = includeUnassignedToggle.checked ? '1' : '0';
+    Array.from(document.querySelectorAll('.character-checkbox')).forEach((checkbox) => { checkbox.disabled = allCharactersToggle.checked; });
+}
+
+function renderSelectedProduct() {
+    if (!selectedProduct) {
+        selectedProductWrap.classList.add('d-none');
+        selectedProductInput.value = '';
+        selectedProductName.textContent = '';
+        selectedProductBadge.innerHTML = '';
+        updateSelectionSummary();
+        persistState();
+        return;
+    }
+    const product = getProductByName(selectedProduct);
+    const tier = product?.tier || 'P1';
+    const color = TIER_COLORS[tier] || '#586e75';
+    selectedProductWrap.classList.remove('d-none');
+    selectedProductInput.value = selectedProduct;
+    selectedProductName.textContent = productLabel(selectedProduct);
+    selectedProductBadge.innerHTML = `<span class="badge" style="background:${color}18;color:${color};border:1px solid ${color}40;">${tier}</span>`;
+    updateSelectedProductFavorite();
+    updateSelectionSummary();
+    persistState();
+}
+
+function renderProductDropdown(query) {
+    const q = (query || '').trim().toLowerCase();
+    const items = ALL_PRODUCTS.filter((item) => !q || item.name.toLowerCase().includes(q) || productLabel(item.name).toLowerCase().includes(q)).slice(0, 12);
+    if (!items.length) {
+        productDropdown.classList.add('d-none');
+        productDropdown.innerHTML = '';
+        return;
+    }
+    productDropdown.innerHTML = items.map((item) => {
+        const color = TIER_COLORS[item.tier] || '#586e75';
+        return `<button type="button" class="eve-search-item w-100 text-start" data-product="${escapeHtml(item.name)}"><span class="d-flex align-items-center justify-content-between gap-2"><span>${escapeHtml(productLabel(item.name))}</span><span class="badge" style="background:${color}18;color:${color};border:1px solid ${color}40;">${item.tier}</span></span></button>`;
+    }).join('');
+    productDropdown.classList.remove('d-none');
+}
+
+function chooseProduct(name) {
+    selectedProduct = name || null;
+    productInput.value = selectedProduct ? productLabel(selectedProduct) : '';
+    productDropdown.classList.add('d-none');
+    renderSelectedProduct();
+}
+
+function updateSelectedProductFavorite() {
+    if (!selectedProduct) { selectedProductFavIcon.textContent = '\u2606'; return; }
+    const isFav = plannerFavorites.has(selectedProduct);
+    selectedProductFavIcon.textContent = isFav ? '\u2605' : '\u2606';
+    selectedProductFavIcon.style.color = isFav ? '#f4a300' : '';
+}
+
+async function loadPlannerFavorites() {
+    try {
+        const response = await fetch('/planner/favorites');
+        const data = await response.json();
+        plannerFavorites = new Set(data || []);
+    } catch (_) {
+        plannerFavorites = new Set();
+    }
+    renderProductFavorites();
+    updateSelectedProductFavorite();
+}
+
+async function toggleSelectedProductFavorite() {
+    if (!selectedProduct) return;
+    try {
+        const response = await fetch('/planner/favorites/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_name: selectedProduct}),
+        });
+        const data = await response.json();
+        if (data.favorited) plannerFavorites.add(selectedProduct); else plannerFavorites.delete(selectedProduct);
+        renderProductFavorites();
+        updateSelectedProductFavorite();
+    } catch (_) {}
+}
+
+function renderProductFavorites() {
+    const favorites = [...plannerFavorites].map((name) => getProductByName(name) || {name, tier: 'P1'}).sort((a, b) => (a.tier || '').localeCompare(b.tier || '') || productLabel(a.name).localeCompare(productLabel(b.name)));
+    if (!favorites.length) {
+        productFavoritesCard.classList.add('d-none');
+        productFavoritesList.innerHTML = '';
+        return;
+    }
+    productFavoritesList.innerHTML = favorites.map((item) => {
+        const color = TIER_COLORS[item.tier] || '#586e75';
+        const active = selectedProduct === item.name ? ' is-active' : '';
+        return `<button type="button" class="eve-fav-pill${active}" data-fav-product="${escapeHtml(item.name)}" style="border-color:${color}40;color:${color};background:${active ? `${color}18` : '#0a1520'};"><span style="opacity:.7;font-size:.72rem;">${item.tier}</span><span>${escapeHtml(productLabel(item.name))}</span></button>`;
+    }).join('');
+    productFavoritesCard.classList.remove('d-none');
+}
+
+function addSystem(system) {
+    const id = Number(system.id || system.system_id);
+    if (!id || selectedSystems.some((entry) => Number(entry.id) === id)) return;
+    selectedSystems.push({ id, name: system.name || system.system_name, security: Number(system.security || 0), region: system.region || system.region_name || '', constellation: system.constellation || system.constellation_name || '' });
+    selectedSystems.sort((a, b) => String(a.name).localeCompare(String(b.name)));
     renderSelectedSystems();
 }
 
-async function searchSystems(q) {
-    const results = document.getElementById('systemSearchResults');
-    if (!q || q.length < 2) {
-        results.style.display = 'none';
-        results.innerHTML = '';
+function removeSystem(id) {
+    selectedSystems = selectedSystems.filter((system) => Number(system.id) !== Number(id));
+    renderSelectedSystems();
+}
+
+function renderSelectedSystems() {
+    systemSelectionCount.textContent = `${selectedSystems.length}`;
+    selectedSystemIdsInput.value = selectedSystems.map((system) => system.id).join(',');
+    if (!selectedSystems.length) {
+        selectedSystemsList.innerHTML = `<div class="text-muted small">${escapeHtml(COLONY_PLAN_I18N.initialHint)}</div>`;
+    } else {
+        selectedSystemsList.innerHTML = selectedSystems.map((system) => `<div class="eve-system-pill is-active"><i class="bi bi-globe2 eve-accent"></i><span>${escapeHtml(system.name)}</span>${system.region ? `<span class="text-muted" style="font-size:.72rem;">${escapeHtml(system.region)}</span>` : ''}<span style="color:${Number(system.security || 0) >= 0.5 ? '#2dc653' : (Number(system.security || 0) > 0 ? '#f4a300' : '#e63946')};font-size:.78rem;">${Number(system.security || 0).toFixed(1)}</span><button type="button" class="btn btn-sm p-0 border-0 bg-transparent eve-system-pill-remove" data-remove-system="${system.id}"><i class="bi bi-x-lg"></i></button></div>`).join('');
+    }
+    updateSelectionSummary();
+    persistState();
+}
+
+function renderSystemFavorites() {
+    const favorites = getSystemFavorites();
+    if (!favorites.length) {
+        systemFavoritesCard.classList.add('d-none');
+        systemFavoritesList.innerHTML = '';
         return;
     }
-    const res = await fetch('/system/search?q=' + encodeURIComponent(q));
-    const data = await res.json();
-    results.innerHTML = '';
-    (data.systems || []).forEach((system) => {
-        if (selectedSystems.has(system.id)) return;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'list-group-item list-group-item-action';
-        btn.textContent = `${system.name} | ${system.region || ''}`;
-        btn.onclick = () => {
-            selectedSystems.set(system.id, system);
-            renderSelectedSystems();
-            results.innerHTML = '';
-            results.style.display = 'none';
-            document.getElementById('systemSearchInput').value = '';
-        };
-        results.appendChild(btn);
-    });
-    results.style.display = results.children.length ? 'block' : 'none';
+    systemFavoritesList.innerHTML = favorites.map((system) => `<button type="button" class="eve-fav-pill" data-fav-system="${system.id}"><i class="bi bi-star-fill" style="color:#f4a300;font-size:.75rem;"></i><span>${escapeHtml(system.name)}</span>${system.region ? `<span class="text-muted" style="font-size:.72rem;">${escapeHtml(system.region)}</span>` : ''}</button>`).join('');
+    systemFavoritesCard.classList.remove('d-none');
 }
 
-document.getElementById('systemSearchInput')?.addEventListener('input', (event) => {
-    searchSystems(event.target.value);
-});
-
-document.getElementById('allCharactersToggle')?.addEventListener('change', (event) => {
-    const disabled = event.target.checked;
-    const box = document.getElementById('characterSelectionBox');
-    box.style.opacity = disabled ? '.55' : '1';
-    box.querySelectorAll('input[type="checkbox"]').forEach((el) => {
-        el.disabled = disabled;
-    });
-});
-
-function copyAssignmentSummary() {
-    const el = document.getElementById('assignmentSummaryText');
-    if (!el) return;
-    el.select();
-    el.setSelectionRange(0, 99999);
-    document.execCommand('copy');
+async function fetchSystems(query) {
+    try {
+        const response = await fetch(`/system/search?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        const systems = data.systems || [];
+        if (!systems.length) {
+            systemDropdown.classList.add('d-none');
+            systemDropdown.innerHTML = '';
+            return;
+        }
+        systemDropdown.innerHTML = systems.map((system) => `<button type="button" class="eve-search-item w-100 text-start" data-system='${JSON.stringify(system).replace(/'/g, '&#39;')}'><span class="d-flex align-items-center justify-content-between gap-2"><span>${escapeHtml(system.name)}</span><span class="text-muted small">${escapeHtml(system.region || '')}</span></span></button>`).join('');
+        systemDropdown.classList.remove('d-none');
+    } catch (_) {
+        systemDropdown.classList.add('d-none');
+    }
 }
 
-renderSelectedSystems();
+function setMode(mode) {
+    singleSystemInput.value = mode === 'single' ? '1' : '0';
+    document.querySelectorAll('.eve-mode-btn').forEach((button) => { button.classList.toggle('is-active', button.dataset.mode === mode); });
+    updateSelectionSummary();
+    persistState();
+}
+
+function updateCharacterPills() {
+    const allSelected = allCharactersToggle.checked;
+    document.querySelectorAll('.eve-character-pill').forEach((pill) => {
+        const checkbox = pill.querySelector('.character-checkbox');
+        pill.classList.toggle('is-active', allSelected || checkbox.checked);
+    });
+    const count = allSelected ? {{ characters|length }} : getSelectedCharacterIds().length;
+    characterSelectionCount.textContent = `${count}`;
+    syncHiddenInputs();
+    updateSelectionSummary();
+    persistState();
+}
+
+function clearStateAndUi() {
+    selectedProduct = null;
+    selectedSystems = [];
+    allCharactersToggle.checked = true;
+    includeUnassignedToggle.checked = true;
+    document.querySelectorAll('.character-checkbox').forEach((checkbox) => { checkbox.checked = true; });
+    setMode('cross');
+    productInput.value = '';
+    systemSearch.value = '';
+    localStorage.removeItem(STATE_KEY);
+    renderSelectedProduct();
+    renderSelectedSystems();
+    updateCharacterPills();
+}
+
+async function copySummary() {
+    const textarea = document.getElementById('summaryText');
+    if (!textarea) return;
+    try {
+        await navigator.clipboard.writeText(textarea.value);
+        const btn = document.getElementById('copySummaryBtn');
+        const original = btn.innerHTML;
+        btn.innerHTML = `<i class="bi bi-check2 me-1"></i>${escapeHtml(COLONY_PLAN_I18N.copyDone)}`;
+        setTimeout(() => { btn.innerHTML = original; }, 1600);
+    } catch (_) {}
+}
+
+function applyState(state) {
+    if (state.product) {
+        selectedProduct = state.product;
+        productInput.value = productLabel(state.product);
+    }
+    if (Array.isArray(state.systems)) {
+        selectedSystems = state.systems.filter((system) => system && system.id && system.name);
+    }
+    if (typeof state.all_characters === 'boolean') {
+        allCharactersToggle.checked = state.all_characters;
+    }
+    if (Array.isArray(state.character_ids)) {
+        const idSet = new Set(state.character_ids.map(Number));
+        document.querySelectorAll('.character-checkbox').forEach((checkbox) => { checkbox.checked = allCharactersToggle.checked ? true : idSet.has(Number(checkbox.value)); });
+    }
+    if (typeof state.single_system === 'boolean') setMode(state.single_system ? 'single' : 'cross');
+    if (typeof state.include_unassigned === 'boolean') includeUnassignedToggle.checked = state.include_unassigned;
+}
+
+productInput.addEventListener('input', () => {
+    if (!productInput.value.trim()) { selectedProduct = null; renderSelectedProduct(); }
+    renderProductDropdown(productInput.value);
+});
+productInput.addEventListener('focus', () => renderProductDropdown(productInput.value));
+document.addEventListener('click', (event) => {
+    if (!productDropdown.contains(event.target) && event.target !== productInput) productDropdown.classList.add('d-none');
+    if (!systemDropdown.contains(event.target) && event.target !== systemSearch) systemDropdown.classList.add('d-none');
+});
+productDropdown.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-product]');
+    if (!button) return;
+    chooseProduct(button.dataset.product);
+});
+productFavoritesList.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-fav-product]');
+    if (!button) return;
+    chooseProduct(button.dataset.favProduct);
+});
+selectedProductFavBtn.addEventListener('click', toggleSelectedProductFavorite);
+document.getElementById('clearProductBtn').addEventListener('click', () => chooseProduct(null));
+systemSearch.addEventListener('input', () => {
+    clearTimeout(systemSearchTimer);
+    const query = systemSearch.value.trim();
+    if (query.length < 2) { systemDropdown.classList.add('d-none'); return; }
+    systemSearchTimer = setTimeout(() => fetchSystems(query), 220);
+});
+systemDropdown.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-system]');
+    if (!button) return;
+    try {
+        addSystem(JSON.parse(button.dataset.system));
+        systemSearch.value = '';
+        systemDropdown.classList.add('d-none');
+    } catch (_) {}
+});
+systemFavoritesList.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-fav-system]');
+    if (!button) return;
+    const system = getSystemFavorites().find((entry) => Number(entry.id) === Number(button.dataset.favSystem));
+    if (system) addSystem(system);
+});
+selectedSystemsList.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-remove-system]');
+    if (!button) return;
+    removeSystem(button.dataset.removeSystem);
+});
+allCharactersToggle.addEventListener('change', updateCharacterPills);
+document.querySelectorAll('.character-checkbox').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+        if (allCharactersToggle.checked) allCharactersToggle.checked = false;
+        updateCharacterPills();
+    });
+});
+includeUnassignedToggle.addEventListener('change', () => { syncHiddenInputs(); updateSelectionSummary(); persistState(); });
+document.querySelectorAll('.eve-mode-btn').forEach((button) => { button.addEventListener('click', () => setMode(button.dataset.mode)); });
+document.getElementById('clearStateBtn').addEventListener('click', clearStateAndUi);
+const copySummaryBtn = document.getElementById('copySummaryBtn');
+if (copySummaryBtn) copySummaryBtn.addEventListener('click', copySummary);
+form.addEventListener('submit', () => { syncHiddenInputs(); persistState(); });
+
+(function initColonyPlan() {
+    let restoredFromStorage = false;
+    if (!HAS_SERVER_STATE) {
+        const saved = restoreState();
+        if (saved && (saved.product || (Array.isArray(saved.systems) && saved.systems.length))) {
+            applyState(saved);
+            restoredFromStorage = true;
+        }
+    }
+    renderSelectedProduct();
+    renderSelectedSystems();
+    renderSystemFavorites();
+    updateCharacterPills();
+    syncHiddenInputs();
+    updateSelectionSummary();
+    loadPlannerFavorites();
+    if (restoredFromStorage && selectedProduct && selectedSystems.length) {
+        window.setTimeout(() => form.requestSubmit(), 0);
+    }
+})();
 </script>
 {% endblock %}
