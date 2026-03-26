@@ -533,6 +533,25 @@ def _build_assignment_plan(
 
     assignments.sort(key=lambda item: (item["character_name"].casefold(), item["system_name"].casefold(), item["planet_name"].casefold(), item["role"]))
     char_rows = sorted(char_state.values(), key=lambda item: item["name"].casefold())
+    unused_characters: list[dict[str, Any]] = []
+    for item in char_rows:
+        item["used_in_plan"] = len(item.get("assignments") or [])
+        reason = None
+        if item["used_in_plan"] <= 0:
+            if item["remaining_slots"] <= 0:
+                reason = "no_slots"
+            elif (not include_unassigned) and item["selected_system_existing"] <= 0:
+                reason = "excluded_unassigned"
+            else:
+                reason = "not_needed"
+            unused_characters.append({
+                "id": item["id"],
+                "name": item["name"],
+                "portrait": item.get("portrait"),
+                "existing_total": item["existing_total"],
+                "max_planets": item["max_planets"],
+                "reason": reason,
+            })
     missing_planets = len(missing)
     additional_characters_needed = ceil(missing_planets / 6) if missing_planets else 0
 
@@ -542,6 +561,7 @@ def _build_assignment_plan(
         "flows": flow_items,
         "missing": missing,
         "characters": char_rows,
+        "unused_characters": unused_characters,
         "system_mode": mode_meta,
         "selected_systems": selected_systems,
         "used_systems": scoped_systems,

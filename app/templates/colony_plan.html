@@ -246,6 +246,38 @@
 </div>
 {% endif %}
 
+{% if plan and plan.unused_characters %}
+<div class="eve-card card border-0 mb-4">
+    <div class="card-header eve-card-header d-flex align-items-center gap-2">
+        <i class="bi bi-person-dash eve-accent"></i>
+        <span class="fw-medium">{{ t('colony_plan.unused_characters_title') }}</span>
+    </div>
+    <div class="card-body p-3">
+        <div class="d-flex flex-wrap gap-2">
+            {% for item in plan.unused_characters %}
+            <div class="eve-missing-row d-flex align-items-center gap-2">
+                {% if item.portrait %}
+                <img src="{{ item.portrait }}" alt="{{ item.name }}" style="width:24px;height:24px;border-radius:999px;object-fit:cover;border:1px solid #1a2d3d;">
+                {% endif %}
+                <div>
+                    <div class="fw-semibold">{{ item.name }} <span class="text-muted small">{{ item.existing_total }}/{{ item.max_planets }}</span></div>
+                    <div class="text-muted small">
+                        {% if item.reason == 'no_slots' %}
+                            {{ t('colony_plan.unused_reason_no_slots') }}
+                        {% elif item.reason == 'excluded_unassigned' %}
+                            {{ t('colony_plan.unused_reason_excluded') }}
+                        {% else %}
+                            {{ t('colony_plan.unused_reason_not_needed') }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% if plan %}
 <div class="row g-4">
     <div class="col-12">
