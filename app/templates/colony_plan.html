@@ -24,7 +24,7 @@
     <input type="hidden" name="include_unassigned" id="includeUnassignedInput" value="{{ 1 if include_unassigned else 0 }}">
 
     <div class="row g-4">
-        <div class="col-xl-7">
+        <div class="col-xl-6">
             <div class="eve-card card border-0 h-100">
                 <div class="card-body p-3 p-lg-4">
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -68,6 +68,13 @@
                         <div id="productFavoritesList" class="d-flex flex-wrap gap-2"></div>
                     </div>
 
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6">
+            <div class="eve-card card border-0 h-100">
+                <div class="card-body p-3 p-lg-4">
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
                         <div>
                             <div class="text-muted small mb-1">{{ t('colony_plan.systems') }}</div>
@@ -98,8 +105,8 @@
             </div>
         </div>
 
-        <div class="col-xl-5">
-            <div class="eve-card card border-0 h-100">
+        <div class="col-xl-8">
+            <div class="eve-card card border-0">
                 <div class="card-body p-3 p-lg-4">
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                         <div>
@@ -149,35 +156,47 @@
                         <div class="text-muted small mb-2">{{ t('colony_plan.selected_characters_label') }}</div>
                         <div id="selectedCharacterSummary" class="d-flex flex-wrap gap-2"></div>
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <div class="row g-3 mb-4">
-                        <div class="col-sm-6">
-                            <label class="form-label text-muted small">{{ t('colony_plan.chain_mode') }}</label>
-                            <div class="eve-option-stack">
-                                <button type="button" class="eve-mode-btn{% if single_system %} is-active{% endif %}" data-mode="single">
-                                    <i class="bi bi-bullseye me-1"></i>{{ t('colony_plan.single_system_mode') }}
-                                </button>
-                                <button type="button" class="eve-mode-btn{% if not single_system %} is-active{% endif %}" data-mode="cross">
-                                    <i class="bi bi-globe-europe-africa me-1"></i>{{ t('colony_plan.cross_system_mode') }}
-                                </button>
-                            </div>
-                        </div>
-                        <div class="col-sm-6">
-                            <label class="form-label text-muted small">{{ t('colony_plan.unassigned_characters') }}</label>
-                            <label class="eve-toggle-row h-auto">
-                                <input type="checkbox" id="includeUnassignedToggle" {% if include_unassigned %}checked{% endif %}>
-                                <span>{{ t('colony_plan.include_unassigned') }}</span>
-                            </label>
+        <div class="col-xl-4">
+            <div class="eve-card card border-0 h-100">
+                <div class="card-body p-3 p-lg-4 d-flex flex-column gap-4">
+                    <div>
+                        <label class="form-label text-muted small">{{ t('colony_plan.chain_mode') }}</label>
+                        <div class="eve-option-stack">
+                            <button type="button" class="eve-mode-btn{% if single_system %} is-active{% endif %}" data-mode="single">
+                                <i class="bi bi-bullseye me-1"></i>{{ t('colony_plan.single_system_mode') }}
+                            </button>
+                            <button type="button" class="eve-mode-btn{% if not single_system %} is-active{% endif %}" data-mode="cross">
+                                <i class="bi bi-globe-europe-africa me-1"></i>{{ t('colony_plan.cross_system_mode') }}
+                            </button>
                         </div>
                     </div>
-
-                    <div class="eve-callout mb-4">
-                        <div class="text-muted small mb-1">{{ t('colony_plan.selection_summary') }}</div>
-                        <div id="selectionSummaryText" class="fw-medium">{{ t('colony_plan.initial_hint') }}</div>
+                    <div>
+                        <label class="form-label text-muted small">{{ t('colony_plan.unassigned_characters') }}</label>
+                        <label class="eve-toggle-row h-auto">
+                            <input type="checkbox" id="includeUnassignedToggle" {% if include_unassigned %}checked{% endif %}>
+                            <span>{{ t('colony_plan.include_unassigned') }}</span>
+                        </label>
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <div class="d-grid">
-                        <button type="submit" class="btn eve-btn-primary btn-lg" id="generatePlanBtn">
+        <div class="col-xl-8">
+            <div class="eve-callout eve-callout-hero h-100">
+                <div class="text-muted small mb-2">{{ t('colony_plan.selection_summary') }}</div>
+                <div id="selectionSummaryText" class="fw-medium fs-4 lh-base">{{ t('colony_plan.initial_hint') }}</div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="eve-card card border-0 h-100">
+                <div class="card-body d-flex align-items-center justify-content-center p-4">
+                    <div class="d-grid w-100">
+                        <button type="submit" class="btn eve-btn-primary btn-lg colony-plan-submit" id="generatePlanBtn">
                             <i class="bi bi-play-circle me-2"></i>{{ t('colony_plan.generate') }}
                         </button>
                     </div>
@@ -360,28 +379,6 @@
     </div>
 
     <div class="col-xl-5">
-        <div class="eve-card card border-0 mb-4">
-            <div class="card-header eve-card-header d-flex align-items-center gap-2">
-                <i class="bi bi-exclamation-triangle eve-accent"></i>
-                <span class="fw-medium">{{ t('colony_plan.missing_title') }}</span>
-            </div>
-            <div class="card-body p-3">
-                {% if plan.missing %}
-                <div class="d-flex flex-column gap-2">
-                    {% for item in plan.missing %}
-                    <div class="eve-missing-row">
-                        <span class="badge" style="background:#e6394618;border:1px solid #e6394640;color:#e63946;">{{ item.kind_display }}</span>
-                        <span>{{ item.display_label }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                <div class="text-muted small mt-3">{{ t('colony_plan.additional_characters_needed') }}: <strong>{{ plan.additional_characters_needed }}</strong></div>
-                {% else %}
-                <div class="text-muted">{{ t('colony_plan.no_missing') }}</div>
-                {% endif %}
-            </div>
-        </div>
-
         <div class="eve-card card border-0">
             <div class="card-header eve-card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
                 <div class="d-flex align-items-center gap-2">
@@ -457,7 +454,19 @@
 .eve-mode-btn:hover { border-color:#2a5a8a; color:#c9d1d9; }
 .eve-mode-btn.is-active { border-color:#00b4d860; background:rgba(0,180,216,.08); color:#9adcf0; }
 .eve-callout { background:linear-gradient(180deg, rgba(15,31,48,.88), rgba(11,21,31,.95)); border:1px solid #1a2d3d; border-radius:14px; padding:14px 16px; }
+.eve-callout-hero {
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    min-height:100%;
+    padding:26px 28px;
+}
 .eve-flow-row, .eve-missing-row { background:#0b151f; border:1px solid #1a2d3d; border-radius:12px; padding:12px 14px; }
+.colony-plan-submit {
+    min-height:112px;
+    font-size:1.35rem;
+    font-weight:700;
+}
 </style>
 <script>
 const ALL_PRODUCTS = {{ all_products | tojson }};
