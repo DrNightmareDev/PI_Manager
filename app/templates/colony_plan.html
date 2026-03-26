@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+{% block title %}{{ t('colony_plan.title') }} - {{ t('app.name') }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="eve-page-title mb-1">
+            <i class="bi bi-diagram-2-fill me-2 eve-accent"></i>{{ t('colony_plan.title') }}
+        </h2>
+        <div class="text-muted small">{{ t('colony_plan.subtitle') }}</div>
+    </div>
+    {% if plan %}
+    <button class="btn eve-btn-outline" type="button" onclick="copyAssignmentSummary()">
+        <i class="bi bi-clipboard me-1"></i>{{ t('colony_plan.copy_summary') }}
+    </button>
+    {% endif %}
+</div>
+
+<form method="get" action="/colony-plan" class="eve-card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-xl-4">
+                <label class="form-label text-muted small">{{ t('colony_plan.end_product') }}</label>
+                <input class="form-control eve-input"
+                       list="colonyPlanProducts"
+                       name="product"
+                       value="{{ selected_product or '' }}"
+                       placeholder="{{ t('colony_plan.product_placeholder') }}"
+                       autocomplete="off">
+                <datalist id="colonyPlanProducts">
+                    {% for product in all_products %}
+                    <option value="{{ product.name }}">{{ product.display_name }} ({{ product.tier }})</option>
+                    {% endfor %}
+                </datalist>
+            </div>
+
+            <div class="col-xl-4">
+                <label class="form-label text-muted small">{{ t('colony_plan.systems') }}</label>
+                <div class="eve-input p-2">
+                    <div class="d-flex flex-wrap gap-2 mb-2" id="selectedSystems">
+                        {% for system in selected_systems %}
+                        <span class="badge eve-filter-badge active">
+                            {{ system.name }}
+                            <button class="btn btn-sm p-0 ms-1 text-white border-0 bg-transparent" type="button" onclick="removeSystem({{ system.id }})">&times;</button>
+                        </span>
+                        {% endfor %}
+                    </div>
+                    <input type="text"
+                           id="systemSearchInput"
+                           class="form-control border-0 bg-transparent px-0"
+                           placeholder="{{ t('colony_plan.system_placeholder') }}"
+                           autocomplete="off">
+                    <div id="systemSearchResults" class="list-group mt-2" style="display:none;max-height:220px;overflow:auto;"></div>
+                </div>
+                <input type="hidden" name="system_ids" id="systemIdsInput" value="{{ selected_system_ids | join(',') }}">
+            </div>
+
+            <div class="col-xl-4">
+                <label class="form-label text-muted small">{{ t('colony_plan.characters') }}</label>
+                <div class="eve-card" style="padding:0.85rem;">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="allCharactersToggle" name="all_characters" value="1" {% if use_all_characters %}checked{% endif %}>
+                        <label class="form-check-label small" for="allCharactersToggle">{{ t('colony_plan.all_characters') }}</label>
+                    </div>
+                    <div id="characterSelectionBox" class="d-flex flex-column gap-2" {% if use_all_characters %}style="opacity:.55;"{% endif %}>
+                        {% for char in characters %}
+                        <label class="d-flex align-items-center gap-2 small">
+                            <input class="form-check-input colony-plan-char" type="checkbox" name="character_ids" value="{{ char.id }}" {% if char.id in selected_character_ids %}checked{% endif %} {% if use_all_characters %}disabled{% endif %}>
+                            <img src="{{ char.portrait_url }}" class="rounded-circle" style="width:24px;height:24px;object-fit:cover;" onerror="this.src='/static/img/default_char.svg'">
+                            <span>{{ char.character_name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <label class="form-label text-muted small">{{ t('colony_plan.chain_mode') }}</label>
+                <div class="eve-card d-flex gap-3 p-3 flex-wrap">
+                    <label class="form-check d-flex align-items-center gap-2 mb-0">
+                        <input class="form-check-input" type="radio" name="single_system" value="1" {% if single_system %}checked{% endif %}>
+                        <span>{{ t('colony_plan.single_system_mode') }}</span>
+                    </label>
+                    <label class="form-check d-flex align-items-center gap-2 mb-0">
+                        <input class="form-check-input" type="radio" name="single_system" value="0" {% if not single_system %}checked{% endif %}>
+                        <span>{{ t('colony_plan.cross_system_mode') }}</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <label class="form-label text-muted small">{{ t('colony_plan.unassigned_characters') }}</label>
+                <div class="eve-card d-flex align-items-center gap-2 p-3">
+                    <input class="form-check-input" type="checkbox" id="includeUnassigned" name="include_unassigned" value="1" {% if include_unassigned %}checked{% endif %}>
+                    <label class="small mb-0" for="includeUnassigned">{{ t('colony_plan.include_unassigned') }}</label>
+                </div>
+            </div>
+
+            <div class="col-lg-4 d-flex align-items-end">
+                <div class="d-flex gap-2 w-100">
+                    <button class="btn eve-btn-primary flex-grow-1" type="submit">
+                        <i class="bi bi-magic me-1"></i>{{ t('colony_plan.generate') }}
+                    </button>
+                    <a class="btn eve-btn-ghost" href="/colony-plan">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if plan_error %}
+<div class="alert alert-danger eve-card mb-4">
+    <div class="card-body">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ plan_error }}
+    </div>
+</div>
+{% elif not plan and selected_product %}
+<div class="eve-card">
+    <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
+        {{ t('colony_plan.empty_hint') }}
+    </div>
+</div>
+{% elif not plan %}
+<div class="eve-card">
+    <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
+        {{ t('colony_plan.initial_hint') }}
+    </div>
+</div>
+{% else %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="eve-stat-card">
+            <div class="eve-stat-label">{{ t('colony_plan.stat_systems') }}</div>
+            <div class="eve-stat-value">{{ plan.used_systems | length }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="eve-stat-card">
+            <div class="eve-stat-label">{{ t('colony_plan.stat_assignments') }}</div>
+            <div class="eve-stat-value">{{ plan.assignments | length }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="eve-stat-card">
+            <div class="eve-stat-label">{{ t('colony_plan.stat_missing') }}</div>
+            <div class="eve-stat-value">{{ plan.missing_planets }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="eve-stat-card">
+            <div class="eve-stat-label">{{ t('colony_plan.stat_extra_chars') }}</div>
+            <div class="eve-stat-value">{{ plan.additional_characters_needed }}</div>
+        </div>
+    </div>
+</div>
+
+{% if plan.system_mode.single_system_mode %}
+<div class="eve-card mb-4">
+    <div class="card-body">
+        {% if plan.system_mode.viable %}
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge eve-filter-badge active">{{ t('colony_plan.single_system_mode') }}</span>
+            <span class="text-muted small">{{ t('colony_plan.single_system_selected') }} <strong>{{ plan.system_mode.chosen_system.name }}</strong></span>
+        </div>
+        {% else %}
+        <div class="text-danger small">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.single_system_unavailable') }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-12">
+        <div class="eve-card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                    <div>
+                        <div class="fw-semibold">{{ t('colony_plan.assignment_table') }}</div>
+                        <div class="text-muted small">{{ product_labels.get(selected_product, selected_product) }}</div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge eve-filter-badge active">{{ t('colony_plan.status_existing') }}</span>
+                        <span class="badge eve-filter-badge">{{ t('colony_plan.status_new') }}</span>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>{{ t('colony_plan.col_character') }}</th>
+                                <th>{{ t('colony_plan.col_planet') }}</th>
+                                <th>{{ t('colony_plan.col_role') }}</th>
+                                <th>{{ t('colony_plan.col_details') }}</th>
+                                <th>{{ t('colony_plan.col_status') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in plan.assignments %}
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">{{ item.character_name }}</div>
+                                    <div class="text-muted small">{{ item.system_name }}</div>
+                                </td>
+                                <td>
+                                    <div>{{ item.planet_name }}</div>
+                                    <div class="small text-muted">{{ planet_type_labels.get(item.planet_type, item.planet_type) }}</div>
+                                </td>
+                                <td>
+                                    {% if item.role == 'Extractor' %}
+                                    <span class="badge eve-filter-badge active">{{ t('colony_plan.role_extractor') }}</span>
+                                    {% else %}
+                                    <span class="badge eve-filter-badge">{{ t('colony_plan.role_factory') }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">{{ item.output_display }}</div>
+                                    <div class="small text-muted">{{ item.summary_display }}</div>
+                                </td>
+                                <td>
+                                    {% if item.status == 'existing' %}
+                                    <span class="text-success small"><i class="bi bi-arrow-repeat me-1"></i>{{ t('colony_plan.status_existing') }}</span>
+                                    {% else %}
+                                    <span class="text-warning small"><i class="bi bi-plus-circle me-1"></i>{{ t('colony_plan.status_new') }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if not plan.assignments %}
+                            <tr><td colspan="5" class="text-center text-muted py-4">{{ t('colony_plan.no_assignments') }}</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="eve-card h-100">
+            <div class="card-body">
+                <div class="fw-semibold mb-3">{{ t('colony_plan.flow_summary') }}</div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>{{ t('colony_plan.flow_from') }}</th>
+                                <th>{{ t('colony_plan.flow_to') }}</th>
+                                <th>{{ t('colony_plan.flow_transport') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for flow in plan.flows %}
+                            <tr>
+                                <td>
+                                    <div>{{ flow.from_product_display }}</div>
+                                    <div class="small text-muted">{{ flow.from_character }} | {{ flow.from_planet }}</div>
+                                </td>
+                                <td>
+                                    <div>{{ flow.to_product_display }}</div>
+                                    <div class="small text-muted">{{ flow.to_character }} | {{ flow.to_planet }}</div>
+                                </td>
+                                <td>
+                                    {% if flow.transport_label == 'same_character' %}
+                                    <span class="text-success small">{{ t('colony_plan.transport_same_character') }}</span>
+                                    {% elif flow.transport_label == 'cross_system' %}
+                                    <span class="text-warning small">{{ t('colony_plan.transport_cross_system') }}</span>
+                                    {% else %}
+                                    <span class="text-info small">{{ t('colony_plan.transport_customs') }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if not plan.flows %}
+                            <tr><td colspan="3" class="text-center text-muted py-4">{{ t('colony_plan.no_flow') }}</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-5">
+        <div class="eve-card h-100">
+            <div class="card-body">
+                <div class="fw-semibold mb-3">{{ t('colony_plan.capacity_summary') }}</div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>{{ t('colony_plan.col_character') }}</th>
+                                <th>{{ t('colony_plan.capacity_used') }}</th>
+                                <th>{{ t('colony_plan.capacity_remaining') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for char in plan.characters %}
+                            <tr>
+                                <td>
+                                    <div>{{ char.name }}</div>
+                                    {% if not char.scope_based %}
+                                    <div class="small text-muted">{{ t('colony_plan.capacity_estimated') }}</div>
+                                    {% endif %}
+                                </td>
+                                <td>{{ char.existing_total }}/{{ char.max_planets }}</td>
+                                <td>{{ char.remaining_slots }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="row g-4">
+            <div class="col-xl-5">
+                <div class="eve-card h-100">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-3">{{ t('colony_plan.materials_needed') }}</div>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for p0 in plan.chain.p0_needed %}
+                            <span class="badge eve-filter-badge">{{ product_labels.get(p0, p0) }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-7">
+                <div class="eve-card h-100">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-3">{{ t('colony_plan.missing_title') }}</div>
+                        {% if plan.missing %}
+                        <ul class="mb-0">
+                            {% for item in plan.missing %}
+                            <li class="mb-1">
+                                <strong>{{ item.kind_display }}</strong>: {{ item.display_label }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <div class="text-muted small mt-3">
+                            {{ t('colony_plan.additional_characters_needed') }}: <strong>{{ plan.additional_characters_needed }}</strong>
+                        </div>
+                        {% else %}
+                        <div class="text-success">
+                            <i class="bi bi-check-circle-fill me-1"></i>{{ t('colony_plan.no_missing') }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="eve-card">
+            <div class="card-body">
+                <div class="fw-semibold mb-3">{{ t('colony_plan.export_title') }}</div>
+                <textarea class="form-control eve-input" id="assignmentSummaryText" rows="10" readonly>{{ plan.summary_text }}</textarea>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    #systemSearchResults .list-group-item {
+        background: #111c26;
+        color: #c9d8e8;
+        border-color: #1a2d3d;
+        cursor: pointer;
+    }
+    #systemSearchResults .list-group-item:hover {
+        background: #152433;
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const selectedSystems = new Map();
+{% for system in selected_systems %}
+selectedSystems.set({{ system.id }}, {{ system | tojson }});
+{% endfor %}
+
+function syncSystemIds() {
+    document.getElementById('systemIdsInput').value = Array.from(selectedSystems.keys()).join(',');
+}
+
+function renderSelectedSystems() {
+    const wrap = document.getElementById('selectedSystems');
+    wrap.innerHTML = '';
+    selectedSystems.forEach((system, id) => {
+        const chip = document.createElement('span');
+        chip.className = 'badge eve-filter-badge active';
+        chip.innerHTML = `${system.name} <button class="btn btn-sm p-0 ms-1 text-white border-0 bg-transparent" type="button" onclick="removeSystem(${id})">&times;</button>`;
+        wrap.appendChild(chip);
+    });
+    syncSystemIds();
+}
+
+function removeSystem(id) {
+    selectedSystems.delete(id);
+    renderSelectedSystems();
+}
+
+async function searchSystems(q) {
+    const results = document.getElementById('systemSearchResults');
+    if (!q || q.length < 2) {
+        results.style.display = 'none';
+        results.innerHTML = '';
+        return;
+    }
+    const res = await fetch('/system/search?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    results.innerHTML = '';
+    (data.systems || []).forEach((system) => {
+        if (selectedSystems.has(system.id)) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'list-group-item list-group-item-action';
+        btn.textContent = `${system.name} | ${system.region || ''}`;
+        btn.onclick = () => {
+            selectedSystems.set(system.id, system);
+            renderSelectedSystems();
+            results.innerHTML = '';
+            results.style.display = 'none';
+            document.getElementById('systemSearchInput').value = '';
+        };
+        results.appendChild(btn);
+    });
+    results.style.display = results.children.length ? 'block' : 'none';
+}
+
+document.getElementById('systemSearchInput')?.addEventListener('input', (event) => {
+    searchSystems(event.target.value);
+});
+
+document.getElementById('allCharactersToggle')?.addEventListener('change', (event) => {
+    const disabled = event.target.checked;
+    const box = document.getElementById('characterSelectionBox');
+    box.style.opacity = disabled ? '.55' : '1';
+    box.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+        el.disabled = disabled;
+    });
+});
+
+function copyAssignmentSummary() {
+    const el = document.getElementById('assignmentSummaryText');
+    if (!el) return;
+    el.select();
+    el.setSelectionRange(0, 99999);
+    document.execCommand('copy');
+}
+
+renderSelectedSystems();
+</script>
+{% endblock %}

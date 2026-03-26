@@ -1,0 +1,636 @@
+from __future__ import annotations
+
+from collections import Counter
+from math import ceil
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import HTMLResponse
+from sqlalchemy.orm import Session
+
+from app import sde
+from app.database import get_db
+from app.dependencies import require_account
+from app.i18n import get_language_from_request, translate, translate_type_name
+from app.market import PI_TYPE_IDS
+from app.models import Character
+from app.pi_data import (
+    ALL_P1,
+    ALL_P2,
+    ALL_P3,
+    ALL_P4,
+    P0_TO_P1,
+    P1_TO_P2,
+    P2_TO_P3,
+    P3_TO_P4,
+    PLANET_RESOURCES,
+    PLANET_TYPE_COLORS,
+)
+from app.routers.dashboard import _attach_pi_skills, _build_dashboard_payload, _load_colony_cache, _save_colony_cache
+from app.routers.system import _load_system_planets
+from app.templates_env import templates
+
+router = APIRouter(prefix="/colony-plan", tags=["colony-plan"])
+
+P1_TO_P0 = {v: k for k, v in P0_TO_P1.items()}
+TIER_ORDER = {"P1": 1, "P2": 2, "P3": 3, "P4": 4}
+FACTORY_ANY_TYPE = "Factory"
+
+
+def _resolve_type_id(name: str) -> int | None:
+    return PI_TYPE_IDS.get(name) or sde.find_type_id_by_name(name)
+
+
+def _product_tier(name: str) -> str | None:
+    if name in ALL_P4:
+        return "P4"
+    if name in ALL_P3:
+        return "P3"
+    if name in ALL_P2:
+        return "P2"
+    if name in ALL_P1:
+        return "P1"
+    return None
+
+
+def _build_product_labels(lang: str) -> dict[str, str]:
+    names = set(ALL_P1) | set(ALL_P2) | set(ALL_P3) | set(ALL_P4) | set(P0_TO_P1.keys())
+    labels: dict[str, str] = {}
+    for name in names:
+        labels[name] = translate_type_name(_resolve_type_id(name), fallback=name, lang=lang)
+    return labels
+
+
+def _build_planet_type_labels(lang: str) -> dict[str, str]:
+    return {
+        name: translate(f"planet_type.{name.lower()}", lang=lang, default=name)
+        for name in PLANET_TYPE_COLORS
+    }
+
+
+def _parse_csv_ints(raw: str | None) -> list[int]:
+    values: list[int] = []
+    for part in (raw or "").split(","):
+        part = part.strip()
+        if part.isdigit():
+            values.append(int(part))
+    return list(dict.fromkeys(values))
+
+
+def _system_meta(system_id: int) -> dict[str, Any]:
+    info = sde.get_system_local(system_id) or {}
+    return {
+        "id": system_id,
+        "name": info.get("name", f"System {system_id}"),
+        "security": info.get("security", 0.0),
+        "region": info.get("region_name", ""),
+        "constellation": info.get("constellation_name", ""),
+    }
+
+
+def _collect_chain(product_name: str) -> dict[str, Any]:
+    tier = _product_tier(product_name)
+    if not tier:
+        raise ValueError(f"Unknown PI product: {product_name}")
+
+    tiers = {"P1": set(), "P2": set(), "P3": set(), "P4": set()}
+    flow_edges: list[tuple[str, str]] = []
+    p0_needed: set[str] = set()
+
+    def visit(name: str) -> None:
+        current_tier = _product_tier(name)
+        if not current_tier:
+            return
+        if name in tiers[current_tier]:
+            return
+        tiers[current_tier].add(name)
+        if current_tier == "P1":
+            p0_name = P1_TO_P0.get(name)
+            if p0_name:
+                p0_needed.add(p0_name)
+            return
+        inputs: list[str]
+        if current_tier == "P2":
+            inputs = P1_TO_P2.get(name, [])
+        elif current_tier == "P3":
+            inputs = P2_TO_P3.get(name, [])
+        else:
+            inputs = P3_TO_P4.get(name, [])
+        for item in inputs:
+            if _product_tier(item):
+                flow_edges.append((item, name))
+                visit(item)
+            else:
+                # Direct P1 input in certain P4 recipes
+                flow_edges.append((item, name))
+                visit(item)
+
+    visit(product_name)
+    return {
+        "product": product_name,
+        "tier": tier,
+        "tiers": {k: sorted(v) for k, v in tiers.items()},
+        "p0_needed": sorted(p0_needed),
+        "flow_edges": flow_edges,
+    }
+
+
+def _load_cached_colonies(account, characters: list[Character], db: Session) -> list[dict]:
+    cached = _load_colony_cache(account.id, db)
+    if not cached:
+        payload = _build_dashboard_payload(account, characters, db, price_mode=getattr(account, "price_mode", "sell"))
+        _save_colony_cache(account.id, payload, db)
+        cached = {"colonies": payload["colonies"]}
+    return list(cached.get("colonies", []))
+
+
+def _character_capacity(char: Character, used_colonies: int) -> dict[str, Any]:
+    skill_map = {skill["name"]: skill["level"] for skill in getattr(char, "pi_skills", [])}
+    ip_level = int(skill_map.get("Interplanetary Consolidation", 0) or 0)
+    has_scope = bool(getattr(char, "has_skill_scope", False))
+    max_planets = 1 + ip_level if has_scope else max(used_colonies, 6)
+    return {
+        "id": char.id,
+        "name": char.character_name,
+        "portrait": char.portrait_url,
+        "existing_total": used_colonies,
+        "max_planets": max_planets,
+        "remaining_slots": max(max_planets - used_colonies, 0),
+        "scope_based": has_scope,
+    }
+
+
+def _pick_system_subset(
+    selected_systems: list[dict],
+    required_p0: set[str],
+    selected_colonies: list[dict],
+    single_system_only: bool,
+) -> tuple[list[dict], dict[str, Any]]:
+    if not single_system_only:
+        return selected_systems, {"single_system_mode": False, "chosen_system": None, "viable": True}
+
+    viable: list[tuple[int, dict]] = []
+    colony_counter = Counter(int(col.get("solar_system_id") or 0) for col in selected_colonies)
+    for system in selected_systems:
+        resources = set()
+        for planet in system["planets"]:
+            resources.update(PLANET_RESOURCES.get(planet["planet_type"], []))
+        if required_p0.issubset(resources):
+            score = colony_counter.get(system["id"], 0) * 100 + len(system["planets"])
+            viable.append((score, system))
+
+    if not viable:
+        return [], {
+            "single_system_mode": True,
+            "chosen_system": None,
+            "viable": False,
+            "missing_resources": sorted(required_p0),
+        }
+
+    viable.sort(key=lambda item: item[0], reverse=True)
+    chosen = viable[0][1]
+    return [chosen], {
+        "single_system_mode": True,
+        "chosen_system": chosen,
+        "viable": True,
+    }
+
+
+def _make_planet_pool(
+    selected_systems: list[dict],
+    selected_char_ids: set[int],
+    colonies: list[dict],
+    char_id_by_name: dict[str, int],
+) -> tuple[list[dict], dict[int, int], set[int]]:
+    occupied_by_selected: dict[int, int] = {}
+    blocked_planets: set[int] = set()
+    for colony in colonies:
+        planet_id = int(colony.get("planet_id") or 0)
+        if not planet_id:
+            continue
+        char_id = char_id_by_name.get(colony.get("character_name") or "")
+        if char_id in selected_char_ids:
+            occupied_by_selected[planet_id] = char_id
+        else:
+            blocked_planets.add(planet_id)
+
+    pool: list[dict] = []
+    for system in selected_systems:
+        for planet in system["planets"]:
+            pid = int(planet["planet_id"])
+            if pid in blocked_planets:
+                continue
+            resources = PLANET_RESOURCES.get(planet["planet_type"], [])
+            pool.append({
+                **planet,
+                "resources": resources,
+                "occupied_char_id": occupied_by_selected.get(pid),
+            })
+    return pool, occupied_by_selected, blocked_planets
+
+
+def _select_assignment(
+    *,
+    candidates: list[dict],
+    char_state: dict[int, dict],
+    assigned_planets: set[int],
+    include_unassigned: bool,
+    preferred_chars: set[int] | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    preferred_chars = preferred_chars or set()
+    best: tuple[tuple[int, int, int], dict[str, Any], dict[str, Any]] | None = None
+
+    for planet in candidates:
+        planet_id = int(planet["planet_id"])
+        if planet_id in assigned_planets:
+            continue
+
+        occupied_char_id = planet.get("occupied_char_id")
+        candidate_char_ids = [occupied_char_id] if occupied_char_id else list(char_state.keys())
+
+        for char_id in candidate_char_ids:
+            if not char_id:
+                continue
+            state = char_state.get(char_id)
+            if not state:
+                continue
+            existing_planet = occupied_char_id == char_id
+            if not existing_planet:
+                if state["remaining_slots"] <= 0:
+                    continue
+                if not include_unassigned and state["selected_system_existing"] == 0:
+                    continue
+
+            score = 0
+            if existing_planet:
+                score += 1000
+            if char_id in preferred_chars:
+                score += 200
+            if int(planet["system_id"]) in state["systems_with_colonies"]:
+                score += 75
+            score += min(state["remaining_slots"], 20)
+            score -= state["new_assignments"]
+            score -= state["existing_reuse_assignments"]
+
+            tiebreak = (
+                score,
+                1 if existing_planet else 0,
+                state["remaining_slots"],
+            )
+            if not best or tiebreak > best[0]:
+                best = (tiebreak, planet, state)
+
+    if not best:
+        return None, None
+    return best[1], best[2]
+
+
+def _assignment_summary_text(
+    assignments: list[dict[str, Any]],
+    flows: list[dict[str, Any]],
+    missing: list[dict[str, Any]],
+) -> str:
+    lines = ["Colony Assignment Planner", ""]
+    lines.append("Assignments:")
+    for item in assignments:
+        detail_summary = " | ".join(item.get("detail_items") or [])
+        lines.append(
+            f"- {item['character_name']} | {item['system_name']} | {item['planet_name']} | {item['role']} | {detail_summary or item['summary']}"
+        )
+    if flows:
+        lines.append("")
+        lines.append("Material Flow:")
+        for flow in flows:
+            lines.append(
+                f"- {flow['from_product']} -> {flow['to_product']} | {flow['transport_label']} | {flow['from_character']} -> {flow['to_character']}"
+            )
+    if missing:
+        lines.append("")
+        lines.append("Missing:")
+        for item in missing:
+            lines.append(f"- {item['kind']}: {item['label']}")
+    return "\n".join(lines)
+
+
+def _missing_label(item: dict[str, Any], lang: str, product_labels: dict[str, str]) -> str:
+    kind = item.get("kind") or "item"
+    label = item.get("label") or ""
+    if kind == "system" and label == "single_system_unavailable":
+        return translate("colony_plan.single_system_unavailable", lang=lang)
+    if kind == "extractor":
+        return translate("colony_plan.missing_extractor", lang=lang, label=product_labels.get(label, label))
+    if kind == "factory":
+        return translate("colony_plan.missing_factory", lang=lang, label=product_labels.get(label, label))
+    return str(label)
+
+
+def _missing_kind_label(kind: str, lang: str) -> str:
+    mapping = {
+        "system": "colony_plan.missing_kind_system",
+        "extractor": "colony_plan.missing_kind_extractor",
+        "factory": "colony_plan.missing_kind_factory",
+    }
+    return translate(mapping.get(kind, "common.unknown"), lang=lang, default=kind)
+
+
+def _build_assignment_plan(
+    *,
+    product_name: str,
+    selected_systems: list[dict],
+    selected_characters: list[Character],
+    all_colonies: list[dict],
+    include_unassigned: bool,
+    single_system_only: bool,
+) -> dict[str, Any]:
+    chain = _collect_chain(product_name)
+    required_p0 = set(chain["p0_needed"])
+    char_id_by_name = {char.character_name: char.id for char in selected_characters}
+    selected_char_ids = {char.id for char in selected_characters}
+    selected_colonies = [
+        colony for colony in all_colonies
+        if char_id_by_name.get(colony.get("character_name") or "") in selected_char_ids
+    ]
+
+    scoped_systems, mode_meta = _pick_system_subset(selected_systems, required_p0, selected_colonies, single_system_only)
+    if single_system_only and not mode_meta.get("viable"):
+        return {
+            "chain": chain,
+            "assignments": [],
+            "flows": [],
+            "missing": [{"kind": "system", "label": "single_system_unavailable"}],
+            "characters": [],
+            "system_mode": mode_meta,
+            "selected_systems": selected_systems,
+            "used_systems": [],
+            "summary_text": "",
+            "missing_planets": 0,
+            "additional_characters_needed": 0,
+        }
+
+    used_system_ids = {system["id"] for system in scoped_systems}
+    selected_colonies = [
+        colony for colony in selected_colonies
+        if int(colony.get("solar_system_id") or 0) in used_system_ids
+    ]
+    all_counts = Counter(colony.get("character_name") for colony in all_colonies if colony.get("character_name"))
+    char_state: dict[int, dict[str, Any]] = {}
+    for char in selected_characters:
+        state = _character_capacity(char, int(all_counts.get(char.character_name, 0) or 0))
+        state["selected_system_existing"] = sum(
+            1 for colony in selected_colonies if colony.get("character_name") == char.character_name
+        )
+        state["systems_with_colonies"] = {
+            int(colony.get("solar_system_id") or 0)
+            for colony in selected_colonies
+            if colony.get("character_name") == char.character_name
+        }
+        state["new_assignments"] = 0
+        state["existing_reuse_assignments"] = 0
+        state["assignments"] = []
+        char_state[char.id] = state
+
+    planet_pool, occupied_by_selected, _blocked = _make_planet_pool(scoped_systems, selected_char_ids, all_colonies, char_id_by_name)
+    assignments: list[dict[str, Any]] = []
+    assigned_planets: set[int] = set()
+    output_task_by_product: dict[str, dict[str, Any]] = {}
+    missing: list[dict[str, Any]] = []
+
+    # Extractors first: one extractor planet per needed P0.
+    for p0_name in chain["p0_needed"]:
+        matching = [planet for planet in planet_pool if p0_name in planet["resources"]]
+        chosen_planet, chosen_char = _select_assignment(
+            candidates=matching,
+            char_state=char_state,
+            assigned_planets=assigned_planets,
+            include_unassigned=include_unassigned,
+        )
+        if not chosen_planet or not chosen_char:
+            missing.append({"kind": "extractor", "label": p0_name})
+            continue
+
+        assigned_planets.add(int(chosen_planet["planet_id"]))
+        existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
+        if existing_planet:
+            chosen_char["existing_reuse_assignments"] += 1
+        else:
+            chosen_char["remaining_slots"] -= 1
+            chosen_char["new_assignments"] += 1
+        chosen_char["assignments"].append(chosen_planet["planet_id"])
+
+        p1_output = P0_TO_P1.get(p0_name, "")
+        entry = {
+            "character_id": chosen_char["id"],
+            "character_name": chosen_char["name"],
+            "planet_id": chosen_planet["planet_id"],
+            "planet_name": chosen_planet["planet_name"],
+            "planet_type": chosen_planet["planet_type"],
+            "system_id": chosen_planet["system_id"],
+            "system_name": chosen_planet["system_name"],
+            "role": "Extractor",
+            "summary": p0_name,
+            "detail_items": [p0_name],
+            "output_product": p1_output,
+            "status": "existing" if existing_planet else "new",
+            "status_label": "existing_reassignable" if existing_planet else "new_placement",
+            "tier": "P0",
+        }
+        assignments.append(entry)
+        output_task_by_product[p1_output] = entry
+
+    # Factory stages P2 -> P4 (or final lower tiers).
+    factory_products: list[str] = []
+    for tier in ("P2", "P3", "P4"):
+        factory_products.extend(chain["tiers"][tier])
+    if chain["tier"] == "P1":
+        factory_products = []
+
+    for product in factory_products:
+        tier = _product_tier(product) or ""
+        if tier == "P2":
+            inputs = list(P1_TO_P2.get(product, []))
+        elif tier == "P3":
+            inputs = list(P2_TO_P3.get(product, []))
+        else:
+            inputs = list(P3_TO_P4.get(product, []))
+
+        preferred_chars = {
+            output_task_by_product[item]["character_id"]
+            for item in inputs
+            if item in output_task_by_product
+        }
+        chosen_planet, chosen_char = _select_assignment(
+            candidates=planet_pool,
+            char_state=char_state,
+            assigned_planets=assigned_planets,
+            include_unassigned=include_unassigned,
+            preferred_chars=preferred_chars,
+        )
+        if not chosen_planet or not chosen_char:
+            missing.append({"kind": "factory", "label": product})
+            continue
+
+        assigned_planets.add(int(chosen_planet["planet_id"]))
+        existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
+        if existing_planet:
+            chosen_char["existing_reuse_assignments"] += 1
+        else:
+            chosen_char["remaining_slots"] -= 1
+            chosen_char["new_assignments"] += 1
+        chosen_char["assignments"].append(chosen_planet["planet_id"])
+
+        entry = {
+            "character_id": chosen_char["id"],
+            "character_name": chosen_char["name"],
+            "planet_id": chosen_planet["planet_id"],
+            "planet_name": chosen_planet["planet_name"],
+            "planet_type": chosen_planet["planet_type"],
+            "system_id": chosen_planet["system_id"],
+            "system_name": chosen_planet["system_name"],
+            "role": FACTORY_ANY_TYPE,
+            "summary": f"{product} · " + " · ".join(inputs),
+            "detail_items": inputs,
+            "output_product": product,
+            "status": "existing" if existing_planet else "new",
+            "status_label": "existing_reassignable" if existing_planet else "new_placement",
+            "tier": tier,
+        }
+        assignments.append(entry)
+        output_task_by_product[product] = entry
+
+    flow_items: list[dict[str, Any]] = []
+    for source_name, target_name in chain["flow_edges"]:
+        source_task = output_task_by_product.get(source_name)
+        target_task = output_task_by_product.get(target_name)
+        if not source_task or not target_task:
+            continue
+        same_character = source_task["character_id"] == target_task["character_id"]
+        cross_system = source_task["system_id"] != target_task["system_id"]
+        if same_character and not cross_system:
+            transport_label = "same_character"
+        elif cross_system:
+            transport_label = "cross_system"
+        else:
+            transport_label = "customs_office"
+        flow_items.append({
+            "from_product": source_name,
+            "to_product": target_name,
+            "from_character": source_task["character_name"],
+            "to_character": target_task["character_name"],
+            "from_planet": source_task["planet_name"],
+            "to_planet": target_task["planet_name"],
+            "transport_label": transport_label,
+            "same_character": same_character,
+            "cross_system": cross_system,
+        })
+
+    assignments.sort(key=lambda item: (item["character_name"].casefold(), item["system_name"].casefold(), item["planet_name"].casefold(), item["role"]))
+    char_rows = sorted(char_state.values(), key=lambda item: item["name"].casefold())
+    missing_planets = len(missing)
+    additional_characters_needed = ceil(missing_planets / 6) if missing_planets else 0
+
+    return {
+        "chain": chain,
+        "assignments": assignments,
+        "flows": flow_items,
+        "missing": missing,
+        "characters": char_rows,
+        "system_mode": mode_meta,
+        "selected_systems": selected_systems,
+        "used_systems": scoped_systems,
+        "summary_text": _assignment_summary_text(assignments, flow_items, missing),
+        "missing_planets": missing_planets,
+        "additional_characters_needed": additional_characters_needed,
+    }
+
+
+@router.get("", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
+def colony_plan_page(
+    request: Request,
+    product: str | None = None,
+    system_ids: str | None = Query(default=None),
+    character_ids: list[int] | None = Query(default=None),
+    all_characters: int = Query(default=1),
+    single_system: int = Query(default=0),
+    include_unassigned: int = Query(default=1),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    lang = get_language_from_request(request)
+    characters = db.query(Character).filter(Character.account_id == account.id).all()
+    _attach_pi_skills(characters, db)
+
+    product_labels = _build_product_labels(lang)
+    planet_type_labels = _build_planet_type_labels(lang)
+
+    all_products = []
+    for tier, names in (("P1", ALL_P1), ("P2", ALL_P2), ("P3", ALL_P3), ("P4", ALL_P4)):
+        for name in names:
+            all_products.append({
+                "name": name,
+                "display_name": product_labels.get(name, name),
+                "tier": tier,
+            })
+    all_products.sort(key=lambda item: (TIER_ORDER[item["tier"]], item["display_name"].casefold()))
+
+    selected_system_ids = _parse_csv_ints(system_ids)
+    selected_character_ids = set(character_ids or [])
+    use_all_characters = bool(all_characters) or not selected_character_ids
+    selected_characters = characters if use_all_characters else [char for char in characters if char.id in selected_character_ids]
+    selected_character_ids = {char.id for char in selected_characters}
+
+    selected_systems: list[dict[str, Any]] = []
+    for system_id in selected_system_ids:
+        planets = _load_system_planets(system_id)
+        if not planets:
+            continue
+        meta = _system_meta(system_id)
+        selected_systems.append({
+            **meta,
+            "planets": planets,
+            "planet_count": len(planets),
+            "planet_types": sorted({planet["planet_type"] for planet in planets}),
+        })
+
+    plan = None
+    plan_error = None
+    valid_product_names = {item["name"] for item in all_products}
+    if product and product not in valid_product_names:
+        plan_error = translate("colony_plan.invalid_product", lang=lang)
+    elif product and selected_systems and selected_characters:
+        all_colonies = _load_cached_colonies(account, characters, db)
+        plan = _build_assignment_plan(
+            product_name=product,
+            selected_systems=selected_systems,
+            selected_characters=selected_characters,
+            all_colonies=all_colonies,
+            include_unassigned=bool(include_unassigned),
+            single_system_only=bool(single_system),
+        )
+        for item in plan["assignments"]:
+            item["summary_display"] = " | ".join(product_labels.get(part, part) for part in item["detail_items"])
+            item["output_display"] = product_labels.get(item["output_product"], item["output_product"])
+        for flow in plan["flows"]:
+            flow["from_product_display"] = product_labels.get(flow["from_product"], flow["from_product"])
+            flow["to_product_display"] = product_labels.get(flow["to_product"], flow["to_product"])
+        for item in plan["missing"]:
+            item["display_label"] = _missing_label(item, lang, product_labels)
+            item["kind_display"] = _missing_kind_label(item["kind"], lang)
+
+    return templates.TemplateResponse("colony_plan.html", {
+        "request": request,
+        "account": account,
+        "all_products": all_products,
+        "product_labels": product_labels,
+        "planet_type_labels": planet_type_labels,
+        "selected_product": product,
+        "selected_system_ids": selected_system_ids,
+        "selected_systems": selected_systems,
+        "characters": characters,
+        "selected_character_ids": selected_character_ids,
+        "use_all_characters": use_all_characters,
+        "single_system": bool(single_system),
+        "include_unassigned": bool(include_unassigned),
+        "plan": plan,
+        "plan_error": plan_error,
+    })
