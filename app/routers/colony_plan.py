@@ -383,13 +383,21 @@ def _select_assignment(
     if not eligible:
         return None, None, False
 
+    # Hard priority tiers — scoring only applies within the winning tier:
+    #   1. existing planet (reuse current colony, no move needed)
+    #   2. free new slot (remaining_slots > 0, no relocation)
+    #   3. relocation (full-capacity char repurposing an existing colony)
+    # This ensures free-capacity chars are exhausted before relocations happen,
+    # even when same_corp / preferred_chars bonuses would otherwise tip the scale.
+    existing_tier = [(p, s, ep, ir) for p, s, ep, ir in eligible if ep]
+    new_tier      = [(p, s, ep, ir) for p, s, ep, ir in eligible if not ep and not ir]
+    reloc_tier    = [(p, s, ep, ir) for p, s, ep, ir in eligible if not ep and ir]
+
+    to_score = existing_tier or new_tier or reloc_tier
+
     best: tuple[tuple[int, int, int], dict[str, Any], dict[str, Any], bool] | None = None
-    for planet, state, existing_planet, is_relocation in eligible:
+    for planet, state, existing_planet, is_relocation in to_score:
         score = 0
-        if existing_planet:
-            score += 1000
-        elif is_relocation:
-            score += 50  # lower priority than free-slot placements
         if state["id"] in preferred_chars:
             score += 200
         if state.get("same_corp_as_main"):
@@ -398,17 +406,12 @@ def _select_assignment(
             score += 75
         if preferred_systems and int(planet["system_id"]) in preferred_systems:
             score += 40
-        if not is_relocation:
-            score += min(max(state["remaining_slots"], 0), 20)
+        score += min(max(state["remaining_slots"], 0), 20)
         score -= state["new_assignments"]
         score -= state["relocation_assignments"]
         score -= state["existing_reuse_assignments"]
 
-        tiebreak = (
-            score,
-            1 if existing_planet else 0,
-            0 if is_relocation else state["remaining_slots"],
-        )
+        tiebreak = (score, state["remaining_slots"])
         if not best or tiebreak > best[0]:
             best = (tiebreak, planet, state, is_relocation)
 
