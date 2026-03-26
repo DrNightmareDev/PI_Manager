@@ -616,7 +616,10 @@ def _build_assignment_plan(
         }
         state["new_assignments"] = 0
         state["existing_reuse_assignments"] = 0
-        state["relocation_slots"] = state["selected_system_existing"]
+        # Relocation = abandoning any existing colony (in any system) to free a slot.
+        # Previously limited to colonies inside the selected systems; now any colony
+        # can be abandoned so full chars can still plan new placements.
+        state["relocation_slots"] = state["existing_total"]
         state["relocation_assignments"] = 0
         state["assignments"] = []
         char_state[char.id] = state
