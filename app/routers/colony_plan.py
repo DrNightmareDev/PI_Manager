@@ -270,18 +270,22 @@ def _feasibility_analysis(
 
     # Count achievable self-sufficient P2 assignments: each saves 2 planets
     # (1 combined planet replaces P0_A extractor + P0_B extractor + P2 factory).
-    ss_sim_used: set[int] = set()
+    #
+    # IMPORTANT: different characters can operate on the same physical planet
+    # simultaneously (each has their own command center).  The feasibility
+    # simulation therefore does NOT mark planets as "exclusively used" between
+    # SS P2 assignments — it only checks that a planet of the required type
+    # exists in the pool.  Character capacity is the real limiting factor and
+    # is checked separately via total_capacity vs planets_needed.
     ss_covered_p0: set[str] = set()
     ss_planet_count = 0
     for p2_name, ss in chain.get("self_sufficient_p2", {}).items():
         p0_a, p0_b = ss["p0_a"], ss["p0_b"]
-        combined = [
-            p for p in planet_pool
-            if p0_a in p.get("resources", []) and p0_b in p.get("resources", [])
-            and int(p["planet_id"]) not in ss_sim_used
-        ]
-        if combined:
-            ss_sim_used.add(int(combined[0]["planet_id"]))
+        planet_available = any(
+            p0_a in p.get("resources", []) and p0_b in p.get("resources", [])
+            for p in planet_pool
+        )
+        if planet_available:
             ss_covered_p0.add(p0_a)
             ss_covered_p0.add(p0_b)
             ss_planet_count += 1
@@ -341,8 +345,10 @@ def _feasibility_analysis(
     # Greedy simulation mirroring the actual assignment order:
     #   1. self-sufficient P2 assignments (covers two P0s on one planet)
     #   2. remaining P0 extractors
-    # Detects planet-count conflicts (e.g. two P0s competing for the only Lava planet).
-    simulated_used: set[int] = set(ss_sim_used)  # SS planets already committed
+    # Detects true planet-count conflicts for standalone P0 extractions (those not
+    # already handled by a self-sufficient P2).  Planets shared by SS assignments
+    # are NOT blocked here — different chars may still use the same planet.
+    simulated_used: set[int] = set()
     insufficient_set: set[str] = set()
     for p0_name in chain["p0_needed"]:
         if p0_name in ss_covered_p0:
