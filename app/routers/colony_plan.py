@@ -497,8 +497,15 @@ def _select_assignment(
             score += 40
         score += min(max(state["remaining_slots"], 0), 20)
         score -= state["new_assignments"]
-        score -= state["relocation_assignments"]
         score -= state["existing_reuse_assignments"]
+        if is_relocation:
+            # Fill up one character's relocation slots before starting another.
+            # +300 per existing relocation assignment dominates all other bonuses
+            # (corp +90, preferred_chars +200), so once we commit to a char we
+            # keep using them until their reloc_free hits 0.
+            score += state["relocation_assignments"] * 300
+        else:
+            score -= state["relocation_assignments"]
 
         tiebreak = (score, state["remaining_slots"])
         if not best or tiebreak > best[0]:
