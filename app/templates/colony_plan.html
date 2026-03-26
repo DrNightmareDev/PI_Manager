@@ -66,10 +66,37 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
     cursor: pointer; font-size: .85rem; padding: .35rem .7rem;
 }
 #systemSearchResults .list-group-item:hover { background: #152433; }
+
+/* ── Fav pills ───────────────────────────────────────────────── */
+.eve-fav-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px 3px 7px; border-radius: 20px;
+    background: #0a1520; border: 1px solid #1e3448;
+    font-size: .78rem; cursor: pointer; white-space: nowrap;
+    transition: background .15s, border-color .15s; line-height: 1.4;
+}
+.eve-fav-pill:hover { background: #0f1f30; border-color: #2a5a8a; }
+.eve-fav-region { color: #586e75; font-size: .7rem; }
+.eve-fav-remove { opacity: .5; font-size: .8rem; margin-left: 1px; cursor: pointer; line-height: 1; }
+.eve-fav-remove:hover { opacity: 1; color: #e74c3c; }
+
+/* ── Loading overlay ─────────────────────────────────────────── */
+#planLoadingOverlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(5,13,24,.78); backdrop-filter: blur(2px);
+    display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+}
+#planLoadingOverlay.active { display: flex; }
 </style>
 {% endblock %}
 
 {% block content %}
+
+{# ── Loading overlay ─────────────────────────────────────────── #}
+<div id="planLoadingOverlay">
+    <div class="spinner-border" style="color:var(--eve-accent);width:2.5rem;height:2.5rem;" role="status"></div>
+    <div style="color:#c9d8e8;font-size:.95rem;">Calculating assignment plan…</div>
+</div>
 
 {# ── Page header ─────────────────────────────────────────────── #}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
@@ -641,13 +668,32 @@ document.addEventListener('click', e => {
 });
 
 // ── System multi-select ───────────────────────────────────────────────────────
+const COLONY_SYSTEMS_KEY = 'pi_colony_plan_systems';
 const selectedSystems = new Map();
+
+// Seed from server (URL params present) or restore from localStorage
+{% if selected_systems %}
 {% for system in selected_systems %}
 selectedSystems.set({{ system.id }}, {{ system | tojson }});
 {% endfor %}
+{% else %}
+(function() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(COLONY_SYSTEMS_KEY) || '[]');
+        saved.forEach(sys => { if (sys && sys.id) selectedSystems.set(sys.id, sys); });
+    } catch {}
+})();
+{% endif %}
+
+function persistSelectedSystems() {
+    const arr = [];
+    selectedSystems.forEach(sys => arr.push(sys));
+    localStorage.setItem(COLONY_SYSTEMS_KEY, JSON.stringify(arr));
+}
 
 function syncSystemIds() {
     document.getElementById('systemIdsInput').value = [...selectedSystems.keys()].join(',');
+    persistSelectedSystems();
     updateBtnText();
 }
 
@@ -743,7 +789,8 @@ document.getElementById('productInput')?.addEventListener('input', () => {
 });
 
 // ── Product favorites — server API (/planner/favorites) ──────────────────────
-const PROD_TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const PROD_TIER_COLORS  = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const PROD_TIER_BORDERS = {P1:'rgba(88,110,117,.4)', P2:'rgba(0,180,216,.4)', P3:'rgba(244,163,0,.4)', P4:'rgba(230,57,70,.4)'};
 let serverProdFavs = [];
 
 async function loadProdFavs() {
@@ -778,11 +825,13 @@ function renderProductFavs() {
     serverProdFavs.forEach(name => {
         const prod = ALL_PRODUCTS.find(p => p.name === name);
         const label = prod ? prod.display_name : name;
-        const tier = prod ? prod.tier : 'P1';
-        const color = PROD_TIER_COLORS[tier] || '#586e75';
+        const tier  = prod ? prod.tier : 'P1';
+        const color  = PROD_TIER_COLORS[tier]  || '#586e75';
+        const border = PROD_TIER_BORDERS[tier] || 'rgba(88,110,117,.4)';
         const pill = document.createElement('div');
         pill.className = 'eve-fav-pill';
-        pill.innerHTML = `<i class="bi bi-star-fill" style="color:#f4a300;font-size:.7rem;"></i><span>${label}</span><span style="color:${color};font-size:.65rem;">${tier}</span><span class="eve-fav-remove" data-name="${name}">&#xd7;</span>`;
+        pill.style.borderColor = border;
+        pill.innerHTML = `<span style="color:${color};font-weight:700;font-size:.68rem;">${tier}</span><span>${label}</span><span class="eve-fav-remove" data-name="${name}">&#xd7;</span>`;
         pill.addEventListener('click', e => {
             if (e.target.classList.contains('eve-fav-remove')) {
                 e.stopPropagation(); removeProdFav(e.target.dataset.name); return;
@@ -892,6 +941,15 @@ function copyAssignmentSummary() {
     if (!el) return;
     el.select(); el.setSelectionRange(0, 99999); document.execCommand('copy');
 }
+
+// ── Loading overlay on submit ─────────────────────────────────────────────────
+document.getElementById('colonyPlanForm')?.addEventListener('submit', () => {
+    const productVal = (document.getElementById('productHidden')?.value || '').trim();
+    const sysVal     = (document.getElementById('systemIdsInput')?.value || '').trim();
+    if (productVal && sysVal) {
+        document.getElementById('planLoadingOverlay')?.classList.add('active');
+    }
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 renderSelectedSystems();
