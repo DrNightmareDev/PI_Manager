@@ -211,9 +211,10 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                     <span id="generateBtnText">{% if plan %}Update Plan{% elif selected_product and selected_system_ids %}{{ t('colony_plan.generate') }}{% elif selected_product %}Add a system{% elif selected_system_ids %}Select a product{% else %}{{ t('colony_plan.generate') }}{% endif %}</span>
                 </button>
                 {% if selected_product or selected_system_ids %}
-                <a class="btn eve-btn-ghost btn-sm text-center" href="/colony-plan">
+                <button type="button" class="btn eve-btn-ghost btn-sm text-center"
+                        onclick="localStorage.removeItem('pi_colony_plan_systems'); window.location.href='/colony-plan';">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>{{ t('common.reset') }}
-                </a>
+                </button>
                 {% endif %}
             </div>
 
