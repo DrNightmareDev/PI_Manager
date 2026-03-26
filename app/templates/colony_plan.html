@@ -401,6 +401,7 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                 <option value="">All Status</option>
                 <option value="existing">Existing</option>
                 <option value="new">New</option>
+                <option value="relocate">Relocate</option>
                 {% if plan.missing %}<option value="missing">Missing</option>{% endif %}
             </select>
         </div>
@@ -450,6 +451,8 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                         <td data-sort="{{ item.status }}">
                             {% if item.status == 'existing' %}
                             <span class="text-success" style="font-size:.8rem;"><i class="bi bi-arrow-repeat me-1"></i>{{ t('colony_plan.status_existing') }}</span>
+                            {% elif item.status == 'relocate' %}
+                            <span style="font-size:.8rem;color:#a78bfa;"><i class="bi bi-arrow-left-right me-1"></i>{{ t('colony_plan.status_relocate') }}</span>
                             {% else %}
                             <span class="text-warning" style="font-size:.8rem;"><i class="bi bi-plus-circle me-1"></i>{{ t('colony_plan.status_new') }}</span>
                             {% endif %}

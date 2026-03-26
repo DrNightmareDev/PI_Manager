@@ -165,6 +165,7 @@
   "colony_plan.role_factory": "Factory",
   "colony_plan.status_existing": "Existing, reassignable",
   "colony_plan.status_new": "New placement",
+  "colony_plan.status_relocate": "Relocate",
   "colony_plan.no_assignments": "No assignments available for the current selection.",
   "colony_plan.flow_summary": "Material flow summary",
   "colony_plan.flow_from": "From",

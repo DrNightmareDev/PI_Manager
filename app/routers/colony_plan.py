@@ -244,7 +244,12 @@ def _feasibility_analysis(
     factory_count = 0 if chain["tier"] == "P1" else sum(len(chain["tiers"][tier]) for tier in ("P2", "P3", "P4"))
     planets_needed = p0_count + factory_count
 
-    total_capacity = sum(state["remaining_slots"] for state in char_state.values())
+    # Include relocation slots: chars with 0 free slots can repurpose existing
+    # colonies in selected systems (abandon + rebuild elsewhere = net 0 planets used)
+    total_capacity = sum(
+        max(state["remaining_slots"], 0) + state.get("relocation_slots", 0)
+        for state in char_state.values()
+    )
     capacity_ok = total_capacity >= planets_needed
 
     available_resources: set[str] = set()
@@ -317,9 +322,11 @@ def _select_assignment(
     include_unassigned: bool,
     preferred_chars: set[int] | None = None,
     preferred_systems: set[int] | None = None,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, bool]:
+    """Returns (planet, char_state, is_relocation)."""
     preferred_chars = preferred_chars or set()
-    eligible: list[tuple[dict[str, Any], dict[str, Any], bool]] = []
+    # (planet, state, existing_planet, is_relocation)
+    eligible: list[tuple[dict[str, Any], dict[str, Any], bool, bool]] = []
 
     for planet in candidates:
         planet_id = int(planet["planet_id"])
@@ -337,24 +344,32 @@ def _select_assignment(
                 continue
             existing_planet = occupied_char_id == char_id
             if not existing_planet:
-                if state["remaining_slots"] <= 0:
+                can_new = state["remaining_slots"] > 0
+                reloc_free = state["relocation_slots"] - state["relocation_assignments"]
+                can_relocate = state["remaining_slots"] <= 0 and reloc_free > 0
+                if not can_new and not can_relocate:
                     continue
                 if not include_unassigned and state["selected_system_existing"] == 0:
                     continue
-            eligible.append((planet, state, existing_planet))
+                is_relocation = not can_new
+            else:
+                is_relocation = False
+            eligible.append((planet, state, existing_planet, is_relocation))
 
     if not eligible:
-        return None, None
+        return None, None, False
 
     same_corp_eligible = [item for item in eligible if item[1].get("same_corp_as_main")]
     if same_corp_eligible:
         eligible = same_corp_eligible
 
-    best: tuple[tuple[int, int, int], dict[str, Any], dict[str, Any]] | None = None
-    for planet, state, existing_planet in eligible:
+    best: tuple[tuple[int, int, int], dict[str, Any], dict[str, Any], bool] | None = None
+    for planet, state, existing_planet, is_relocation in eligible:
         score = 0
         if existing_planet:
             score += 1000
+        elif is_relocation:
+            score += 50  # lower priority than free-slot placements
         if state["id"] in preferred_chars:
             score += 200
         if state.get("same_corp_as_main"):
@@ -363,21 +378,23 @@ def _select_assignment(
             score += 75
         if preferred_systems and int(planet["system_id"]) in preferred_systems:
             score += 40
-        score += min(state["remaining_slots"], 20)
+        if not is_relocation:
+            score += min(max(state["remaining_slots"], 0), 20)
         score -= state["new_assignments"]
+        score -= state["relocation_assignments"]
         score -= state["existing_reuse_assignments"]
 
         tiebreak = (
             score,
             1 if existing_planet else 0,
-            state["remaining_slots"],
+            0 if is_relocation else state["remaining_slots"],
         )
         if not best or tiebreak > best[0]:
-            best = (tiebreak, planet, state)
+            best = (tiebreak, planet, state, is_relocation)
 
     if not best:
-        return None, None
-    return best[1], best[2]
+        return None, None, False
+    return best[1], best[2], best[3]
 
 
 def _assignment_summary_text(
@@ -487,6 +504,8 @@ def _build_assignment_plan(
         }
         state["new_assignments"] = 0
         state["existing_reuse_assignments"] = 0
+        state["relocation_slots"] = state["selected_system_existing"]
+        state["relocation_assignments"] = 0
         state["assignments"] = []
         char_state[char.id] = state
 
@@ -510,7 +529,7 @@ def _build_assignment_plan(
     # Extractors first: one extractor planet per needed P0.
     for p0_name in chain["p0_needed"]:
         matching = [planet for planet in planet_pool if p0_name in planet["resources"]]
-        chosen_planet, chosen_char = _select_assignment(
+        chosen_planet, chosen_char, is_relocation = _select_assignment(
             candidates=matching,
             char_state=char_state,
             assigned_planets=assigned_planets,
@@ -526,12 +545,15 @@ def _build_assignment_plan(
         existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
         if existing_planet:
             chosen_char["existing_reuse_assignments"] += 1
+        elif is_relocation:
+            chosen_char["relocation_assignments"] += 1
         else:
             chosen_char["remaining_slots"] -= 1
             chosen_char["new_assignments"] += 1
         chosen_char["assignments"].append(chosen_planet["planet_id"])
 
         p1_output = P0_TO_P1.get(p0_name, "")
+        _status = "existing" if existing_planet else ("relocate" if is_relocation else "new")
         entry = {
             "character_id": chosen_char["id"],
             "character_name": chosen_char["name"],
@@ -544,8 +566,8 @@ def _build_assignment_plan(
             "summary": p0_name,
             "detail_items": [p0_name],
             "output_product": p1_output,
-            "status": "existing" if existing_planet else "new",
-            "status_label": "existing_reassignable" if existing_planet else "new_placement",
+            "status": _status,
+            "status_label": _status,
             "tier": "P0",
         }
         assignments.append(entry)
@@ -572,7 +594,7 @@ def _build_assignment_plan(
             for item in inputs
             if item in output_task_by_product
         }
-        chosen_planet, chosen_char = _select_assignment(
+        chosen_planet, chosen_char, is_relocation = _select_assignment(
             candidates=planet_pool,
             char_state=char_state,
             assigned_planets=assigned_planets,
@@ -589,11 +611,14 @@ def _build_assignment_plan(
         existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
         if existing_planet:
             chosen_char["existing_reuse_assignments"] += 1
+        elif is_relocation:
+            chosen_char["relocation_assignments"] += 1
         else:
             chosen_char["remaining_slots"] -= 1
             chosen_char["new_assignments"] += 1
         chosen_char["assignments"].append(chosen_planet["planet_id"])
 
+        _status = "existing" if existing_planet else ("relocate" if is_relocation else "new")
         entry = {
             "character_id": chosen_char["id"],
             "character_name": chosen_char["name"],
@@ -606,8 +631,8 @@ def _build_assignment_plan(
             "summary": f"{product} · " + " · ".join(inputs),
             "detail_items": inputs,
             "output_product": product,
-            "status": "existing" if existing_planet else "new",
-            "status_label": "existing_reassignable" if existing_planet else "new_placement",
+            "status": _status,
+            "status_label": _status,
             "tier": tier,
         }
         assignments.append(entry)
