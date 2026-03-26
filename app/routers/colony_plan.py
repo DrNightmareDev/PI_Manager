@@ -266,6 +266,8 @@ def _select_assignment(
                 score += 1000
             if char_id in preferred_chars:
                 score += 200
+            if state.get("same_corp_as_main"):
+                score += 90
             if int(planet["system_id"]) in state["systems_with_colonies"]:
                 score += 75
             score += min(state["remaining_slots"], 20)
@@ -344,6 +346,8 @@ def _build_assignment_plan(
 ) -> dict[str, Any]:
     chain = _collect_chain(product_name)
     required_p0 = set(chain["p0_needed"])
+    main_character = next((char for char in selected_characters if getattr(char, "is_main", False)), None)
+    main_corporation = (getattr(main_character, "corporation_name", "") or "").strip().casefold()
     char_id_by_name = {char.character_name: char.id for char in selected_characters}
     selected_char_ids = {char.id for char in selected_characters}
     selected_colonies = [
@@ -376,6 +380,10 @@ def _build_assignment_plan(
     char_state: dict[int, dict[str, Any]] = {}
     for char in selected_characters:
         state = _character_capacity(char, int(all_counts.get(char.character_name, 0) or 0))
+        state["same_corp_as_main"] = bool(
+            main_corporation
+            and ((getattr(char, "corporation_name", "") or "").strip().casefold() == main_corporation)
+        )
         state["selected_system_existing"] = sum(
             1 for colony in selected_colonies if colony.get("character_name") == char.character_name
         )
