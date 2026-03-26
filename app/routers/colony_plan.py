@@ -341,7 +341,9 @@ def _select_assignment(
             continue
 
         occupied_char_id = planet.get("occupied_char_id")
-        candidate_char_ids = [occupied_char_id] if occupied_char_id else list(char_state.keys())
+        # Always consider all chars — the occupant gets +1000 score (existing planet),
+        # but other chars can also build a new command center on the same planet.
+        candidate_char_ids = list(char_state.keys())
 
         for char_id in candidate_char_ids:
             if not char_id:
