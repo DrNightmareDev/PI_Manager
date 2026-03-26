@@ -82,7 +82,7 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
 
 /* ── Loading overlay ─────────────────────────────────────────── */
 #planLoadingOverlay {
-    position: fixed; inset: 0; z-index: 9999;
+    position: fixed; top: var(--eve-navbar-h); left: 0; right: 0; bottom: 0; z-index: 9999;
     background: rgba(5,13,24,.78); backdrop-filter: blur(2px);
     display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
 }
@@ -103,6 +103,7 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
     <div>
         <h2 class="eve-page-title mb-1">
             <i class="bi bi-diagram-2-fill me-2 eve-accent"></i>{{ t('colony_plan.title') }}
+            <span class="badge ms-2" style="background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;font-size:.55em;vertical-align:middle;">-Testing-</span>
         </h2>
         <div class="text-muted small">{{ t('colony_plan.subtitle') }}</div>
     </div>
@@ -586,7 +587,7 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                                         </div>
                                     </div>
                                 </td>
-                                <td style="font-size:.85rem;">{{ char.existing_total }}/{{ char.max_planets }}</td>
+                                <td style="font-size:.85rem;">{{ char.max_planets - char.remaining_slots }}/{{ char.max_planets }}</td>
                                 <td><span class="{% if char.remaining_slots <= 0 %}text-danger{% else %}text-success{% endif %}" style="font-size:.85rem;">{{ char.remaining_slots }}</span></td>
                             </tr>
                             {% endfor %}
