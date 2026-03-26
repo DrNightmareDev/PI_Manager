@@ -245,9 +245,16 @@ def _feasibility_analysis(
     planets_needed = p0_count + factory_count
 
     # Include relocation slots: chars with 0 free slots can repurpose existing
-    # colonies in selected systems (abandon + rebuild elsewhere = net 0 planets used)
+    # colonies in selected systems. existing_reuse assignments commit a colony
+    # in-place so they also reduce available relocation capacity.
     total_capacity = sum(
-        max(state["remaining_slots"], 0) + state.get("relocation_slots", 0)
+        max(state["remaining_slots"], 0)
+        + max(
+            state.get("relocation_slots", 0)
+            - state.get("relocation_assignments", 0)
+            - state.get("existing_reuse_assignments", 0),
+            0,
+        )
         for state in char_state.values()
     )
     capacity_ok = total_capacity >= planets_needed
@@ -345,7 +352,13 @@ def _select_assignment(
             existing_planet = occupied_char_id == char_id
             if not existing_planet:
                 can_new = state["remaining_slots"] > 0
-                reloc_free = state["relocation_slots"] - state["relocation_assignments"]
+                # existing_reuse assignments already commit a colony slot in-place,
+                # so they reduce available relocation capacity too
+                reloc_free = (
+                    state["relocation_slots"]
+                    - state["relocation_assignments"]
+                    - state["existing_reuse_assignments"]
+                )
                 can_relocate = state["remaining_slots"] <= 0 and reloc_free > 0
                 if not can_new and not can_relocate:
                     continue
