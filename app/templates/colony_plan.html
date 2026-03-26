@@ -5,45 +5,26 @@
 <style>
 /* ── Character cards ─────────────────────────────────────────── */
 .colony-char-card {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 9px 5px 5px;
-    border-radius: 8px;
-    border: 1px solid var(--eve-card-border);
-    background: var(--eve-bg-2);
-    cursor: pointer;
-    transition: border-color .15s, background .15s;
-    user-select: none;
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 9px 5px 5px; border-radius: 8px;
+    border: 1px solid var(--eve-card-border); background: var(--eve-bg-2);
+    cursor: pointer; transition: border-color .15s, background .15s; user-select: none;
 }
 .colony-char-card:hover { border-color: rgba(0,180,216,.4); }
-.colony-char-card.selected {
-    border-color: var(--eve-accent);
-    background: rgba(0,180,216,.1);
-}
+.colony-char-card.selected { border-color: var(--eve-accent); background: rgba(0,180,216,.1); }
 .colony-char-card.no-slots { opacity: .65; }
-.colony-char-card.no-slots.selected {
-    border-color: #f4a300;
-    background: rgba(244,163,0,.08);
-}
+.colony-char-card.no-slots.selected { border-color: #f4a300; background: rgba(244,163,0,.08); }
 .colony-char-portrait { width: 30px; height: 30px; object-fit: cover; flex-shrink: 0; }
 .colony-char-name { font-size: .8rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }
 .colony-char-slots { font-size: .68rem; line-height: 1.2; }
 
 /* ── Favorites strip ─────────────────────────────────────────── */
 .fav-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 1px 7px;
-    border-radius: 20px;
-    border: 1px solid var(--eve-card-border);
-    background: var(--eve-bg-2);
-    color: var(--eve-text-muted);
-    font-size: .7rem;
-    cursor: pointer;
-    transition: border-color .12s, color .12s;
-    white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 1px 7px; border-radius: 20px;
+    border: 1px solid var(--eve-card-border); background: var(--eve-bg-2);
+    color: var(--eve-text-muted); font-size: .7rem;
+    cursor: pointer; transition: border-color .12s, color .12s; white-space: nowrap;
 }
 .fav-chip:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
 .fav-chip-remove { opacity: .5; font-size: .65rem; margin-left: 2px; }
@@ -52,57 +33,34 @@
 /* ── Sort indicators ─────────────────────────────────────────── */
 th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 th.sortable:hover { color: var(--eve-accent); }
-th.sort-asc .sort-icon,
-th.sort-desc .sort-icon { color: var(--eve-accent); }
+th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
 
 /* ── Flow cards ──────────────────────────────────────────────── */
 .flow-card {
-    background: var(--eve-bg-2);
-    border: 1px solid var(--eve-card-border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 100%;
+    background: var(--eve-bg-2); border: 1px solid var(--eve-card-border);
+    border-radius: 6px; padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px; height: 100%;
 }
 .flow-local   { color: #57cc99; font-size: .65rem; }
 .flow-cross   { color: #f4a300; font-size: .65rem; }
 .flow-customs { color: #59d8f0; font-size: .65rem; }
 
-/* ── Unused character rows ───────────────────────────────────── */
+/* ── Unused chars ────────────────────────────────────────────── */
 .unused-char-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 6px;
-    background: var(--eve-bg-2);
-    border: 1px solid var(--eve-card-border);
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border-radius: 6px; background: var(--eve-bg-2); border: 1px solid var(--eve-card-border);
 }
 
 /* ── Collapse header ─────────────────────────────────────────── */
 .eve-collapse-hdr {
-    cursor: pointer;
-    background: transparent;
+    cursor: pointer; background: transparent;
     border-bottom: 1px solid var(--eve-card-border);
-    padding: .65rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    padding: .65rem 1rem; display: flex; align-items: center; justify-content: space-between;
 }
-.eve-collapse-hdr .chevron {
-    transition: transform .2s;
-    color: var(--eve-text-muted);
-    font-size: .85rem;
-}
+.eve-collapse-hdr .chevron { transition: transform .2s; color: var(--eve-text-muted); font-size: .85rem; }
 .eve-collapse-hdr[aria-expanded="true"] .chevron { transform: rotate(180deg); }
 
-/* ── System search dropdown inside eve-input ─────────────────── */
-#systemSearchResults {
-    position: absolute; left: 0; right: 0; z-index: 200;
-    max-height: 200px; overflow: auto;
-}
+/* ── System search results ───────────────────────────────────── */
 #systemSearchResults .list-group-item {
     background: #111c26; color: #c9d8e8; border-color: #1a2d3d;
     cursor: pointer; font-size: .85rem; padding: .35rem .7rem;
@@ -112,12 +70,6 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
 {% endblock %}
 
 {% block content %}
-
-{# ── Build portrait map for table lookup ─────────────────────── #}
-{% set char_portrait_map = {} %}
-{% for ch in characters %}
-  {% if char_portrait_map.update({ch.character_name: ch.portrait_url}) %}{% endif %}
-{% endfor %}
 
 {# ── Page header ─────────────────────────────────────────────── #}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
@@ -134,54 +86,60 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
     <div class="card-body p-3">
         <div class="row g-3 align-items-start">
 
-            {# Product #}
+            {# ── Product ── #}
             <div class="col-xl-3 col-md-6">
-                <div id="productFavStrip" class="d-flex flex-wrap gap-1 mb-2"></div>
-                <div class="position-relative">
-                    <input class="form-control eve-input flex-grow-1"
-                           id="productInput"
-                           value="{{ product_labels.get(selected_product, selected_product) if selected_product else '' }}"
-                           placeholder="{{ t('colony_plan.product_placeholder') }}"
-                           autocomplete="off">
-                    <input type="hidden" name="product" id="productValueInput" value="{{ selected_product or '' }}">
-                    <div id="productDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
-                    <button type="button" class="btn eve-btn-ghost btn-sm px-2 position-absolute"
-                            style="right:8px;top:50%;transform:translateY(-50%);z-index:5;"
+                <div id="productFavStrip" class="d-flex flex-wrap gap-1 mb-2 d-none"></div>
+                <div class="d-flex gap-1 align-items-center">
+                    <div class="position-relative flex-grow-1">
+                        <input class="form-control eve-input"
+                               id="productInput"
+                               placeholder="{{ t('colony_plan.product_placeholder') }}"
+                               value="{{ selected_product_display or '' }}"
+                               autocomplete="off"
+                               oninput="searchProducts(this.value)"
+                               onfocus="if(this.value.length>=1) searchProducts(this.value)">
+                        <div id="productDropdown" class="eve-search-dropdown position-absolute w-100 d-none"></div>
+                    </div>
+                    <input type="hidden" name="product" id="productHidden" value="{{ selected_product or '' }}">
+                    <button type="button" class="btn eve-btn-ghost btn-sm px-2"
                             title="Save as favorite" onclick="toggleProductFav()">
                         <i class="bi bi-star" id="productFavIcon" style="font-size:.95rem;"></i>
                     </button>
                 </div>
             </div>
 
-            {# Systems #}
+            {# ── Systems ── #}
             <div class="col-xl-3 col-md-6">
-                <div id="systemFavStrip" class="d-flex flex-wrap gap-1 mb-2"></div>
-                <div class="position-relative mb-2">
-                    <input type="text" id="systemSearchInput"
-                           class="form-control eve-input pe-5"
-                           placeholder="{{ t('colony_plan.system_placeholder') }}"
-                           autocomplete="off">
-                    <button type="button" class="btn eve-btn-ghost btn-sm px-1 position-absolute"
-                            style="right:8px;top:50%;transform:translateY(-50%);z-index:5;"
-                            title="Save selected systems as favorites"
-                            onclick="saveCurrentSystemsAsFav()">
-                        <i class="bi bi-star" style="font-size:.85rem;"></i>
-                    </button>
-                    <div id="systemSearchResults" class="eve-search-dropdown position-absolute w-100 d-none"></div>
-                </div>
-                <div class="d-flex flex-wrap gap-1" id="selectedSystems">
-                    {% for system in selected_systems %}
-                    <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;font-weight:500;">
-                        {{ system.name }}
-                        <button class="btn btn-sm p-0 ms-1 border-0 bg-transparent" style="color:inherit;"
-                                type="button" onclick="removeSystem({{ system.id }})">&times;</button>
-                    </span>
-                    {% endfor %}
+                <div id="systemFavStrip" class="d-flex flex-wrap gap-1 mb-2 d-none"></div>
+                <div class="eve-input p-2 position-relative">
+                    <div class="d-flex flex-wrap gap-1 mb-1" id="selectedSystems">
+                        {% for system in selected_systems %}
+                        <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;font-weight:500;">
+                            {{ system.name }}
+                            <button class="btn btn-sm p-0 ms-1 border-0 bg-transparent" style="color:inherit;"
+                                    type="button" onclick="removeSystem({{ system.id }})">&times;</button>
+                        </span>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <input type="text" id="systemSearchInput"
+                               class="form-control border-0 bg-transparent px-0 py-0 flex-grow-1"
+                               style="min-height:22px;font-size:.85rem;"
+                               placeholder="{{ t('colony_plan.system_placeholder') }}"
+                               autocomplete="off">
+                        <button type="button" class="btn eve-btn-ghost btn-sm px-1"
+                                title="Save selected systems as favorites"
+                                onclick="saveCurrentSystemsAsFav()">
+                            <i class="bi bi-star" style="font-size:.85rem;"></i>
+                        </button>
+                    </div>
+                    <div id="systemSearchResults" class="list-group mt-1"
+                         style="display:none;position:absolute;left:0;right:0;z-index:200;max-height:200px;overflow:auto;"></div>
                 </div>
                 <input type="hidden" name="system_ids" id="systemIdsInput" value="{{ selected_system_ids | join(',') }}">
             </div>
 
-            {# Characters #}
+            {# ── Characters ── #}
             <div class="col-xl-4 col-md-8">
                 <div class="d-flex flex-wrap gap-2" id="characterGrid">
                     {% for char in characters %}
@@ -209,7 +167,7 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
                 </label>
             </div>
 
-            {# Options + Button #}
+            {# ── Options + Button ── #}
             <div class="col-xl-2 col-md-4 d-flex flex-column gap-2">
                 <label class="d-flex align-items-center gap-2 small text-muted" style="cursor:pointer;">
                     <input class="form-check-input m-0" type="checkbox" name="single_system" value="1"
@@ -242,24 +200,19 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
      style="background:#dc354520;border:1px solid #dc354540;color:#f07075;">
     <i class="bi bi-exclamation-triangle-fill"></i><span>{{ plan_error }}</span>
 </div>
-
 {% elif not plan and (selected_product or selected_system_ids) %}
 <div class="eve-card card border-0">
     <div class="card-body p-3 text-center text-muted py-5">
-        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
-        {{ t('colony_plan.empty_hint') }}
+        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>{{ t('colony_plan.empty_hint') }}
     </div>
 </div>
-
 {% elif not plan %}
 <div class="eve-card card border-0">
     <div class="card-body p-3 text-center text-muted py-5">
-        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>
-        {{ t('colony_plan.initial_hint') }}
+        <i class="bi bi-diagram-3 fs-2 d-block mb-3"></i>{{ t('colony_plan.initial_hint') }}
     </div>
 </div>
-
-{% else %}{# ════ Plan results ════ #}
+{% else %}
 
 {# ── Stats ───────────────────────────────────────────────────── #}
 <div class="row g-3 mb-4">
@@ -282,9 +235,7 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
     <div class="col-6 col-md-3">
         <div class="eve-stat-card card border-0">
             <div class="card-body text-center p-3">
-                <div class="eve-stat-value {% if plan.missing_planets > 0 %}text-warning{% else %}text-success{% endif %}">
-                    {{ plan.missing_planets }}
-                </div>
+                <div class="eve-stat-value {% if plan.missing_planets > 0 %}text-warning{% else %}text-success{% endif %}">{{ plan.missing_planets }}</div>
                 <div class="eve-stat-label">{{ t('colony_plan.stat_missing') }}</div>
             </div>
         </div>
@@ -304,59 +255,17 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
     <div class="card-body p-3">
         {% if plan.system_mode.viable %}
         <div class="d-flex align-items-center gap-2">
-            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">
-                {{ t('colony_plan.single_system_mode') }}
-            </span>
-            <span class="text-muted small">{{ t('colony_plan.single_system_selected') }}
-                <strong>{{ plan.system_mode.chosen_system.name }}</strong></span>
+            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">{{ t('colony_plan.single_system_mode') }}</span>
+            <span class="text-muted small">{{ t('colony_plan.single_system_selected') }} <strong>{{ plan.system_mode.chosen_system.name }}</strong></span>
         </div>
         {% else %}
-        <div class="text-danger small">
-            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.single_system_unavailable') }}
-        </div>
+        <div class="text-danger small"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.single_system_unavailable') }}</div>
         {% endif %}
     </div>
 </div>
 {% endif %}
 
 {# ── Assignment table ────────────────────────────────────────── #}
-<div class="eve-card card border-0 mb-4">
-    <div class="card-body p-3 d-flex flex-column gap-3">
-        <div>
-            <div class="text-muted small mb-2">{{ t('colony_plan.current_basis') }}</div>
-            <div class="fw-semibold" style="font-size:1.05rem;">
-                {{ product_labels.get(selected_product, selected_product) }}
-                | {{ selected_systems | length }} {{ t('common.systems', default='Systeme') }}
-                | {% if use_all_characters %}{{ t('colony_plan.all_characters') }}{% else %}{{ selected_character_ids | length }} {{ t('common.characters', default='Charaktere') }}{% endif %}
-                | {% if single_system %}{{ t('colony_plan.single_system_mode') }}{% else %}{{ t('colony_plan.cross_system_mode', default='Systemuebergreifende Kette erlauben') }}{% endif %}
-            </div>
-        </div>
-        {% if plan.unused_characters %}
-        <div style="border-top:1px solid var(--eve-card-border);padding-top:.85rem;">
-            <div class="text-muted small mb-2">{{ t('colony_plan.unused_characters_title', default='Ausgewaehlte, aber ungenutzte Charaktere') }}</div>
-            <div class="d-flex flex-wrap gap-2">
-                {% for char in plan.unused_characters %}
-                <span class="fav-chip" style="padding:5px 10px;border-radius:999px;cursor:default;gap:6px;">
-                    <img src="{{ char.portrait or '/static/img/default_char.svg' }}"
-                         class="rounded-circle" style="width:20px;height:20px;object-fit:cover;"
-                         onerror="this.src='/static/img/default_char.svg'">
-                    <span style="font-size:.78rem;font-weight:600;color:#dce8f2;">{{ char.name }}</span>
-                    <span class="text-muted" style="font-size:.72rem;">{{ char.existing_total }}/{{ char.max_planets }}</span>
-                    {% if char.reason == 'no_slots' %}
-                    <span class="text-warning" style="font-size:.72rem;">{{ t('colony_plan.unused_no_slots_short', default='voll') }}</span>
-                    {% elif char.reason == 'excluded_unassigned' %}
-                    <span class="text-warning" style="font-size:.72rem;">{{ t('colony_plan.unused_excluded_short', default='ausgeschlossen') }}</span>
-                    {% else %}
-                    <span class="text-muted" style="font-size:.72rem;">{{ t('colony_plan.unused_not_needed_short', default='nicht benoetigt') }}</span>
-                    {% endif %}
-                </span>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
 <div class="eve-card card border-0 mb-4">
     <div class="card-body p-3">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -366,19 +275,14 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
             </div>
             <span id="tableRowCount" class="text-muted small"></span>
         </div>
-
         <div class="d-flex flex-wrap gap-2 mb-3">
             <select class="form-select form-select-sm eve-input" id="filterChar" style="max-width:170px;" onchange="applyFilters()">
                 <option value="">All Characters</option>
-                {% for ch in plan.characters %}
-                <option value="{{ ch.name }}">{{ ch.name }}</option>
-                {% endfor %}
+                {% for ch in plan.characters %}<option value="{{ ch.name }}">{{ ch.name }}</option>{% endfor %}
             </select>
             <select class="form-select form-select-sm eve-input" id="filterSystem" style="max-width:160px;" onchange="applyFilters()">
                 <option value="">All Systems</option>
-                {% for sys in plan.used_systems %}
-                <option value="{{ sys.name }}">{{ sys.name }}</option>
-                {% endfor %}
+                {% for sys in plan.used_systems %}<option value="{{ sys.name }}">{{ sys.name }}</option>{% endfor %}
             </select>
             <select class="form-select form-select-sm eve-input" id="filterRole" style="max-width:130px;" onchange="applyFilters()">
                 <option value="">All Roles</option>
@@ -391,39 +295,26 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
                 <option value="new">New</option>
             </select>
         </div>
-
         <div class="table-responsive">
             <table class="table table-dark table-hover align-middle mb-0" id="assignmentTable">
                 <thead>
                     <tr>
-                        <th class="sortable" onclick="sortTable(0, this)">
-                            {{ t('colony_plan.col_character') }}
-                            <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i>
-                        </th>
-                        <th class="sortable" onclick="sortTable(1, this)">
-                            {{ t('colony_plan.col_planet') }}
-                            <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i>
-                        </th>
-                        <th class="sortable" onclick="sortTable(2, this)">
-                            {{ t('colony_plan.col_role') }}
-                            <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i>
-                        </th>
+                        <th class="sortable" onclick="sortTable(0,this)">{{ t('colony_plan.col_character') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
+                        <th class="sortable" onclick="sortTable(1,this)">{{ t('colony_plan.col_planet') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
+                        <th class="sortable" onclick="sortTable(2,this)">{{ t('colony_plan.col_role') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
                         <th>{{ t('colony_plan.col_details') }}</th>
-                        <th class="sortable" onclick="sortTable(4, this)">
-                            {{ t('colony_plan.col_status') }}
-                            <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i>
-                        </th>
+                        <th class="sortable" onclick="sortTable(4,this)">{{ t('colony_plan.col_status') }} <i class="bi bi-arrow-down-up sort-icon ms-1" style="font-size:.72rem;"></i></th>
                     </tr>
                 </thead>
                 <tbody id="assignmentTableBody">
                     {% for item in plan.assignments %}
-                    <tr data-char="{{ item.character_name }}"
-                        data-system="{{ item.system_name }}"
-                        data-role="{{ item.role }}"
-                        data-status="{{ item.status }}">
+                    {% set ns = namespace(portrait='') %}
+                    {% for ch in characters %}{% if ch.character_name == item.character_name %}{% set ns.portrait = ch.portrait_url %}{% endif %}{% endfor %}
+                    <tr data-char="{{ item.character_name }}" data-system="{{ item.system_name }}"
+                        data-role="{{ item.role }}" data-status="{{ item.status }}">
                         <td data-sort="{{ item.character_name }}">
                             <div class="d-flex align-items-center gap-2">
-                                <img src="{{ char_portrait_map.get(item.character_name, '') or '/static/img/default_char.svg' }}"
+                                <img src="{{ ns.portrait or '/static/img/default_char.svg' }}"
                                      class="rounded-circle" style="width:28px;height:28px;object-fit:cover;flex-shrink:0;"
                                      onerror="this.src='/static/img/default_char.svg'">
                                 <div>
@@ -438,13 +329,9 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
                         </td>
                         <td data-sort="{{ item.role }}">
                             {% if item.role == 'Extractor' %}
-                            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">
-                                {{ t('colony_plan.role_extractor') }}
-                            </span>
+                            <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">{{ t('colony_plan.role_extractor') }}</span>
                             {% else %}
-                            <span class="badge" style="background:rgba(244,163,0,.12);border:1px solid rgba(244,163,0,.35);color:#f0b74d;">
-                                {{ t('colony_plan.role_factory') }}
-                            </span>
+                            <span class="badge" style="background:rgba(244,163,0,.12);border:1px solid rgba(244,163,0,.35);color:#f0b74d;">{{ t('colony_plan.role_factory') }}</span>
                             {% endif %}
                         </td>
                         <td>
@@ -453,32 +340,24 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
                         </td>
                         <td data-sort="{{ item.status }}">
                             {% if item.status == 'existing' %}
-                            <span class="text-success" style="font-size:.8rem;">
-                                <i class="bi bi-arrow-repeat me-1"></i>{{ t('colony_plan.status_existing') }}
-                            </span>
+                            <span class="text-success" style="font-size:.8rem;"><i class="bi bi-arrow-repeat me-1"></i>{{ t('colony_plan.status_existing') }}</span>
                             {% else %}
-                            <span class="text-warning" style="font-size:.8rem;">
-                                <i class="bi bi-plus-circle me-1"></i>{{ t('colony_plan.status_new') }}
-                            </span>
+                            <span class="text-warning" style="font-size:.8rem;"><i class="bi bi-plus-circle me-1"></i>{{ t('colony_plan.status_new') }}</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
                     {% if not plan.assignments %}
-                    <tr>
-                        <td colspan="5" class="text-center text-muted py-4">{{ t('colony_plan.no_assignments') }}</td>
-                    </tr>
+                    <tr><td colspan="5" class="text-center text-muted py-4">{{ t('colony_plan.no_assignments') }}</td></tr>
                     {% endif %}
                 </tbody>
             </table>
-            <div id="noResultsMsg" class="text-center text-muted py-3 d-none" style="font-size:.85rem;">
-                No rows match the current filters.
-            </div>
+            <div id="noResultsMsg" class="text-center text-muted py-3 d-none" style="font-size:.85rem;">No rows match the current filters.</div>
         </div>
     </div>
 </div>
 
-{# ── Material flow (2-column) ────────────────────────────────── #}
+{# ── Material flow (2-col) ───────────────────────────────────── #}
 {% if plan.flows %}
 <div class="eve-card card border-0 mb-4">
     <div class="card-body p-3">
@@ -493,13 +372,9 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
                     </div>
                     <div class="d-flex flex-column align-items-center flex-shrink-0 px-1">
                         <i class="bi bi-arrow-right eve-accent" style="font-size:.9rem;"></i>
-                        {% if flow.transport_label == 'same_character' %}
-                        <span class="flow-local">local</span>
-                        {% elif flow.transport_label == 'cross_system' %}
-                        <span class="flow-cross">cross-sys</span>
-                        {% else %}
-                        <span class="flow-customs">customs</span>
-                        {% endif %}
+                        {% if flow.transport_label == 'same_character' %}<span class="flow-local">local</span>
+                        {% elif flow.transport_label == 'cross_system' %}<span class="flow-cross">cross-sys</span>
+                        {% else %}<span class="flow-customs">customs</span>{% endif %}
                     </div>
                     <div class="flex-grow-1 overflow-hidden text-end">
                         <div style="font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ flow.to_product_display }}</div>
@@ -513,21 +388,19 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
 </div>
 {% endif %}
 
-{# ── Capacity + Unused characters ────────────────────────────── #}
-<div class="row g-4 mb-4 d-none">
+{# ── Capacity + Unused ───────────────────────────────────────── #}
+<div class="row g-4 mb-4">
     <div class="{{ 'col-xl-6' if plan.unused_characters else 'col-12' }}">
         <div class="eve-card card border-0 h-100">
             <div class="card-body p-3">
                 <div class="fw-semibold mb-3">{{ t('colony_plan.capacity_summary') }}</div>
                 <div class="table-responsive">
                     <table class="table table-dark table-sm align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>{{ t('colony_plan.col_character') }}</th>
-                                <th>{{ t('colony_plan.capacity_used') }}</th>
-                                <th>{{ t('colony_plan.capacity_remaining') }}</th>
-                            </tr>
-                        </thead>
+                        <thead><tr>
+                            <th>{{ t('colony_plan.col_character') }}</th>
+                            <th>{{ t('colony_plan.capacity_used') }}</th>
+                            <th>{{ t('colony_plan.capacity_remaining') }}</th>
+                        </tr></thead>
                         <tbody>
                             {% for char in plan.characters %}
                             <tr>
@@ -538,17 +411,12 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
                                              onerror="this.src='/static/img/default_char.svg'">
                                         <div>
                                             <div style="font-size:.82rem;">{{ char.name }}</div>
-                                            {% if not char.scope_based %}
-                                            <div class="text-muted" style="font-size:.68rem;">{{ t('colony_plan.capacity_estimated') }}</div>
-                                            {% endif %}
+                                            {% if not char.scope_based %}<div class="text-muted" style="font-size:.68rem;">{{ t('colony_plan.capacity_estimated') }}</div>{% endif %}
                                         </div>
                                     </div>
                                 </td>
                                 <td style="font-size:.85rem;">{{ char.existing_total }}/{{ char.max_planets }}</td>
-                                <td>
-                                    <span class="{% if char.remaining_slots <= 0 %}text-danger{% else %}text-success{% endif %}"
-                                          style="font-size:.85rem;">{{ char.remaining_slots }}</span>
-                                </td>
+                                <td><span class="{% if char.remaining_slots <= 0 %}text-danger{% else %}text-success{% endif %}" style="font-size:.85rem;">{{ char.remaining_slots }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -562,11 +430,8 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
     <div class="col-xl-6">
         <div class="eve-card card border-0 h-100">
             <div class="card-body p-3">
-                <div class="fw-semibold mb-3">
-                    Unused Characters
-                    <span class="ms-2 badge" style="background:rgba(88,110,117,.2);border:1px solid rgba(88,110,117,.4);color:#9aaab0;font-weight:400;">
-                        {{ plan.unused_characters | length }}
-                    </span>
+                <div class="fw-semibold mb-3">Unused Characters
+                    <span class="ms-2 badge" style="background:rgba(88,110,117,.2);border:1px solid rgba(88,110,117,.4);color:#9aaab0;font-weight:400;">{{ plan.unused_characters | length }}</span>
                 </div>
                 <div class="d-flex flex-column gap-2">
                     {% for char in plan.unused_characters %}
@@ -574,8 +439,8 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
                         <img src="{{ char.portrait or '/static/img/default_char.svg' }}"
                              class="rounded-circle" style="width:32px;height:32px;object-fit:cover;flex-shrink:0;"
                              onerror="this.src='/static/img/default_char.svg'">
-                        <div class="flex-grow-1 min-w-0">
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2">
                                 <span style="font-size:.85rem;font-weight:600;">{{ char.name }}</span>
                                 <span class="text-muted" style="font-size:.75rem;">{{ char.existing_total }}/{{ char.max_planets }}</span>
                             </div>
@@ -598,22 +463,14 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
     {% endif %}
 </div>
 
-{# ── Missing coverage ────────────────────────────────────────── #}
+{# ── Missing ─────────────────────────────────────────────────── #}
 {% if plan.missing %}
 <div class="eve-card card border-0 mb-4">
     <div class="card-body p-3">
-        <div class="fw-semibold mb-2 text-warning">
-            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.missing_title') }}
-        </div>
-        <ul class="mb-0 small">
-            {% for item in plan.missing %}
-            <li class="mb-1"><strong>{{ item.kind_display }}</strong>: {{ item.display_label }}</li>
-            {% endfor %}
-        </ul>
+        <div class="fw-semibold mb-2 text-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('colony_plan.missing_title') }}</div>
+        <ul class="mb-0 small">{% for item in plan.missing %}<li class="mb-1"><strong>{{ item.kind_display }}</strong>: {{ item.display_label }}</li>{% endfor %}</ul>
         {% if plan.additional_characters_needed > 0 %}
-        <div class="text-muted small mt-2">
-            {{ t('colony_plan.additional_characters_needed') }}: <strong>{{ plan.additional_characters_needed }}</strong>
-        </div>
+        <div class="text-muted small mt-2">{{ t('colony_plan.additional_characters_needed') }}: <strong>{{ plan.additional_characters_needed }}</strong></div>
         {% endif %}
     </div>
 </div>
@@ -638,12 +495,43 @@ th.sort-desc .sort-icon { color: var(--eve-accent); }
     </div>
 </div>
 
-{% endif %}{# end plan #}
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-// ── System multi-select ──────────────────────────────────────────────────────
+// ── Product search (custom dropdown) ─────────────────────────────────────────
+const ALL_PRODUCTS = {{ all_products | tojson }};
+
+function searchProducts(q) {
+    const dropdown = document.getElementById('productDropdown');
+    if (!q || q.length < 1) { dropdown.classList.add('d-none'); dropdown.innerHTML = ''; return; }
+    const ql = q.toLowerCase();
+    const matches = ALL_PRODUCTS.filter(p =>
+        p.display_name.toLowerCase().includes(ql) || p.name.toLowerCase().includes(ql)
+    ).slice(0, 20);
+    dropdown.innerHTML = '';
+    matches.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'eve-search-item';
+        item.innerHTML = `<span>${p.display_name}</span><span class="text-muted" style="font-size:.75rem;">${p.tier}</span>`;
+        item.onclick = () => {
+            document.getElementById('productInput').value = p.display_name;
+            document.getElementById('productHidden').value = p.name;
+            dropdown.classList.add('d-none'); dropdown.innerHTML = '';
+            updateProductFavIcon(); updateBtnText();
+        };
+        dropdown.appendChild(item);
+    });
+    dropdown.classList.toggle('d-none', matches.length === 0);
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('#productInput') && !e.target.closest('#productDropdown'))
+        document.getElementById('productDropdown')?.classList.add('d-none');
+});
+
+// ── System multi-select ───────────────────────────────────────────────────────
 const selectedSystems = new Map();
 {% for system in selected_systems %}
 selectedSystems.set({{ system.id }}, {{ system | tojson }});
@@ -667,140 +555,44 @@ function renderSelectedSystems() {
     syncSystemIds();
 }
 
-function removeSystem(id) {
-    selectedSystems.delete(id);
-    renderSelectedSystems();
-}
+function removeSystem(id) { selectedSystems.delete(id); renderSelectedSystems(); }
 
 async function searchSystems(q) {
     const results = document.getElementById('systemSearchResults');
-    if (!q || q.length < 2) { results.classList.add('d-none'); results.innerHTML = ''; return; }
+    if (!q || q.length < 2) { results.style.display = 'none'; results.innerHTML = ''; return; }
     try {
-        const res = await fetch('/system/search?q=' + encodeURIComponent(q));
-        const data = await res.json();
+        const data = await fetch('/system/search?q=' + encodeURIComponent(q)).then(r => r.json());
         results.innerHTML = '';
         (data.systems || []).forEach(sys => {
             if (selectedSystems.has(sys.id)) return;
             const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'eve-search-item';
-            btn.innerHTML = `
-                <span>${sys.name}</span>
-                <span class="text-muted" style="font-size:.72rem;">${sys.region || ''}</span>
-            `;
+            btn.type = 'button'; btn.className = 'list-group-item list-group-item-action';
+            btn.textContent = `${sys.name}${sys.region ? ' | ' + sys.region : ''}`;
             btn.onclick = () => {
                 selectedSystems.set(sys.id, sys);
                 renderSelectedSystems();
-                results.innerHTML = ''; results.classList.add('d-none');
+                results.innerHTML = ''; results.style.display = 'none';
                 document.getElementById('systemSearchInput').value = '';
             };
             results.appendChild(btn);
         });
-        results.classList.toggle('d-none', !results.children.length);
-    } catch {}
+        results.style.display = results.children.length ? 'block' : 'none';
+    } catch { results.style.display = 'none'; }
 }
 
 document.getElementById('systemSearchInput')?.addEventListener('input', e => searchSystems(e.target.value));
-
-// ── Product search/dropdown ───────────────────────────────────────────────────
-function productLabel(name) {
-    return PRODUCT_LABELS[name] || name || '';
-}
-
-function productTier(name) {
-    const item = ALL_PRODUCTS.find(p => p.name === name);
-    return item?.tier || '';
-}
-
-function setSelectedProduct(name) {
-    const visible = document.getElementById('productInput');
-    const hidden = document.getElementById('productValueInput');
-    const dropdown = document.getElementById('productDropdown');
-    if (hidden) hidden.value = name || '';
-    if (visible) visible.value = name ? productLabel(name) : '';
-    if (dropdown) {
-        dropdown.innerHTML = '';
-        dropdown.classList.add('d-none');
-    }
-    updateProductFavIcon();
-    updateBtnText();
-}
-
-function filterProducts(query) {
-    const q = (query || '').trim().toLowerCase();
-    if (!q) return ALL_PRODUCTS.slice(0, 20);
-    return ALL_PRODUCTS
-        .filter(item => {
-            const canonical = (item.name || '').toLowerCase();
-            const label = (item.display_name || '').toLowerCase();
-            return canonical.includes(q) || label.includes(q);
-        })
-        .slice(0, 20);
-}
-
-function renderProductDropdown(query) {
-    const dropdown = document.getElementById('productDropdown');
-    if (!dropdown) return;
-    const matches = filterProducts(query);
-    dropdown.innerHTML = '';
-    if (!matches.length) {
-        dropdown.classList.add('d-none');
-        return;
-    }
-    matches.forEach(item => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'eve-search-item';
-        btn.innerHTML = `
-            <span>${item.display_name}</span>
-            <span class="badge" style="background:${TIER_COLORS[item.tier] || '#586e75'}22;color:${TIER_COLORS[item.tier] || '#586e75'};border:1px solid ${TIER_COLORS[item.tier] || '#586e75'}40;font-size:.68rem;">${item.tier}</span>
-        `;
-        btn.onclick = () => setSelectedProduct(item.name);
-        dropdown.appendChild(btn);
-    });
-    dropdown.classList.remove('d-none');
-}
-
-document.getElementById('productInput')?.addEventListener('input', e => {
-    const hidden = document.getElementById('productValueInput');
-    if (hidden) hidden.value = '';
-    renderProductDropdown(e.target.value);
-    updateProductFavIcon();
-    updateBtnText();
-});
-
-document.getElementById('productInput')?.addEventListener('focus', e => {
-    renderProductDropdown(e.target.value);
-});
-
-document.addEventListener('click', e => {
-    const productWrap = document.getElementById('productInput')?.closest('.position-relative');
-    const productDropdown = document.getElementById('productDropdown');
-    if (productWrap && productDropdown && !productWrap.contains(e.target)) {
-        productDropdown.classList.add('d-none');
-    }
-    const systemWrap = document.getElementById('systemSearchInput')?.closest('.position-relative');
-    const systemDropdown = document.getElementById('systemSearchResults');
-    if (systemWrap && systemDropdown && !systemWrap.contains(e.target)) {
-        systemDropdown.classList.add('d-none');
-    }
-});
 
 // ── Character grid ────────────────────────────────────────────────────────────
 function toggleChar(card) {
     const allToggle = document.getElementById('selectAllToggle');
     if (allToggle?.checked) allToggle.checked = false;
     card.classList.toggle('selected');
-    syncCharIds();
-    updateBtnText();
+    syncCharIds(); updateBtnText();
 }
 
 function toggleAllChars(checked) {
-    document.querySelectorAll('.colony-char-card').forEach(card => {
-        card.classList.toggle('selected', checked);
-    });
-    syncCharIds();
-    updateBtnText();
+    document.querySelectorAll('.colony-char-card').forEach(c => c.classList.toggle('selected', checked));
+    syncCharIds(); updateBtnText();
 }
 
 function syncCharIds() {
@@ -813,11 +605,7 @@ function syncCharIds() {
         form.appendChild(inp);
     });
     let allInput = form.querySelector('input[name="all_characters"]');
-    if (!allInput) {
-        allInput = document.createElement('input');
-        allInput.type = 'hidden'; allInput.name = 'all_characters';
-        form.appendChild(allInput);
-    }
+    if (!allInput) { allInput = document.createElement('input'); allInput.type = 'hidden'; allInput.name = 'all_characters'; form.appendChild(allInput); }
     allInput.value = document.getElementById('selectAllToggle')?.checked ? '1' : '0';
 }
 
@@ -828,7 +616,7 @@ function updateBtnText() {
     {% if plan %}
     btn.textContent = 'Update Plan';
     {% else %}
-    const product = (document.getElementById('productValueInput')?.value || '').trim();
+    const product = (document.getElementById('productHidden')?.value || '').trim();
     const sysIds  = (document.getElementById('systemIdsInput')?.value || '').trim();
     if (product && sysIds)  btn.textContent = '{{ t("colony_plan.generate") }}';
     else if (product)       btn.textContent = 'Add a system';
@@ -837,30 +625,33 @@ function updateBtnText() {
     {% endif %}
 }
 
+document.getElementById('productInput')?.addEventListener('input', () => {
+    if (!(document.getElementById('productInput')?.value || '').trim()) {
+        const h = document.getElementById('productHidden');
+        if (h) h.value = '';
+    }
+    updateBtnText();
+});
+
 // ── Product favorites ─────────────────────────────────────────────────────────
 const PROD_FAV_KEY = 'pi-colony-product-favs';
 const getProdFavs = () => { try { return JSON.parse(localStorage.getItem(PROD_FAV_KEY) || '[]'); } catch { return []; } };
 const saveProdFavs = v => localStorage.setItem(PROD_FAV_KEY, JSON.stringify(v));
 
 function toggleProductFav() {
-    const val = (document.getElementById('productValueInput')?.value || '').trim();
+    const val = (document.getElementById('productHidden')?.value || '').trim();
     if (!val) return;
     const favs = getProdFavs();
     const idx = favs.findIndex(f => f.name === val);
     if (idx >= 0) favs.splice(idx, 1);
-    else {
-        favs.push({ name: val, label: productLabel(val), tier: productTier(val) });
-    }
-    saveProdFavs(favs);
-    renderProductFavs();
-    updateProductFavIcon();
+    else { const display = (document.getElementById('productInput')?.value || val).trim(); favs.push({ name: val, label: display }); }
+    saveProdFavs(favs); renderProductFavs(); updateProductFavIcon();
 }
 
 function updateProductFavIcon() {
-    const val = (document.getElementById('productValueInput')?.value || '').trim();
+    const val = (document.getElementById('productHidden')?.value || '').trim();
     const icon = document.getElementById('productFavIcon');
-    if (!icon) return;
-    icon.className = getProdFavs().some(f => f.name === val) ? 'bi bi-star-fill eve-accent' : 'bi bi-star';
+    if (icon) icon.className = getProdFavs().some(f => f.name === val) ? 'bi bi-star-fill eve-accent' : 'bi bi-star';
 }
 
 function renderProductFavs() {
@@ -871,24 +662,18 @@ function renderProductFavs() {
     favs.forEach(fav => {
         const chip = document.createElement('span');
         chip.className = 'fav-chip';
-        const tier = fav.tier || productTier(fav.name);
-        chip.innerHTML = `<span class="badge" style="background:${TIER_COLORS[tier] || '#586e75'}22;color:${TIER_COLORS[tier] || '#586e75'};border:1px solid ${TIER_COLORS[tier] || '#586e75'}40;font-size:.62rem;">${tier || ''}</span>${fav.label || productLabel(fav.name)}<span class="fav-chip-remove" onclick="event.stopPropagation();removeProdFav(${JSON.stringify(fav.name)})">&#x2715;</span>`;
+        chip.innerHTML = `<i class="bi bi-star-fill" style="font-size:.58rem;color:#f4a300;"></i>${fav.label || fav.name}<span class="fav-chip-remove" onclick="event.stopPropagation();removeProdFav(${JSON.stringify(fav.name)})">&#x2715;</span>`;
         chip.onclick = () => {
-            setSelectedProduct(fav.name);
+            document.getElementById('productInput').value = fav.label || fav.name;
+            document.getElementById('productHidden').value = fav.name;
+            updateProductFavIcon(); updateBtnText();
         };
         strip.appendChild(chip);
     });
-    strip.style.display = favs.length ? 'flex' : 'none';
+    favs.length ? strip.classList.remove('d-none') : strip.classList.add('d-none');
 }
 
-function removeProdFav(name) {
-    saveProdFavs(getProdFavs().filter(f => f.name !== name));
-    renderProductFavs(); updateProductFavIcon();
-}
-
-if (document.getElementById('productValueInput')?.value && !document.getElementById('productInput')?.value) {
-    setSelectedProduct(document.getElementById('productValueInput').value);
-}
+function removeProdFav(name) { saveProdFavs(getProdFavs().filter(f => f.name !== name)); renderProductFavs(); updateProductFavIcon(); }
 
 // ── System favorites ──────────────────────────────────────────────────────────
 const SYS_FAV_KEY = 'pi-colony-system-favs';
@@ -898,11 +683,8 @@ const saveSysFavs = v => localStorage.setItem(SYS_FAV_KEY, JSON.stringify(v));
 function saveCurrentSystemsAsFav() {
     if (!selectedSystems.size) return;
     const favs = getSysFavs();
-    selectedSystems.forEach(sys => {
-        if (!favs.find(f => f.id === sys.id)) favs.push({ id: sys.id, name: sys.name, region: sys.region || '' });
-    });
-    saveSysFavs(favs);
-    renderSystemFavs();
+    selectedSystems.forEach(sys => { if (!favs.find(f => f.id === sys.id)) favs.push({ id: sys.id, name: sys.name, region: sys.region || '' }); });
+    saveSysFavs(favs); renderSystemFavs();
 }
 
 function renderSystemFavs() {
@@ -914,21 +696,13 @@ function renderSystemFavs() {
         const chip = document.createElement('span');
         chip.className = 'fav-chip';
         chip.innerHTML = `<i class="bi bi-star-fill" style="font-size:.58rem;color:#f4a300;"></i>${fav.name}<span class="fav-chip-remove" onclick="event.stopPropagation();removeSysFav(${fav.id})">&#x2715;</span>`;
-        chip.onclick = () => {
-            if (!selectedSystems.has(fav.id)) {
-                selectedSystems.set(fav.id, fav);
-                renderSelectedSystems();
-            }
-        };
+        chip.onclick = () => { if (!selectedSystems.has(fav.id)) { selectedSystems.set(fav.id, fav); renderSelectedSystems(); } };
         strip.appendChild(chip);
     });
-    strip.style.display = favs.length ? 'flex' : 'none';
+    favs.length ? strip.classList.remove('d-none') : strip.classList.add('d-none');
 }
 
-function removeSysFav(id) {
-    saveSysFavs(getSysFavs().filter(f => f.id !== id));
-    renderSystemFavs();
-}
+function removeSysFav(id) { saveSysFavs(getSysFavs().filter(f => f.id !== id)); renderSystemFavs(); }
 
 // ── Table filters ─────────────────────────────────────────────────────────────
 function applyFilters() {
@@ -945,26 +719,24 @@ function applyFilters() {
         row.style.display = show ? '' : 'none';
         if (show) visible++;
     });
-    const msg = document.getElementById('noResultsMsg');
-    if (msg) msg.classList.toggle('d-none', visible > 0);
+    document.getElementById('noResultsMsg')?.classList.toggle('d-none', visible > 0);
     const count = document.getElementById('tableRowCount');
     if (count) count.textContent = visible ? `${visible} row${visible !== 1 ? 's' : ''}` : '';
 }
 
 // ── Table sort ────────────────────────────────────────────────────────────────
 let sortCol = -1, sortAsc = true;
-
 function sortTable(colIdx, thEl) {
     const tbody = document.getElementById('assignmentTableBody');
     if (!tbody) return;
     sortAsc = (sortCol === colIdx) ? !sortAsc : true;
     sortCol = colIdx;
-    document.querySelectorAll('#assignmentTable th.sortable').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+    document.querySelectorAll('#assignmentTable th.sortable').forEach(th => th.classList.remove('sort-asc','sort-desc'));
     thEl.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
     const rows = [...tbody.querySelectorAll('tr[data-char]')];
     rows.sort((a, b) => {
-        const aVal = (a.querySelectorAll('td')[colIdx]?.dataset?.sort || a.querySelectorAll('td')[colIdx]?.textContent || '').trim().toLowerCase();
-        const bVal = (b.querySelectorAll('td')[colIdx]?.dataset?.sort || b.querySelectorAll('td')[colIdx]?.textContent || '').trim().toLowerCase();
+        const aVal = (a.querySelectorAll('td')[colIdx]?.dataset?.sort || '').toLowerCase();
+        const bVal = (b.querySelectorAll('td')[colIdx]?.dataset?.sort || '').toLowerCase();
         return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     });
     rows.forEach(r => tbody.appendChild(r));
@@ -974,8 +746,7 @@ function sortTable(colIdx, thEl) {
 function copyAssignmentSummary() {
     const el = document.getElementById('assignmentSummaryText');
     if (!el) return;
-    el.select(); el.setSelectionRange(0, 99999);
-    document.execCommand('copy');
+    el.select(); el.setSelectionRange(0, 99999); document.execCommand('copy');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
