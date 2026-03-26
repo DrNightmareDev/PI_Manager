@@ -237,7 +237,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% if plan.assignments %}
+                            {% if plan.assignments or plan.missing %}
                                 {% for item in plan.assignments %}
                                 <tr>
                                     <td><span class="fw-semibold">{{ item.character_name }}</span></td>
@@ -257,6 +257,28 @@
                                     <td>
                                         <span class="badge" style="background:{{ '#f4a30018' if item.status == 'existing' else '#1a2d3d' }};color:{{ '#f4a300' if item.status == 'existing' else '#9adcf0' }};border:1px solid {{ '#f4a30040' if item.status == 'existing' else '#2b4458' }};">
                                             {{ t('colony_plan.status_existing') if item.status == 'existing' else t('colony_plan.status_new') }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% for item in plan.missing %}
+                                <tr>
+                                    <td><span class="text-muted">—</span></td>
+                                    <td>
+                                        <div class="fw-semibold text-muted">{{ t('colony_plan.needed_planet') }}</div>
+                                        <div class="text-muted small">{{ t('colony_plan.assignment_gap') }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge" style="background:#e6394618;color:#e63946;border:1px solid #e6394640;">
+                                            {{ item.kind_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold text-muted">{{ item.display_label }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge" style="background:#e6394618;color:#e63946;border:1px solid #e6394640;">
+                                            {{ t('colony_plan.status_missing') }}
                                         </span>
                                     </td>
                                 </tr>
