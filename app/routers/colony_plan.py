@@ -126,12 +126,37 @@ def _collect_chain(product_name: str) -> dict[str, Any]:
                 visit(item)
 
     visit(product_name)
+
+    # Detect self-sufficient P2 opportunities: a P2 whose two P1 inputs can both
+    # be extracted on the same planet type.  One planet can then run two ECUs
+    # (P0_A + P0_B) and the matching P2 factory, saving two planet slots.
+    self_sufficient_p2: dict[str, dict[str, Any]] = {}
+    for p2_name in sorted(tiers["P2"]):
+        p1_inputs = P1_TO_P2.get(p2_name, [])
+        if len(p1_inputs) != 2:
+            continue
+        p1_a, p1_b = p1_inputs
+        p0_a = P1_TO_P0.get(p1_a)
+        p0_b = P1_TO_P0.get(p1_b)
+        if not p0_a or not p0_b or p0_a == p0_b:
+            continue
+        types_a = {pt for pt, rs in PLANET_RESOURCES.items() if p0_a in rs}
+        types_b = {pt for pt, rs in PLANET_RESOURCES.items() if p0_b in rs}
+        common = sorted(types_a & types_b)
+        if common:
+            self_sufficient_p2[p2_name] = {
+                "p0_a": p0_a, "p0_b": p0_b,
+                "p1_a": p1_a, "p1_b": p1_b,
+                "planet_types": common,
+            }
+
     return {
         "product": product_name,
         "tier": tier,
         "tiers": {k: sorted(v) for k, v in tiers.items()},
         "p0_needed": sorted(p0_needed),
         "flow_edges": flow_edges,
+        "self_sufficient_p2": self_sufficient_p2,
     }
 
 
@@ -242,7 +267,28 @@ def _feasibility_analysis(
 ) -> dict[str, Any]:
     p0_count = len(chain["p0_needed"])
     factory_count = 0 if chain["tier"] == "P1" else sum(len(chain["tiers"][tier]) for tier in ("P2", "P3", "P4"))
-    planets_needed = p0_count + factory_count
+
+    # Count achievable self-sufficient P2 assignments: each saves 2 planets
+    # (1 combined planet replaces P0_A extractor + P0_B extractor + P2 factory).
+    ss_sim_used: set[int] = set()
+    ss_covered_p0: set[str] = set()
+    ss_planet_count = 0
+    for p2_name, ss in chain.get("self_sufficient_p2", {}).items():
+        p0_a, p0_b = ss["p0_a"], ss["p0_b"]
+        combined = [
+            p for p in planet_pool
+            if p0_a in p.get("resources", []) and p0_b in p.get("resources", [])
+            and int(p["planet_id"]) not in ss_sim_used
+        ]
+        if combined:
+            ss_sim_used.add(int(combined[0]["planet_id"]))
+            ss_covered_p0.add(p0_a)
+            ss_covered_p0.add(p0_b)
+            ss_planet_count += 1
+
+    # planets_needed with self-sufficient optimisations applied:
+    # each SS P2 uses 1 planet for 3 roles (P0_A + P0_B + P2), saving 2 slots.
+    planets_needed = (p0_count - len(ss_covered_p0)) + (factory_count - ss_planet_count) + ss_planet_count
 
     # Include relocation slots: chars with 0 free slots can repurpose existing
     # colonies in selected systems. existing_reuse assignments commit a colony
@@ -292,11 +338,15 @@ def _feasibility_analysis(
     uncoverable_p0: list[str] = []
     insufficient_p0: list[str] = []  # planet exists but consumed by a higher-priority P0
 
-    # Greedy simulation in the same sorted order used by the assignment algorithm.
-    # Detects planet-count conflicts (e.g. two P0s that both need the only Lava planet).
-    simulated_used: set[int] = set()
+    # Greedy simulation mirroring the actual assignment order:
+    #   1. self-sufficient P2 assignments (covers two P0s on one planet)
+    #   2. remaining P0 extractors
+    # Detects planet-count conflicts (e.g. two P0s competing for the only Lava planet).
+    simulated_used: set[int] = set(ss_sim_used)  # SS planets already committed
     insufficient_set: set[str] = set()
     for p0_name in chain["p0_needed"]:
+        if p0_name in ss_covered_p0:
+            continue  # already handled by a self-sufficient P2 assignment
         candidates = [
             p for p in planet_pool
             if p0_name in p.get("resources", [])
@@ -346,7 +396,7 @@ def _select_assignment(
     *,
     candidates: list[dict],
     char_state: dict[int, dict],
-    assigned_planets: set[int],
+    assigned_planet_chars: set[tuple[int, int]],
     include_unassigned: bool,
     preferred_chars: set[int] | None = None,
     preferred_systems: set[int] | None = None,
@@ -358,12 +408,9 @@ def _select_assignment(
 
     for planet in candidates:
         planet_id = int(planet["planet_id"])
-        if planet_id in assigned_planets:
-            continue
-
         occupied_char_id = planet.get("occupied_char_id")
-        # Always consider all chars — the occupant gets +1000 score (existing planet),
-        # but other chars can also build a new command center on the same planet.
+        # All chars are candidates — different chars may share the same planet.
+        # The occupant gets a score bonus but any char can build a new command center.
         candidate_char_ids = list(char_state.keys())
 
         for char_id in candidate_char_ids:
@@ -371,6 +418,10 @@ def _select_assignment(
                 continue
             state = char_state.get(char_id)
             if not state:
+                continue
+            # Each (planet, char) pair can only be assigned once.
+            # Different chars may share the same planet (each has their own command center).
+            if (planet_id, char_id) in assigned_planet_chars:
                 continue
             existing_planet = occupied_char_id == char_id
             if existing_planet:
@@ -565,18 +616,84 @@ def _build_assignment_plan(
         selected_char_ids=selected_char_ids,
     )
     assignments: list[dict[str, Any]] = []
-    assigned_planets: set[int] = set()
+    # Track (planet_id, char_id) pairs — different chars may share a planet.
+    assigned_planet_chars: set[tuple[int, int]] = set()
     assigned_system_ids: set[int] = set()
     output_task_by_product: dict[str, dict[str, Any]] = {}
     missing: list[dict[str, Any]] = []
+    covered_p0: set[str] = set()
+    covered_factory: set[str] = set()
 
-    # Extractors first: one extractor planet per needed P0.
+    def _commit_assignment(planet: dict, char: dict, is_reloc: bool) -> str:
+        """Update char_state counters and return status string."""
+        existing = planet.get("occupied_char_id") == char["id"]
+        if existing:
+            char["existing_reuse_assignments"] += 1
+        elif is_reloc:
+            char["relocation_assignments"] += 1
+        else:
+            char["remaining_slots"] -= 1
+            char["new_assignments"] += 1
+        char["assignments"].append(planet["planet_id"])
+        assigned_planet_chars.add((int(planet["planet_id"]), char["id"]))
+        assigned_system_ids.add(int(planet["system_id"]))
+        return "existing" if existing else ("relocate" if is_reloc else "new")
+
+    # ── Phase 1: Self-sufficient P2 assignments ──────────────────────────────
+    # One planet runs two ECUs (P0_A + P0_B) and a P2 factory — 1 slot, 3 roles.
+    for p2_name, ss in chain.get("self_sufficient_p2", {}).items():
+        p0_a, p0_b = ss["p0_a"], ss["p0_b"]
+        combined = [
+            p for p in planet_pool
+            if p0_a in p.get("resources", []) and p0_b in p.get("resources", [])
+        ]
+        chosen_planet, chosen_char, is_relocation = _select_assignment(
+            candidates=combined,
+            char_state=char_state,
+            assigned_planet_chars=assigned_planet_chars,
+            include_unassigned=include_unassigned,
+            preferred_systems=assigned_system_ids,
+        )
+        if not chosen_planet or not chosen_char:
+            continue  # Fall through to separate P0 + factory assignments
+
+        status = _commit_assignment(chosen_planet, chosen_char, is_relocation)
+        covered_p0.add(p0_a)
+        covered_p0.add(p0_b)
+        covered_factory.add(p2_name)
+
+        p1_a, p1_b = ss["p1_a"], ss["p1_b"]
+        entry = {
+            "character_id": chosen_char["id"],
+            "character_name": chosen_char["name"],
+            "planet_id": chosen_planet["planet_id"],
+            "planet_name": chosen_planet["planet_name"],
+            "planet_type": chosen_planet["planet_type"],
+            "system_id": chosen_planet["system_id"],
+            "system_name": chosen_planet["system_name"],
+            "role": "Extractor+Factory",
+            "summary": f"{p0_a} + {p0_b} → {p2_name}",
+            "detail_items": [p0_a, p0_b],
+            "output_product": p2_name,
+            "status": status,
+            "status_label": status,
+            "tier": "P2",
+        }
+        assignments.append(entry)
+        # Both P1 outputs and the P2 itself route through this entry for P3 preferencing.
+        output_task_by_product[p1_a] = entry
+        output_task_by_product[p1_b] = entry
+        output_task_by_product[p2_name] = entry
+
+    # ── Phase 2: Remaining P0 extractors ─────────────────────────────────────
     for p0_name in chain["p0_needed"]:
+        if p0_name in covered_p0:
+            continue
         matching = [planet for planet in planet_pool if p0_name in planet["resources"]]
         chosen_planet, chosen_char, is_relocation = _select_assignment(
             candidates=matching,
             char_state=char_state,
-            assigned_planets=assigned_planets,
+            assigned_planet_chars=assigned_planet_chars,
             include_unassigned=include_unassigned,
             preferred_systems=assigned_system_ids,
         )
@@ -584,20 +701,8 @@ def _build_assignment_plan(
             missing.append({"kind": "extractor", "label": p0_name})
             continue
 
-        assigned_planets.add(int(chosen_planet["planet_id"]))
-        assigned_system_ids.add(int(chosen_planet["system_id"]))
-        existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
-        if existing_planet:
-            chosen_char["existing_reuse_assignments"] += 1
-        elif is_relocation:
-            chosen_char["relocation_assignments"] += 1
-        else:
-            chosen_char["remaining_slots"] -= 1
-            chosen_char["new_assignments"] += 1
-        chosen_char["assignments"].append(chosen_planet["planet_id"])
-
+        status = _commit_assignment(chosen_planet, chosen_char, is_relocation)
         p1_output = P0_TO_P1.get(p0_name, "")
-        _status = "existing" if existing_planet else ("relocate" if is_relocation else "new")
         entry = {
             "character_id": chosen_char["id"],
             "character_name": chosen_char["name"],
@@ -610,14 +715,14 @@ def _build_assignment_plan(
             "summary": p0_name,
             "detail_items": [p0_name],
             "output_product": p1_output,
-            "status": _status,
-            "status_label": _status,
+            "status": status,
+            "status_label": status,
             "tier": "P0",
         }
         assignments.append(entry)
         output_task_by_product[p1_output] = entry
 
-    # Factory stages P2 -> P4 (or final lower tiers).
+    # ── Phase 3: Factory stages P2 → P4 (skip those handled by SS P2) ────────
     factory_products: list[str] = []
     for tier in ("P2", "P3", "P4"):
         factory_products.extend(chain["tiers"][tier])
@@ -625,6 +730,8 @@ def _build_assignment_plan(
         factory_products = []
 
     for product in factory_products:
+        if product in covered_factory:
+            continue  # already produced by a self-sufficient P2 planet
         tier = _product_tier(product) or ""
         if tier == "P2":
             inputs = list(P1_TO_P2.get(product, []))
@@ -641,7 +748,7 @@ def _build_assignment_plan(
         chosen_planet, chosen_char, is_relocation = _select_assignment(
             candidates=planet_pool,
             char_state=char_state,
-            assigned_planets=assigned_planets,
+            assigned_planet_chars=assigned_planet_chars,
             include_unassigned=include_unassigned,
             preferred_chars=preferred_chars,
             preferred_systems=assigned_system_ids,
@@ -650,19 +757,7 @@ def _build_assignment_plan(
             missing.append({"kind": "factory", "label": product})
             continue
 
-        assigned_planets.add(int(chosen_planet["planet_id"]))
-        assigned_system_ids.add(int(chosen_planet["system_id"]))
-        existing_planet = chosen_planet.get("occupied_char_id") == chosen_char["id"]
-        if existing_planet:
-            chosen_char["existing_reuse_assignments"] += 1
-        elif is_relocation:
-            chosen_char["relocation_assignments"] += 1
-        else:
-            chosen_char["remaining_slots"] -= 1
-            chosen_char["new_assignments"] += 1
-        chosen_char["assignments"].append(chosen_planet["planet_id"])
-
-        _status = "existing" if existing_planet else ("relocate" if is_relocation else "new")
+        status = _commit_assignment(chosen_planet, chosen_char, is_relocation)
         entry = {
             "character_id": chosen_char["id"],
             "character_name": chosen_char["name"],
@@ -675,8 +770,8 @@ def _build_assignment_plan(
             "summary": f"{product} · " + " · ".join(inputs),
             "detail_items": inputs,
             "output_product": product,
-            "status": _status,
-            "status_label": _status,
+            "status": status,
+            "status_label": status,
             "tier": tier,
         }
         assignments.append(entry)

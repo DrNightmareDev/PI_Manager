@@ -406,6 +406,7 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
             <select class="form-select form-select-sm eve-input" id="filterRole" style="max-width:130px;" onchange="applyFilters()">
                 <option value="">All Roles</option>
                 <option value="Extractor">{{ t('colony_plan.role_extractor') }}</option>
+                <option value="Extractor+Factory">{{ t('colony_plan.role_self_sufficient') }}</option>
                 <option value="Factory">{{ t('colony_plan.role_factory') }}</option>
             </select>
             <select class="form-select form-select-sm eve-input" id="filterStatus" style="max-width:130px;" onchange="applyFilters()">
@@ -451,6 +452,8 @@ th.sort-asc .sort-icon, th.sort-desc .sort-icon { color: var(--eve-accent); }
                         <td data-sort="{{ item.role }}">
                             {% if item.role == 'Extractor' %}
                             <span class="badge" style="background:rgba(0,180,216,.15);border:1px solid rgba(0,180,216,.4);color:#59d8f0;">{{ t('colony_plan.role_extractor') }}</span>
+                            {% elif item.role == 'Extractor+Factory' %}
+                            <span class="badge" style="background:rgba(87,204,153,.12);border:1px solid rgba(87,204,153,.4);color:#57cc99;" title="{{ t('colony_plan.role_self_sufficient_hint') }}">{{ t('colony_plan.role_self_sufficient') }}</span>
                             {% else %}
                             <span class="badge" style="background:rgba(244,163,0,.12);border:1px solid rgba(244,163,0,.35);color:#f0b74d;">{{ t('colony_plan.role_factory') }}</span>
                             {% endif %}

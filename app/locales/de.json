@@ -163,6 +163,8 @@
   "colony_plan.col_status": "Status",
   "colony_plan.role_extractor": "Extraktor",
   "colony_plan.role_factory": "Fabrik",
+  "colony_plan.role_self_sufficient": "Selbstversorgend P2",
+  "colony_plan.role_self_sufficient_hint": "Ein Planet extrahiert zwei Rohstoffe und produziert das P2-Produkt",
   "colony_plan.status_relocate": "Umzug",
   "colony_plan.status_existing":"Bestehend, neu zuweisbar",
   "colony_plan.status_new": "Neue Platzierung",

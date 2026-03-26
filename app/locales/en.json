@@ -163,6 +163,8 @@
   "colony_plan.col_status": "Status",
   "colony_plan.role_extractor": "Extractor",
   "colony_plan.role_factory": "Factory",
+  "colony_plan.role_self_sufficient": "Self-Sufficient P2",
+  "colony_plan.role_self_sufficient_hint": "One planet extracts two raw materials and produces the P2 product",
   "colony_plan.status_existing": "Existing, reassignable",
   "colony_plan.status_new": "New placement",
   "colony_plan.status_relocate": "Relocate",
