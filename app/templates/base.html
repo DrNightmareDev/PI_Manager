@@ -104,6 +104,12 @@
                         <i class="bi bi-graph-up-arrow me-1"></i>{{ t('nav.market') }}
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/templates') %}active{% endif %}"
+                       href="/templates">
+                        <i class="bi bi-geo-alt me-1"></i>PI Templates
+                    </a>
+                </li>
                 {% if account_can_access_corp_nav(account) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path == '/dashboard/corp' %}active{% endif %}"

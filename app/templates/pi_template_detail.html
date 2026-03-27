@@ -1,0 +1,534 @@
+{% extends "base.html" %}
+{% block title %}{{ tmpl.name }} - PI Templates - {{ t('app.name') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+#piCanvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-height: 600px;
+    background: #080a0e;
+    border-radius: 8px;
+    border: 1px solid var(--eve-card-border);
+}
+.legend-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1.5px solid transparent;
+}
+.legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: .8rem;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--eve-card-border);
+}
+.legend-row:last-child { border-bottom: none; }
+.planet-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: .75rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+.meta-card {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+.meta-label {
+    font-size: .7rem;
+    color: var(--eve-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 2px;
+}
+.meta-value {
+    font-size: .95rem;
+    font-weight: 600;
+}
+.res-bar-wrap {
+    background: var(--eve-bg-1);
+    border-radius: 4px;
+    height: 7px;
+    overflow: hidden;
+    margin-top: 3px;
+}
+.res-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .3s;
+}
+.res-bar.over { background: #f07075 !important; }
+.skill-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,180,216,.08);
+    border: 1px solid rgba(0,180,216,.25);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: .78rem;
+}
+.skill-level-pip {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    border: 1.5px solid rgba(0,180,216,.5);
+}
+.skill-level-pip.filled { background: var(--eve-accent); border-color: var(--eve-accent); }
+.pt-btn {
+    padding: 2px 8px;
+    font-size: .7rem;
+    border-radius: 4px;
+    border: 1px solid var(--eve-card-border);
+    background: var(--eve-bg-2);
+    color: var(--eve-text-muted);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.pt-btn:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+.pt-btn.active { background: rgba(0,180,216,.15); border-color: var(--eve-accent); color: var(--eve-accent); font-weight: 600; }
+.scale-btn {
+    padding: 2px 8px;
+    font-size: .7rem;
+    border-radius: 4px;
+    border: 1px solid var(--eve-card-border);
+    background: var(--eve-bg-2);
+    color: var(--eve-text-muted);
+    cursor: pointer;
+    transition: all .15s;
+}
+.scale-btn:hover { border-color: #9b5de5; color: #9b5de5; }
+.scale-btn.active { background: rgba(155,93,229,.15); border-color: #9b5de5; color: #9b5de5; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+  <!-- Breadcrumb -->
+  <div class="d-flex align-items-center gap-2 mb-3" style="font-size:.8rem;color:var(--eve-text-muted);">
+    <a href="/templates" class="text-decoration-none" style="color:var(--eve-accent);">PI Templates</a>
+    <i class="bi bi-chevron-right" style="font-size:.7rem;"></i>
+    <span>{{ tmpl.name }}</span>
+  </div>
+
+  <!-- Page header -->
+  <div class="d-flex align-items-start gap-3 mb-4 flex-wrap">
+    <div class="flex-grow-1">
+      <h4 class="mb-1 fw-bold">
+        {{ tmpl.name }}
+        <span class="badge ms-2" style="background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;font-size:.55em;vertical-align:middle;">-Testing-</span>
+      </h4>
+      {% if tmpl.description %}<div class="text-muted" style="font-size:.85rem;">{{ tmpl.description }}</div>{% endif %}
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="/templates/{{ tmpl.id }}/download" class="btn btn-sm eve-btn-primary">
+        <i class="bi bi-download me-1"></i>Download JSON
+      </a>
+      {% if not tmpl.is_community and tmpl.account_id == account.id or account.is_admin %}
+      <button class="btn btn-sm btn-outline-danger" style="font-size:.78rem;" onclick="deleteTemplate({{ tmpl.id }})">
+        <i class="bi bi-trash me-1"></i>Delete
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- Left: SVG canvas -->
+    <div class="col-12 col-lg-7">
+      <div class="position-relative">
+        <canvas id="piCanvas" width="800" height="800"></canvas>
+        <!-- Zoom hint -->
+        <div style="position:absolute;bottom:8px;right:10px;font-size:.65rem;color:var(--eve-text-muted);pointer-events:none;">
+          Scroll to zoom · Drag to pan
+        </div>
+      </div>
+      <!-- Planet type selector + scale toggle -->
+      <div class="d-flex align-items-center gap-1 flex-wrap mt-2" style="font-size:.7rem;">
+        <span style="color:var(--eve-text-muted);margin-right:2px;">Planet:</span>
+        {% for pt in ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'] %}
+        <button class="pt-btn" data-pt="{{ pt.lower() }}" onclick="setPlanetType('{{ pt.lower() }}')">{{ pt }}</button>
+        {% endfor %}
+        <span style="color:var(--eve-card-border);margin:0 4px;">|</span>
+        <button class="scale-btn" id="scaleToggle" onclick="toggleScaleMode()">
+          <i class="bi bi-rulers me-1"></i>Scale
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: info + legend -->
+    <div class="col-12 col-lg-5 d-flex flex-column gap-3">
+
+      <!-- Meta stats row -->
+      <div class="row g-2">
+        <div class="col-4">
+          <div class="meta-card text-center">
+            <div class="meta-label">CC Level</div>
+            <div class="meta-value">{{ meta.cmd_center_level }}</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="meta-card text-center">
+            <div class="meta-label">Pins</div>
+            <div class="meta-value">{{ meta.pin_count }}</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="meta-card text-center">
+            <div class="meta-label">Links</div>
+            <div class="meta-value">{{ meta.link_count }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Planet type -->
+      {% if meta.planet_type %}
+      <div class="meta-card">
+        <div class="meta-label mb-1">Planet Type</div>
+        <span class="planet-badge" data-planet-type="{{ meta.planet_type }}">{{ meta.planet_type }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Building breakdown -->
+      <div class="meta-card flex-grow-1">
+        <div class="meta-label mb-2">Buildings</div>
+        <div id="legend">
+          {% for name, count in meta.building_counts.items() %}
+          <div class="legend-row" data-building="{{ name }}">
+            <span class="legend-dot" data-building-dot="{{ name }}"></span>
+            <span class="flex-grow-1">{{ name }}</span>
+            <span class="fw-semibold">{{ count }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- CPU / PG resource card -->
+      <div class="meta-card" id="resourceCard">
+        <div class="meta-label mb-2">Power &amp; CPU</div>
+
+        <!-- Skill chip -->
+        <div class="skill-chip mb-3">
+          <i class="bi bi-mortarboard-fill" style="color:var(--eve-accent);font-size:.85rem;"></i>
+          <div>
+            <div style="font-weight:600;font-size:.8rem;">Command Center Upgrades</div>
+            <div style="font-size:.7rem;color:var(--eve-text-muted);">
+              Level required:
+              <span id="skillPips" style="display:inline-flex;gap:2px;margin-left:4px;vertical-align:middle;"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CPU -->
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-baseline" style="font-size:.78rem;">
+            <span style="color:var(--eve-text-muted);text-transform:uppercase;font-size:.65rem;letter-spacing:.04em;">CPU</span>
+            <span id="cpuText" class="fw-semibold">–</span>
+          </div>
+          <div class="res-bar-wrap">
+            <div id="cpuBar" class="res-bar" style="background:#00b4d8;width:0%;"></div>
+          </div>
+        </div>
+
+        <!-- Power Grid -->
+        <div class="mb-1">
+          <div class="d-flex justify-content-between align-items-baseline" style="font-size:.78rem;">
+            <span style="color:var(--eve-text-muted);text-transform:uppercase;font-size:.65rem;letter-spacing:.04em;">Power Grid</span>
+            <span id="pgText" class="fw-semibold">–</span>
+          </div>
+          <div class="res-bar-wrap">
+            <div id="pgBar" class="res-bar" style="background:#f4a300;width:0%;"></div>
+          </div>
+        </div>
+
+        <!-- Per-family breakdown (toggled) -->
+        <div id="resBreakdown" style="margin-top:10px;display:none;font-size:.72rem;border-top:1px solid var(--eve-card-border);padding-top:8px;"></div>
+        <button class="btn btn-sm eve-btn-ghost mt-2 py-0 px-1" style="font-size:.7rem;" onclick="toggleBreakdown()">
+          <i class="bi bi-list-ul me-1"></i>Details
+        </button>
+      </div>
+
+      {% if tmpl.source_url %}
+      <div style="font-size:.7rem;color:var(--eve-text-muted);">
+        Source: <a href="{{ tmpl.source_url }}" target="_blank" rel="noopener" style="color:var(--eve-accent);">DalShooth/EVE_PI_Templates</a>
+      </div>
+      {% endif %}
+
+      {% if not tmpl.is_community %}
+      <div style="font-size:.7rem;color:var(--eve-text-muted);">Personal template · saved by you</div>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/pi_canvas.js?v={{ static_version }}"></script>
+<script>
+const PLANET_COLORS = {
+  barren:    ['#c47300', '#3a1e00'],
+  gas:       ['#a0c040', '#1e2800'],
+  oceanic:   ['#00a0c0', '#001828'],
+  temperate: ['#40a040', '#0a1f0a'],
+  ice:       ['#80c8f0', '#102030'],
+  storm:     ['#a060c0', '#1a0828'],
+  plasma:    ['#ff6020', '#2a0800'],
+  lava:      ['#e04000', '#280800'],
+};
+
+const rawLayout = {{ layout_json | tojson }};
+let layoutData;
+try { layoutData = JSON.parse(rawLayout); } catch(e) { layoutData = null; }
+
+// ── Interactive canvas with zoom/pan ──────────────────────────────────────────
+const canvas = document.getElementById('piCanvas');
+let transform = { x: 0, y: 0, scale: 1 };
+let dragging = false, dragStart = null;
+
+let currentPlanetType = ({{ (meta.planet_type or '') | tojson }}.toLowerCase()) || 'barren';
+let scaleMode = false;
+
+function renderFull() {
+  const planetRadiusM = PI_PLANET_RADIUS_M[currentPlanetType] || PI_PLANET_RADIUS_M.barren;
+  renderPITemplate(canvas, layoutData, {
+    pad: 40,
+    pinScale: 2,
+    lineWidth: 2,
+    linkAlpha: 0.65,
+    showLabels: true,
+    showBg: true,
+    planetType: currentPlanetType,
+    scaleMode,
+    planetRadiusM,
+    transform,
+  });
+}
+
+function setPlanetType(pt) {
+  currentPlanetType = pt;
+  document.querySelectorAll('.pt-btn').forEach(b => b.classList.toggle('active', b.dataset.pt === pt));
+  renderFull();
+}
+
+function toggleScaleMode() {
+  scaleMode = !scaleMode;
+  document.getElementById('scaleToggle').classList.toggle('active', scaleMode);
+  renderFull();
+}
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const delta = e.deltaY > 0 ? 0.85 : 1.18;
+  transform.x = mx - (mx - transform.x) * delta;
+  transform.y = my - (my - transform.y) * delta;
+  transform.scale = Math.max(0.4, Math.min(12, transform.scale * delta));
+  renderFull();
+}, { passive: false });
+
+canvas.addEventListener('mousedown', e => {
+  dragging = true;
+  dragStart = { x: e.clientX - transform.x, y: e.clientY - transform.y };
+  canvas.style.cursor = 'grabbing';
+});
+canvas.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  transform.x = e.clientX - dragStart.x;
+  transform.y = e.clientY - dragStart.y;
+  renderFull();
+});
+window.addEventListener('mouseup', () => { dragging = false; canvas.style.cursor = 'default'; });
+
+let lastTouchDist = null;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    dragging = true;
+    dragStart = { x: e.touches[0].clientX - transform.x, y: e.touches[0].clientY - transform.y };
+  }
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && dragging) {
+    transform.x = e.touches[0].clientX - dragStart.x;
+    transform.y = e.touches[0].clientY - dragStart.y;
+    renderFull();
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (lastTouchDist) {
+      transform.scale = Math.max(0.4, Math.min(12, transform.scale * dist / lastTouchDist));
+    }
+    lastTouchDist = dist;
+    renderFull();
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', () => { dragging = false; lastTouchDist = null; });
+
+// ── Legend & badge colours ────────────────────────────────────────────────────
+document.querySelectorAll('[data-building-dot]').forEach(dot => {
+  const name = dot.getAttribute('data-building-dot');
+  const tid = Object.entries(PI_NAMES).find(([,n]) => n === name)?.[0];
+  const color = tid ? (PI_COLORS[parseInt(tid)] || '#888') : '#888';
+  dot.style.background = color + '44';
+  dot.style.borderColor = color;
+});
+document.querySelectorAll('[data-planet-type]').forEach(el => {
+  const pt = (el.getAttribute('data-planet-type') || '').toLowerCase();
+  const [fg, bg] = PLANET_COLORS[pt] || ['#888', '#222'];
+  el.style.color = fg; el.style.background = bg + '88'; el.style.borderColor = fg + '66';
+});
+
+// Mark the active planet type button
+document.querySelectorAll('.pt-btn').forEach(b => b.classList.toggle('active', b.dataset.pt === currentPlanetType));
+
+renderFull();
+
+// ── CPU / PG resource calculation ────────────────────────────────────────────
+// Source: ESI dogma attributes (cpuLoad attr 49, powerLoad attr 15)
+// CC output verified from ESI dogma on Barren CC tiers (all planet types same).
+
+const CC_OUTPUT = [
+  // [cpu_tf, pg_mw]        // CCU skill level
+  [  1_675,  6_000 ],      // 0 – Base
+  [  7_057,  9_000 ],      // 1 – Limited
+  [ 12_136, 12_000 ],      // 2 – Standard
+  [ 17_215, 15_000 ],      // 3 – Improved
+  [ 21_315, 17_000 ],      // 4 – Advanced
+  [ 25_415, 19_000 ],      // 5 – Elite
+];
+
+// Family → [cpu_tf, pg_mw] per unit
+const FAMILY_COST = {
+  command_center:   [    0,    0 ],   // provides resources, zero draw
+  launchpad:        [ 3600,  700 ],
+  storage:          [  500,  700 ],
+  ecu:              [  400, 2600 ],
+  extractor_head:   [  110,  550 ],
+  adv_industrial:   [  500,  700 ],
+  basic_industrial: [  200,  800 ],
+  high_tech:        [ 1100,  400 ],
+  unknown:          [    0,    0 ],
+};
+
+// Mirror of PI_TYPE_FAMILY from pi_canvas.js (same data, needed here)
+const TYPE_FAMILY_LOCAL = {
+  ...Object.fromEntries([2254,2524,2525,2533,2534,2549,2550,2551,
+    2129,2130,2131,2132,2133,2134,2135,2136,2137,2138,2139,2140,
+    2141,2142,2143,2144,2145,2146,2147,2148,2149,2150,2151,2152,
+    2153,2154,2155,2156,2157,2158,2159,2160,2574,2576,2577,2578,
+    2581,2582,2585,2586].map(id => [id, 'command_center'])),
+  ...Object.fromEntries([2256,2542,2543,2544,2552,2555,2556,2557].map(id=>[id,'launchpad'])),
+  ...Object.fromEntries([2257,2535,2536,2541,2558,2560,2561,2562].map(id=>[id,'storage'])),
+  ...Object.fromEntries([2848,3060,3061,3062,3063,3064,3067,3068].map(id=>[id,'ecu'])),
+  2481: 'extractor_head',
+  ...Object.fromEntries([2470,2472,2474,2480,2484,2485,2491,2494].map(id=>[id,'adv_industrial'])),
+  ...Object.fromEntries([2469,2471,2473,2483,2490,2492,2493].map(id=>[id,'basic_industrial'])),
+  ...Object.fromEntries([2475,2482].map(id=>[id,'high_tech'])),
+};
+
+const FAMILY_LABEL = {
+  command_center: 'Command Center', launchpad: 'Launch Pad',
+  storage: 'Storage Facility',     ecu: 'ECU',
+  extractor_head: 'Extractor Head', adv_industrial: 'Adv. Industrial',
+  basic_industrial: 'Basic Industrial', high_tech: 'High-Tech Plant',
+};
+
+function calcResources() {
+  if (!layoutData) return;
+  const pins = layoutData.P || [];
+  const ccLevel = Math.min(5, Math.max(0, layoutData.CmdCtrLv || 0));
+  const [cpuAvail, pgAvail] = CC_OUTPUT[ccLevel];
+
+  let cpuUsed = 0, pgUsed = 0;
+  const breakdown = {}; // family → {count, cpu, pg}
+
+  for (const pin of pins) {
+    const fam = TYPE_FAMILY_LOCAL[pin.T] || 'unknown';
+    if (fam === 'command_center') continue; // CC provides, doesn't consume
+    const [cpu, pg] = FAMILY_COST[fam] || [0, 0];
+    cpuUsed += cpu;
+    pgUsed  += pg;
+    if (!breakdown[fam]) breakdown[fam] = { count: 0, cpu: 0, pg: 0 };
+    breakdown[fam].count++;
+    breakdown[fam].cpu += cpu;
+    breakdown[fam].pg  += pg;
+  }
+
+  // Skill pips
+  const pipsEl = document.getElementById('skillPips');
+  if (pipsEl) {
+    pipsEl.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      const pip = document.createElement('span');
+      pip.className = 'skill-level-pip' + (i <= ccLevel ? ' filled' : '');
+      pipsEl.appendChild(pip);
+    }
+  }
+
+  // CPU bar
+  const cpuPct = Math.min(100, cpuUsed / cpuAvail * 100);
+  const cpuOver = cpuUsed > cpuAvail;
+  document.getElementById('cpuText').textContent =
+    `${cpuUsed.toLocaleString()} / ${cpuAvail.toLocaleString()} tf`;
+  const cpuBar = document.getElementById('cpuBar');
+  cpuBar.style.width = cpuPct + '%';
+  cpuBar.classList.toggle('over', cpuOver);
+
+  // PG bar
+  const pgPct = Math.min(100, pgUsed / pgAvail * 100);
+  const pgOver = pgUsed > pgAvail;
+  document.getElementById('pgText').textContent =
+    `${pgUsed.toLocaleString()} / ${pgAvail.toLocaleString()} MW`;
+  const pgBar = document.getElementById('pgBar');
+  pgBar.style.width = pgPct + '%';
+  pgBar.classList.toggle('over', pgOver);
+
+  // Per-family breakdown
+  const bEl = document.getElementById('resBreakdown');
+  if (bEl) {
+    bEl.innerHTML = Object.entries(breakdown).map(([fam, v]) => {
+      const color = (PI_FAMILIES[fam] || {}).ring || '#888';
+      return `<div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--eve-card-border);">
+        <span style="color:${color};">${FAMILY_LABEL[fam] || fam} ×${v.count}</span>
+        <span class="text-muted">CPU ${v.cpu.toLocaleString()} · PG ${v.pg.toLocaleString()}</span>
+      </div>`;
+    }).join('') +
+    `<div class="d-flex justify-content-between pt-1 fw-semibold">
+      <span>Total</span>
+      <span>CPU ${cpuUsed.toLocaleString()} · PG ${pgUsed.toLocaleString()}</span>
+    </div>`;
+  }
+}
+
+function toggleBreakdown() {
+  const el = document.getElementById('resBreakdown');
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+calcResources();
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+async function deleteTemplate(id) {
+  if (!confirm('Delete this template? This cannot be undone.')) return;
+  const resp = await fetch('/templates/' + id, { method: 'DELETE' });
+  if (resp.ok) { window.location.href = '/templates'; }
+  else { const d = await resp.json(); alert(d.detail || 'Error deleting template'); }
+}
+</script>
+{% endblock %}

@@ -26,6 +26,26 @@
 .eve-tier-filter-p3.active { background: rgba(244,163,0,.24); border-color: rgba(244,163,0,.95); color: #ffe1a0; }
 .eve-tier-filter-p4 { background: rgba(230,57,70,.12); border-color: rgba(230,57,70,.45); color: #ff6f7b; }
 .eve-tier-filter-p4.active { background: rgba(230,57,70,.24); border-color: rgba(230,57,70,.95); color: #ffc1c7; }
+
+/* PI Check modal */
+.picheck-p0-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+.picheck-p0-table th { color:var(--eve-text-muted); font-weight:500; padding:4px 6px; border-bottom:1px solid #1a2d3d; text-align:left; }
+.picheck-p0-table td { padding:4px 6px; border-bottom:1px solid rgba(255,255,255,.04); }
+.picheck-p0-table td:last-child { text-align:right; }
+.picheck-p4-card { background:rgba(255,255,255,.03); border:1px solid #1a2d3d; border-radius:6px; margin-bottom:8px; overflow:hidden; }
+.picheck-p4-header { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; cursor:pointer; user-select:none; }
+.picheck-p4-header:hover { background:rgba(255,255,255,.04); }
+.picheck-p4-name { font-weight:600; font-size:.88rem; color:#e0e8f0; }
+.picheck-p4-qty { font-size:.8rem; color:#f4a300; font-weight:500; white-space:nowrap; }
+.picheck-p0-breakdown { padding:6px 12px 10px; border-top:1px solid #1a2d3d; }
+.picheck-p0-row { display:grid; grid-template-columns:1fr auto auto auto; gap:4px 12px; align-items:center; padding:3px 0; font-size:.79rem; border-bottom:1px solid rgba(255,255,255,.03); }
+.picheck-p0-row:last-child { border-bottom:none; }
+.picheck-p0-matname { color:var(--eve-text-muted); }
+.picheck-num { font-variant-numeric:tabular-nums; text-align:right; }
+.picheck-ok { color:#2dc653; }
+.picheck-deficit { color:#e63946; }
+.picheck-chevron { transition:transform .2s; display:inline-block; font-size:.75rem; color:var(--eve-text-muted); }
+.picheck-p4-card.open .picheck-chevron { transform:rotate(90deg); }
 </style>
 {% endblock %}
 
@@ -198,6 +218,12 @@
                         {% elif cache_age_sec < 3600 %}Vor {{ cache_age_sec // 60 }} Min.
                         {% else %}Vor {{ cache_age_sec // 3600 }}h{% endif %}
                     </span>
+                    {% if colonies %}
+                    <button class="btn btn-sm eve-btn-outline" onclick="openPiCheck()"
+                            title="P4 Produktion vs. P0 Abbau analysieren">
+                        <i class="bi bi-clipboard-data me-1"></i>Check
+                    </button>
+                    {% endif %}
                     <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
                             onclick="forceRefresh()"
                             title="Daten aktualisieren (max. 1Ã— pro Minute)"
@@ -615,6 +641,51 @@
         </div>
     </div>
 
+</div>
+
+<!-- PI Check Modal -->
+<div class="modal fade" id="piCheckModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content" style="background:var(--eve-card-bg,#0f1923);border:1px solid #1a2d3d;">
+            <div class="modal-header" style="border-bottom:1px solid #1a2d3d;">
+                <h5 class="modal-title fw-semibold"><i class="bi bi-clipboard-data me-2 eve-accent"></i>PI Balance Check — P4 vs. P0/Tag</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="piCheckBody" style="min-height:200px;">
+                <div class="text-center text-muted py-5" id="piCheckLoading">
+                    <span class="spinner-border spinner-border-sm me-2"></span>Lade…
+                </div>
+                <div id="piCheckContent" style="display:none;">
+                    <div class="row g-3">
+                        <!-- Left: Extractor P0 summary -->
+                        <div class="col-md-4">
+                            <div class="fw-semibold mb-2" style="color:#f4a300;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;">
+                                <i class="bi bi-minecart-loaded me-1"></i>Rohstoffe (P0) — Extraktoren
+                            </div>
+                            <div id="piCheckP0Table"></div>
+                        </div>
+                        <!-- Middle: P4 products breakdown -->
+                        <div class="col-md-4">
+                            <div class="fw-semibold mb-2" style="color:#e63946;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;">
+                                <i class="bi bi-box-seam me-1"></i>P4 Produkte — Bedarf vs. Abbau
+                            </div>
+                            <div id="piCheckP4List"></div>
+                        </div>
+                        <!-- Right: P0 balance summary -->
+                        <div class="col-md-4">
+                            <div class="fw-semibold mb-2" style="color:#2dc653;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;">
+                                <i class="bi bi-bar-chart-line me-1"></i>P0 Gesamtbilanz
+                            </div>
+                            <div id="piCheckBalanceTable"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="piCheckEmpty" style="display:none;" class="text-center text-muted py-5">
+                    Keine P4-Produktion oder Extraktoren gefunden.
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Colony Detail Modal -->
@@ -1562,6 +1633,161 @@ if (coloniesTableBody) {
     updateBalanceThreshold(getBalanceThreshold());
     updateExtractorRateThreshold(getExtractorRateThreshold());
     updateSingleExtractorRateThreshold(getSingleExtractorRateThreshold());
+}
+
+// ── PI Check modal ──────────────────────────────────────────────────────────
+function _fmtNum(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+    return Math.round(n).toLocaleString();
+}
+
+function openPiCheck() {
+    const modal = new bootstrap.Modal(document.getElementById('piCheckModal'));
+    modal.show();
+    document.getElementById('piCheckLoading').style.display = '';
+    document.getElementById('piCheckContent').style.display = 'none';
+    document.getElementById('piCheckEmpty').style.display = 'none';
+
+    fetch('/dashboard/pi-check')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('piCheckLoading').style.display = 'none';
+            const p4 = data.p4_products || [];
+            const p0 = data.p0_gathered || {};
+
+            if (!p4.length && !Object.keys(p0).length) {
+                document.getElementById('piCheckEmpty').style.display = '';
+                return;
+            }
+            document.getElementById('piCheckContent').style.display = '';
+            _renderPiCheckP0(p0);
+            _renderPiCheckP4(p4, p0);
+            _renderPiCheckBalance(p0, data.p0_total_needed || {});
+        })
+        .catch(() => {
+            document.getElementById('piCheckLoading').innerHTML = '<span class="text-danger">Fehler beim Laden.</span>';
+        });
+}
+
+function _renderPiCheckP0(p0) {
+    const el = document.getElementById('piCheckP0Table');
+    if (!Object.keys(p0).length) {
+        el.innerHTML = '<div class="text-muted small">Keine aktiven Extraktoren.</div>';
+        return;
+    }
+    let rows = '';
+    for (const [name, d] of Object.entries(p0).sort((a, b) => b[1].per_day - a[1].per_day)) {
+        rows += `<tr>
+            <td>${name}</td>
+            <td class="text-center" style="color:var(--eve-text-muted)">${d.count}×</td>
+            <td class="picheck-num" style="color:#00b4d8">${_fmtNum(d.per_day)}</td>
+        </tr>`;
+    }
+    el.innerHTML = `<table class="picheck-p0-table">
+        <thead><tr><th>Material</th><th style="text-align:center">Ext.</th><th style="text-align:right">/Tag</th></tr></thead>
+        <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function _renderPiCheckP4(p4, p0) {
+    const el = document.getElementById('piCheckP4List');
+    if (!p4.length) {
+        el.innerHTML = '<div class="text-muted small">Keine P4-Produktion.</div>';
+        return;
+    }
+    let html = '';
+    for (let i = 0; i < p4.length; i++) {
+        const prod = p4[i];
+        const reqs = prod.p0_requirements || {};
+        let breakdown = '';
+        let hasData = Object.keys(reqs).length > 0;
+        for (const [matName, needed] of Object.entries(reqs)) {
+            const gathered = (p0[matName] || {}).per_day || 0;
+            const ok = gathered >= needed;
+            const cls = ok ? 'picheck-ok' : 'picheck-deficit';
+            const icon = ok ? '▲' : '▼';
+            breakdown += `<div class="picheck-p0-row">
+                <span class="picheck-p0-matname">${matName}</span>
+                <span class="picheck-num" style="color:#c9d1d9">${_fmtNum(needed)}</span>
+                <span class="picheck-num" style="color:#6e8090">/ ${_fmtNum(gathered)}</span>
+                <span class="${cls}" title="${ok ? 'Ausreichend' : 'Defizit'}">${icon}</span>
+            </div>`;
+        }
+        if (!hasData) {
+            breakdown = '<div class="text-muted" style="font-size:.78rem;">P0-Kette nicht auflösbar (SDE fehlt?).</div>';
+        }
+        html += `<div class="picheck-p4-card" id="picheck-card-${i}">
+            <div class="picheck-p4-header" onclick="togglePiCheckCard(${i})">
+                <span class="picheck-p4-name">${prod.name}</span>
+                <span class="d-flex align-items-center gap-2">
+                    <span class="picheck-p4-qty">${_fmtNum(prod.qty_day)}/Tag</span>
+                    <i class="bi bi-chevron-right picheck-chevron"></i>
+                </span>
+            </div>
+            <div class="picheck-p0-breakdown" style="display:none" id="picheck-breakdown-${i}">
+                <div style="font-size:.72rem;color:var(--eve-text-muted);margin-bottom:6px;display:grid;grid-template-columns:1fr auto auto auto;gap:4px 12px;">
+                    <span>Rohstoff</span><span style="text-align:right">Bedarf/T</span><span style="text-align:right">Abbau/T</span><span></span>
+                </div>
+                ${breakdown}
+            </div>
+        </div>`;
+    }
+    el.innerHTML = html;
+    // Auto-expand first card
+    if (p4.length > 0) togglePiCheckCard(0);
+}
+
+function togglePiCheckCard(i) {
+    const card = document.getElementById(`picheck-card-${i}`);
+    const body = document.getElementById(`picheck-breakdown-${i}`);
+    if (!card || !body) return;
+    const open = card.classList.toggle('open');
+    body.style.display = open ? '' : 'none';
+}
+
+function _renderPiCheckBalance(p0, needed) {
+    const el = document.getElementById('piCheckBalanceTable');
+    // Merge keys from both gathered and needed
+    const allMats = new Set([...Object.keys(p0), ...Object.keys(needed)]);
+    if (!allMats.size) {
+        el.innerHTML = '<div class="text-muted small">Keine Daten.</div>';
+        return;
+    }
+    // Sort: deficits first, then by needed desc
+    const rows = [...allMats].map(name => ({
+        name,
+        gathered: (p0[name] || {}).per_day || 0,
+        needed: needed[name] || 0,
+    })).sort((a, b) => {
+        const aOk = a.gathered >= a.needed;
+        const bOk = b.gathered >= b.needed;
+        if (aOk !== bOk) return aOk ? 1 : -1;  // deficits first
+        return b.needed - a.needed;
+    });
+
+    let html = `<table class="picheck-p0-table">
+        <thead><tr>
+            <th>P0 Material</th>
+            <th style="text-align:right">Abbau/T</th>
+            <th style="text-align:right">Bedarf/T</th>
+            <th style="text-align:center">Status</th>
+        </tr></thead><tbody>`;
+    for (const r of rows) {
+        const ok = r.gathered >= r.needed;
+        const statusIcon = ok
+            ? '<span style="color:#2dc653;font-size:1rem;">✓</span>'
+            : '<span style="color:#e63946;font-size:1rem;">✗</span>';
+        const gatheredStyle = ok ? 'color:#2dc653' : 'color:#e63946';
+        html += `<tr>
+            <td>${r.name}</td>
+            <td class="picheck-num" style="${gatheredStyle}">${_fmtNum(r.gathered)}</td>
+            <td class="picheck-num" style="color:#c9d1d9">${r.needed > 0 ? _fmtNum(r.needed) : '—'}</td>
+            <td style="text-align:center">${r.needed > 0 ? statusIcon : '<span style="color:#586e75">—</span>'}</td>
+        </tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
 }
 </script>
 {% endblock %}

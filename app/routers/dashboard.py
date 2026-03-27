@@ -905,20 +905,27 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
     _update_character_colony_sync_status(characters, char_fetch_results, db)
 
     # Schritt 2: planet_info + planet_detail parallel abrufen
+    # Extract plain values before threading — ORM objects must not be accessed from
+    # multiple threads (SQLAlchemy session is not thread-safe; expire_on_commit=True
+    # would trigger concurrent lazy-loads, causing the isce error).
     def _fetch_planet(args):
-        char, colony, token = args
+        char_eve_id, colony, token = args
         planet_id = colony.get("planet_id")
         info = get_planet_info(planet_id) if planet_id else {}
         detail = {}
         if token and planet_id:
             try:
-                detail = get_planet_detail(char.eve_character_id, planet_id, token)
+                detail = get_planet_detail(char_eve_id, planet_id, token)
             except Exception as e:
                 logger.warning(f"Fehler bei Planet {planet_id}: {e}")
         return info, detail
 
+    planet_fetch_args = [
+        (char.eve_character_id, colony, token)
+        for char, colony, token in char_colony_token
+    ]
     with ThreadPoolExecutor(max_workers=10) as ex:
-        planet_data = list(ex.map(_fetch_planet, char_colony_token))
+        planet_data = list(ex.map(_fetch_planet, planet_fetch_args))
 
     # Schritt 3: Produktionen berechnen — ohne Preisabfrage
     colony_prods: list[tuple] = []
@@ -1210,6 +1217,118 @@ def dashboard(
         "price_mode": current_price_mode,
         "refreshing": refreshing,
         "market_last_updated_iso": market_last_updated_iso,
+    })
+
+
+@router.get("/pi-check")
+def pi_check(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """P4 production vs. P0 extraction balance check.
+
+    Uses the hardcoded PI chain from pi_data.py — avoids relying on
+    SDE schematic output_type_id which is stored as the dict key in
+    EVERef schematics.json, not as a field, causing lookups to fail.
+
+    Production ratios (per cycle):
+      P0 → P1 :  3000 P0 → 20 P1    → 150 P0 per P1
+      P1 → P2 :  40 P1A + 40 P1B → 5 P2   → 8 P1 per P2 per input
+      P2 → P3 :  10 P2(each) → 3 P3        → 10/3 P2 per P3 per input
+      P3 → P4 :  6 P3(each) → 1 P4         → 6 P3 per P4 per input
+    """
+    from app.pi_data import P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4
+
+    cached = _load_colony_cache(account.id, db)
+    colonies: list[dict] = (cached.get("colonies") or []) if cached else []
+
+    # 1. Sum P4 productions across all colonies (units/day)
+    p4_totals: dict[str, float] = {}
+    for colony in colonies:
+        productions = colony.get("productions") or {}
+        prod_tiers = colony.get("prod_tiers") or {}
+        for product, qty in productions.items():
+            if prod_tiers.get(product, 0) == 4:
+                p4_totals[product] = p4_totals.get(product, 0.0) + float(qty)
+
+    # 2. Sum active extractor output per P0 material type (units/day)
+    p0_gathered_raw: dict[str, dict] = {}
+    for colony in colonies:
+        ers = colony.get("extractor_rate_summary") or {}
+        for ext in (ers.get("extractors") or []):
+            name = (ext.get("name") or "Unknown").strip()
+            per_day = float(ext.get("avg_per_hour") or 0) * 24.0
+            if name not in p0_gathered_raw:
+                p0_gathered_raw[name] = {"count": 0, "per_day": 0.0}
+            p0_gathered_raw[name]["count"] += 1
+            p0_gathered_raw[name]["per_day"] += per_day
+
+    # Normalise P0 names: ESI may use "Micro Organisms" or "Microorganisms" etc.
+    # Build key: stripped-lowercase → canonical pi_data name
+    _p0_canon: dict[str, str] = {
+        k.lower().replace(" ", ""): k for k in P0_TO_P1
+    }
+    def _norm_p0(name: str) -> str:
+        return _p0_canon.get(name.lower().replace(" ", ""), name)
+
+    p0_gathered: dict[str, dict] = {}
+    for raw_name, v in p0_gathered_raw.items():
+        canon = _norm_p0(raw_name)
+        if canon not in p0_gathered:
+            p0_gathered[canon] = {"count": 0, "per_day": 0.0}
+        p0_gathered[canon]["count"] += v["count"]
+        p0_gathered[canon]["per_day"] += v["per_day"]
+
+    # Reverse maps
+    _p1_to_p0: dict[str, str] = {v: k for k, v in P0_TO_P1.items()}
+
+    def _p4_to_p0(p4_name: str, qty_day: float) -> dict[str, float]:
+        """Return {p0_name: required_per_day} for producing qty_day units of p4_name."""
+        result: dict[str, float] = {}
+        for inp in P3_TO_P4.get(p4_name, []):
+            inp_qty = qty_day * 6.0          # 6 of each input per P4 per cycle
+
+            if inp in _p1_to_p0:
+                # Input is a P1 (e.g. Reactive Metals, Bacteria, Water)
+                p0 = _p1_to_p0[inp]
+                result[p0] = result.get(p0, 0.0) + inp_qty * 150.0
+            elif inp in P2_TO_P3:
+                # Input is a P3 — trace P3 → P2 → P1 → P0
+                for p2 in P2_TO_P3[inp]:
+                    p2_qty = inp_qty * (10.0 / 3.0)  # 10/3 P2 per P3 per input type
+                    for p1 in (P1_TO_P2.get(p2) or []):
+                        p1_qty = p2_qty * 8.0        # 8 P1 per P2 per input type
+                        p0 = _p1_to_p0.get(p1)
+                        if p0:
+                            result[p0] = result.get(p0, 0.0) + p1_qty * 150.0
+        return result
+
+    # 3. Compute P0 requirements per P4 product
+    p4_results = []
+    for p4_name, qty_day in sorted(p4_totals.items(), key=lambda x: -x[1]):
+        p0_reqs = _p4_to_p0(p4_name, qty_day)
+        p4_results.append({
+            "name": p4_name,
+            "qty_day": round(qty_day, 1),
+            "p0_requirements": {
+                k: round(v)
+                for k, v in sorted(p0_reqs.items(), key=lambda x: -x[1])
+            },
+        })
+
+    # 4. Sum total P0 needed across all P4 products
+    p0_total_needed: dict[str, float] = {}
+    for p4 in p4_results:
+        for p0_name, qty in p4["p0_requirements"].items():
+            p0_total_needed[p0_name] = p0_total_needed.get(p0_name, 0.0) + qty
+
+    return JSONResponse({
+        "p4_products": p4_results,
+        "p0_gathered": {
+            k: {"count": v["count"], "per_day": round(v["per_day"])}
+            for k, v in sorted(p0_gathered.items())
+        },
+        "p0_total_needed": {k: round(v) for k, v in sorted(p0_total_needed.items())},
     })
 
 
