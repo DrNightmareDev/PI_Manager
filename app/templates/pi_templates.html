@@ -255,133 +255,25 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="/static/js/pi_canvas.js?v={{ static_version }}"></script>
 <script>
-// ──────────────────────────────────────────────────────────────────────────────
-// PI Template canvas renderer
-// ──────────────────────────────────────────────────────────────────────────────
-
-const BUILDING_COLORS = {
-  2542: '#c8a600',  // Command Center – gold
-  2524: '#00b4d8',  // Launch Pad – cyan
-  2562: '#4cc9f0',  // Storage – light blue
-  3068: '#f4a300',  // ECU – amber
-  2481: '#57cc99',  // Extractor Head – green
-  2474: '#9b5de5',  // Advanced Industrial Facility – purple
-  2552: '#3a86ff',  // Basic Industrial Facility – blue
-  2256: '#ff006e',  // High-Tech Production Plant – pink
+const PLANET_COLORS = {
+  barren:    ['#c47300', '#3a1e00'],
+  gas:       ['#a0c040', '#1e2800'],
+  oceanic:   ['#00a0c0', '#001828'],
+  temperate: ['#40a040', '#0a1f0a'],
+  ice:       ['#80c8f0', '#102030'],
+  storm:     ['#a060c0', '#1a0828'],
+  plasma:    ['#ff6020', '#2a0800'],
+  lava:      ['#e04000', '#280800'],
 };
-const BUILDING_RADII = {
-  2542: 7, 2524: 6, 2562: 5, 3068: 7,
-  2481: 4, 2474: 5, 2552: 5, 2256: 5,
-};
-const DEFAULT_COLOR = '#888';
 
-function renderPICanvas(canvas, layoutJson, opts) {
-  opts = opts || {};
-  let data;
-  try { data = JSON.parse(layoutJson); } catch(e) { return; }
-  const pins = data.P || [];
-  if (!pins.length) return;
-
-  const W = canvas.width, H = canvas.height;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, W, H);
-
-  // equirectangular projection: x=Lo, y=La (both in radians)
-  const lats = pins.map(p => p.La);
-  const lons = pins.map(p => p.Lo);
-  const minLa = Math.min(...lats), maxLa = Math.max(...lats);
-  const minLo = Math.min(...lons), maxLo = Math.max(...lons);
-
-  const dLa = maxLa - minLa || 0.01;
-  const dLo = maxLo - minLo || 0.01;
-
-  const pad = opts.pad !== undefined ? opts.pad : 16;
-  const usableW = W - pad * 2;
-  const usableH = H - pad * 2;
-
-  const scaleX = usableW / dLo;
-  const scaleY = usableH / dLa;
-  const scale = Math.min(scaleX, scaleY);
-
-  const offsetX = pad + (usableW - dLo * scale) / 2;
-  const offsetY = pad + (usableH - dLa * scale) / 2;
-
-  function toXY(la, lo) {
-    return [
-      offsetX + (lo - minLo) * scale,
-      offsetY + (maxLa - la) * scale,   // flip y: higher lat = higher on screen
-    ];
-  }
-
-  // Draw links (L array: {D: target_pin_idx, ...} — but the L array doesn't
-  // have source indices; in EVE PI template format L[i] describes a link FROM
-  // pin i TO pin L[i].D. However L can have fewer entries than P.
-  // Actually: the L array encodes pairwise links differently per template.
-  // Fall back to: draw faint lines between pins that share routes.
-  const linkedPairs = new Set();
-  for (const r of (data.R || [])) {
-    if (r.Src !== undefined && r.Dst !== undefined) {
-      const a = Math.min(r.Src, r.Dst), b = Math.max(r.Src, r.Dst);
-      linkedPairs.add(a + '_' + b);
-    }
-  }
-  // Also use L array: index i → target index D
-  for (let i = 0; i < (data.L || []).length; i++) {
-    const lnk = data.L[i];
-    if (lnk && lnk.D !== undefined) {
-      const a = Math.min(i, lnk.D), b = Math.max(i, lnk.D);
-      linkedPairs.add(a + '_' + b);
-    }
-  }
-
-  ctx.strokeStyle = opts.linkColor || 'rgba(100,160,200,0.3)';
-  ctx.lineWidth = opts.linkWidth || 1;
-  for (const pair of linkedPairs) {
-    const [ai, bi] = pair.split('_').map(Number);
-    if (ai >= pins.length || bi >= pins.length) continue;
-    const [ax, ay] = toXY(pins[ai].La, pins[ai].Lo);
-    const [bx, by] = toXY(pins[bi].La, pins[bi].Lo);
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.stroke();
-  }
-
-  // Draw pins
-  for (const pin of pins) {
-    const [x, y] = toXY(pin.La, pin.Lo);
-    const color = BUILDING_COLORS[pin.T] || DEFAULT_COLOR;
-    const r = (BUILDING_RADII[pin.T] || 5) * (opts.pinScale || 1);
-
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = color + '33';
-    ctx.fill();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-}
-
-// Render all preview canvases
+// Render all preview canvases + badge colours
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('canvas.pi-preview').forEach(canvas => {
     const raw = canvas.getAttribute('data-layout');
-    if (raw) renderPICanvas(canvas, raw, { pad: 8, pinScale: 0.85 });
+    if (raw) renderPITemplate(canvas, raw, { pad: 7, pinScale: 0.75, lineWidth: 0.8 });
   });
-
-  // Planet type badge colours
-  const PLANET_COLORS = {
-    barren:    ['#c47300', '#3a1e00'],
-    gas:       ['#a0c040', '#1e2800'],
-    oceanic:   ['#00a0c0', '#001828'],
-    temperate: ['#40a040', '#0a1f0a'],
-    ice:       ['#80c8f0', '#102030'],
-    storm:     ['#a060c0', '#1a0828'],
-    plasma:    ['#ff6020', '#2a0800'],
-    lava:      ['#e04000', '#280800'],
-  };
   document.querySelectorAll('[data-planet-type]').forEach(el => {
     const pt = (el.getAttribute('data-planet-type') || '').toLowerCase();
     const [fg, bg] = PLANET_COLORS[pt] || ['#888', '#222'];
