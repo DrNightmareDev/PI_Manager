@@ -207,3 +207,20 @@ class StaticPlanet(Base):
     radius = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PlanetTemplate(Base):
+    """User-saved or community PI surface templates (building layout on a planet)."""
+    __tablename__ = "planet_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True, index=True)
+    # NULL account_id = community/seeded template visible to all
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    planet_type = Column(String(64), nullable=True)   # e.g. "Barren", "Gas", "Oceanic" …
+    layout_json = Column(Text, nullable=False)         # raw JSON from EVE_PI_Templates format
+    is_community = Column(Boolean, nullable=False, default=False, server_default="false")
+    source_url = Column(String(512), nullable=True)    # original repo URL if seeded
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

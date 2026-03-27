@@ -1,0 +1,494 @@
+{% extends "base.html" %}
+{% block title %}PI Surface Templates - {{ t('app.name') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.template-card {
+    background: var(--eve-bg-2);
+    border: 1px solid var(--eve-card-border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color .15s, transform .12s;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+}
+.template-card:hover {
+    border-color: rgba(0,180,216,.5);
+    transform: translateY(-2px);
+    color: inherit;
+    text-decoration: none;
+}
+.template-card-preview {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: var(--eve-bg-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.template-card-preview canvas {
+    max-width: 100%;
+    max-height: 100%;
+}
+.template-card-body {
+    padding: 10px 12px;
+    flex: 1;
+}
+.template-card-name {
+    font-size: .85rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.template-card-meta {
+    font-size: .7rem;
+    color: var(--eve-text-muted);
+    line-height: 1.5;
+}
+.planet-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-size: .65rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+.upload-zone {
+    border: 2px dashed var(--eve-card-border);
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+    color: var(--eve-text-muted);
+    transition: border-color .15s;
+    cursor: pointer;
+}
+.upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--eve-accent);
+    color: var(--eve-accent);
+}
+.filter-btn {
+    padding: 3px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--eve-card-border);
+    background: var(--eve-bg-2);
+    color: var(--eve-text-muted);
+    font-size: .75rem;
+    cursor: pointer;
+    transition: border-color .12s, color .12s, background .12s;
+}
+.filter-btn:hover, .filter-btn.active {
+    border-color: var(--eve-accent);
+    color: var(--eve-accent);
+    background: rgba(0,180,216,.08);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 px-3 px-md-4">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+    <div>
+      <h4 class="mb-0 fw-bold">
+        PI Surface Templates
+        <span class="badge ms-2" style="background:rgba(255,193,7,.15);border:1px solid rgba(255,193,7,.4);color:#ffc107;font-size:.55em;vertical-align:middle;">-Testing-</span>
+      </h4>
+      <div class="text-muted" style="font-size:.8rem;">
+        Building layouts for planetary industry — visualise, save and download templates.
+      </div>
+    </div>
+    <div class="ms-auto d-flex gap-2 flex-wrap">
+      {% if account.is_admin %}
+      <button class="btn btn-sm eve-btn-ghost" id="seedBtn" onclick="seedCommunity()">
+        <i class="bi bi-cloud-download me-1"></i>Seed from GitHub
+      </button>
+      {% endif %}
+      <button class="btn btn-sm eve-btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+        <i class="bi bi-upload me-1"></i>Upload Template
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="d-flex gap-2 flex-wrap mb-3" id="filterBar">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="Factory">Factory</button>
+    <button class="filter-btn" data-filter="Miner">Miner / Extractor</button>
+    <button class="filter-btn" data-filter="Barren">Barren</button>
+    <button class="filter-btn" data-filter="Gas">Gas</button>
+    <button class="filter-btn" data-filter="Oceanic">Oceanic</button>
+    <button class="filter-btn" data-filter="Temperate">Temperate</button>
+    <button class="filter-btn" data-filter="Ice">Ice</button>
+    <button class="filter-btn" data-filter="Storm">Storm</button>
+    <button class="filter-btn" data-filter="Plasma">Plasma</button>
+    <button class="filter-btn" data-filter="Lava">Lava</button>
+  </div>
+
+  <!-- Community templates -->
+  {% if community_templates %}
+  <div class="mb-2">
+    <span class="fw-semibold" style="font-size:.85rem;">Community Templates</span>
+    <span class="text-muted ms-2" style="font-size:.75rem;">{{ community_templates|length }} templates</span>
+  </div>
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-2 mb-4" id="communityGrid">
+    {% for tmpl in community_templates %}
+    <div class="col template-item"
+         data-name="{{ tmpl.name|lower }}"
+         data-planet="{{ tmpl.planet_type|lower }}"
+         data-type="{{ 'miner' if 'extractor' in tmpl.building_counts|list|join(' ')|lower else 'factory' }}">
+      <a href="/templates/{{ tmpl.id }}" class="template-card h-100">
+        <div class="template-card-preview">
+          <canvas class="pi-preview" data-layout="{{ tmpl.layout_json | e }}" width="160" height="160"></canvas>
+        </div>
+        <div class="template-card-body">
+          <div class="template-card-name" title="{{ tmpl.name }}">{{ tmpl.name }}</div>
+          <div class="template-card-meta">
+            {% if tmpl.planet_type %}<span class="planet-badge" data-planet-type="{{ tmpl.planet_type }}">{{ tmpl.planet_type }}</span>{% endif %}
+            <span class="ms-1">CC{{ tmpl.cmd_center_level }}</span>
+            · {{ tmpl.pin_count }} pins
+          </div>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="mb-4 p-3 rounded" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+    <span class="text-muted" style="font-size:.85rem;">No community templates yet.</span>
+    {% if account.is_admin %}
+    <span class="text-muted ms-2" style="font-size:.85rem;">Use <strong>Seed from GitHub</strong> to import templates from the DalShooth EVE PI Templates repository.</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Personal templates -->
+  <div class="mb-2 mt-2">
+    <span class="fw-semibold" style="font-size:.85rem;">My Templates</span>
+    <span class="text-muted ms-2" style="font-size:.75rem;">{{ own_templates|length }} templates</span>
+  </div>
+  {% if own_templates %}
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-2" id="ownGrid">
+    {% for tmpl in own_templates %}
+    <div class="col template-item"
+         data-name="{{ tmpl.name|lower }}"
+         data-planet="{{ tmpl.planet_type|lower }}"
+         data-type="{{ 'miner' if 'extractor' in tmpl.building_counts|list|join(' ')|lower else 'factory' }}">
+      <a href="/templates/{{ tmpl.id }}" class="template-card h-100">
+        <div class="template-card-preview">
+          <canvas class="pi-preview" data-layout="{{ tmpl.layout_json | e }}" width="160" height="160"></canvas>
+        </div>
+        <div class="template-card-body">
+          <div class="template-card-name" title="{{ tmpl.name }}">{{ tmpl.name }}</div>
+          <div class="template-card-meta">
+            {% if tmpl.planet_type %}<span class="planet-badge" data-planet-type="{{ tmpl.planet_type }}">{{ tmpl.planet_type }}</span>{% endif %}
+            <span class="ms-1">CC{{ tmpl.cmd_center_level }}</span>
+            · {{ tmpl.pin_count }} pins
+          </div>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="p-3 rounded" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+    <span class="text-muted" style="font-size:.85rem;">You haven't saved any templates yet. Upload a JSON file to get started.</span>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+      <div class="modal-header" style="border-bottom:1px solid var(--eve-card-border);">
+        <h5 class="modal-title fw-bold"><i class="bi bi-upload me-2"></i>Upload PI Template</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">Template Name</label>
+          <input type="text" id="uploadName" class="form-control" placeholder="e.g. Factory - Robotics" style="background:var(--eve-bg-1);border-color:var(--eve-card-border);color:inherit;">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">Description <span class="text-muted">(optional)</span></label>
+          <input type="text" id="uploadDesc" class="form-control" placeholder="e.g. Barren planet, full factory layout" style="background:var(--eve-bg-1);border-color:var(--eve-card-border);color:inherit;">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem;">JSON Layout</label>
+          <div id="uploadZone" class="upload-zone mb-2" onclick="document.getElementById('fileInput').click()">
+            <i class="bi bi-file-earmark-arrow-up fs-3 mb-2 d-block"></i>
+            Drop a .json file here or click to browse
+          </div>
+          <input type="file" id="fileInput" accept=".json" class="d-none">
+          <textarea id="uploadJson" class="form-control font-monospace" rows="6"
+                    placeholder='Paste JSON here or drop a file above…'
+                    style="background:var(--eve-bg-1);border-color:var(--eve-card-border);color:inherit;font-size:.75rem;resize:vertical;"></textarea>
+        </div>
+        <div id="uploadError" class="text-danger mt-1" style="font-size:.8rem;display:none;"></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--eve-card-border);">
+        <button class="btn btn-sm eve-btn-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm eve-btn-primary" onclick="submitUpload()">
+          <i class="bi bi-check-lg me-1"></i>Save Template
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Seed progress toast -->
+<div id="seedToast" style="position:fixed;bottom:20px;right:20px;z-index:9000;display:none;min-width:240px;">
+  <div class="p-3 rounded shadow" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);font-size:.85rem;">
+    <div id="seedMsg">Seeding templates…</div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ──────────────────────────────────────────────────────────────────────────────
+// PI Template canvas renderer
+// ──────────────────────────────────────────────────────────────────────────────
+
+const BUILDING_COLORS = {
+  2542: '#c8a600',  // Command Center – gold
+  2524: '#00b4d8',  // Launch Pad – cyan
+  2562: '#4cc9f0',  // Storage – light blue
+  3068: '#f4a300',  // ECU – amber
+  2481: '#57cc99',  // Extractor Head – green
+  2474: '#9b5de5',  // Advanced Industrial Facility – purple
+  2552: '#3a86ff',  // Basic Industrial Facility – blue
+  2256: '#ff006e',  // High-Tech Production Plant – pink
+};
+const BUILDING_RADII = {
+  2542: 7, 2524: 6, 2562: 5, 3068: 7,
+  2481: 4, 2474: 5, 2552: 5, 2256: 5,
+};
+const DEFAULT_COLOR = '#888';
+
+function renderPICanvas(canvas, layoutJson, opts) {
+  opts = opts || {};
+  let data;
+  try { data = JSON.parse(layoutJson); } catch(e) { return; }
+  const pins = data.P || [];
+  if (!pins.length) return;
+
+  const W = canvas.width, H = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  // equirectangular projection: x=Lo, y=La (both in radians)
+  const lats = pins.map(p => p.La);
+  const lons = pins.map(p => p.Lo);
+  const minLa = Math.min(...lats), maxLa = Math.max(...lats);
+  const minLo = Math.min(...lons), maxLo = Math.max(...lons);
+
+  const dLa = maxLa - minLa || 0.01;
+  const dLo = maxLo - minLo || 0.01;
+
+  const pad = opts.pad !== undefined ? opts.pad : 16;
+  const usableW = W - pad * 2;
+  const usableH = H - pad * 2;
+
+  const scaleX = usableW / dLo;
+  const scaleY = usableH / dLa;
+  const scale = Math.min(scaleX, scaleY);
+
+  const offsetX = pad + (usableW - dLo * scale) / 2;
+  const offsetY = pad + (usableH - dLa * scale) / 2;
+
+  function toXY(la, lo) {
+    return [
+      offsetX + (lo - minLo) * scale,
+      offsetY + (maxLa - la) * scale,   // flip y: higher lat = higher on screen
+    ];
+  }
+
+  // Draw links (L array: {D: target_pin_idx, ...} — but the L array doesn't
+  // have source indices; in EVE PI template format L[i] describes a link FROM
+  // pin i TO pin L[i].D. However L can have fewer entries than P.
+  // Actually: the L array encodes pairwise links differently per template.
+  // Fall back to: draw faint lines between pins that share routes.
+  const linkedPairs = new Set();
+  for (const r of (data.R || [])) {
+    if (r.Src !== undefined && r.Dst !== undefined) {
+      const a = Math.min(r.Src, r.Dst), b = Math.max(r.Src, r.Dst);
+      linkedPairs.add(a + '_' + b);
+    }
+  }
+  // Also use L array: index i → target index D
+  for (let i = 0; i < (data.L || []).length; i++) {
+    const lnk = data.L[i];
+    if (lnk && lnk.D !== undefined) {
+      const a = Math.min(i, lnk.D), b = Math.max(i, lnk.D);
+      linkedPairs.add(a + '_' + b);
+    }
+  }
+
+  ctx.strokeStyle = opts.linkColor || 'rgba(100,160,200,0.3)';
+  ctx.lineWidth = opts.linkWidth || 1;
+  for (const pair of linkedPairs) {
+    const [ai, bi] = pair.split('_').map(Number);
+    if (ai >= pins.length || bi >= pins.length) continue;
+    const [ax, ay] = toXY(pins[ai].La, pins[ai].Lo);
+    const [bx, by] = toXY(pins[bi].La, pins[bi].Lo);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+  }
+
+  // Draw pins
+  for (const pin of pins) {
+    const [x, y] = toXY(pin.La, pin.Lo);
+    const color = BUILDING_COLORS[pin.T] || DEFAULT_COLOR;
+    const r = (BUILDING_RADII[pin.T] || 5) * (opts.pinScale || 1);
+
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color + '33';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+// Render all preview canvases
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('canvas.pi-preview').forEach(canvas => {
+    const raw = canvas.getAttribute('data-layout');
+    if (raw) renderPICanvas(canvas, raw, { pad: 8, pinScale: 0.85 });
+  });
+
+  // Planet type badge colours
+  const PLANET_COLORS = {
+    barren:    ['#c47300', '#3a1e00'],
+    gas:       ['#a0c040', '#1e2800'],
+    oceanic:   ['#00a0c0', '#001828'],
+    temperate: ['#40a040', '#0a1f0a'],
+    ice:       ['#80c8f0', '#102030'],
+    storm:     ['#a060c0', '#1a0828'],
+    plasma:    ['#ff6020', '#2a0800'],
+    lava:      ['#e04000', '#280800'],
+  };
+  document.querySelectorAll('[data-planet-type]').forEach(el => {
+    const pt = (el.getAttribute('data-planet-type') || '').toLowerCase();
+    const [fg, bg] = PLANET_COLORS[pt] || ['#888', '#222'];
+    el.style.color = fg;
+    el.style.background = bg + '88';
+    el.style.borderColor = fg + '66';
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Filter
+// ──────────────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const f = btn.getAttribute('data-filter').toLowerCase();
+    document.querySelectorAll('.template-item').forEach(item => {
+      if (f === 'all') { item.style.display = ''; return; }
+      const name = item.getAttribute('data-name') || '';
+      const planet = item.getAttribute('data-planet') || '';
+      const type = item.getAttribute('data-type') || '';
+      const match = name.includes(f) || planet.includes(f) || type.includes(f) ||
+                    (f === 'miner' && type === 'miner') ||
+                    (f === 'factory' && type === 'factory');
+      item.style.display = match ? '' : 'none';
+    });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Upload
+// ──────────────────────────────────────────────────────────────────────────────
+const fileInput = document.getElementById('fileInput');
+const uploadZone = document.getElementById('uploadZone');
+const uploadJson = document.getElementById('uploadJson');
+const uploadName = document.getElementById('uploadName');
+
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (!uploadName.value) uploadName.value = f.name.replace(/\.json$/i, '');
+  const reader = new FileReader();
+  reader.onload = ev => { uploadJson.value = ev.target.result; };
+  reader.readAsText(f);
+});
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  if (!uploadName.value) uploadName.value = f.name.replace(/\.json$/i, '');
+  const reader = new FileReader();
+  reader.onload = ev => { uploadJson.value = ev.target.result; };
+  reader.readAsText(f);
+});
+
+async function submitUpload() {
+  const errEl = document.getElementById('uploadError');
+  errEl.style.display = 'none';
+  const name = uploadName.value.trim();
+  const layout_json = uploadJson.value.trim();
+  if (!name) { errEl.textContent = 'Please enter a name.'; errEl.style.display = ''; return; }
+  if (!layout_json) { errEl.textContent = 'Please provide the JSON layout.'; errEl.style.display = ''; return; }
+  try {
+    const resp = await fetch('/templates/upload', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, description: document.getElementById('uploadDesc').value.trim(), layout_json }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { errEl.textContent = data.detail || 'Error saving template.'; errEl.style.display = ''; return; }
+    window.location.href = '/templates/' + data.id;
+  } catch(e) {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = '';
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin: seed from GitHub
+// ──────────────────────────────────────────────────────────────────────────────
+async function seedCommunity() {
+  const toast = document.getElementById('seedToast');
+  const msg = document.getElementById('seedMsg');
+  const btn = document.getElementById('seedBtn');
+  btn.disabled = true;
+  toast.style.display = '';
+  msg.textContent = 'Fetching templates from GitHub…';
+  try {
+    const resp = await fetch('/templates/admin/seed', { method: 'POST' });
+    const data = await resp.json();
+    if (resp.ok) {
+      msg.textContent = `Done! Inserted: ${data.inserted}, skipped: ${data.skipped}${data.errors ? ', errors: ' + data.errors : ''}.`;
+      setTimeout(() => { toast.style.display = 'none'; window.location.reload(); }, 3000);
+    } else {
+      msg.textContent = 'Error: ' + (data.detail || 'unknown');
+      setTimeout(() => { toast.style.display = 'none'; }, 4000);
+    }
+  } catch(e) {
+    msg.textContent = 'Network error.';
+    setTimeout(() => { toast.style.display = 'none'; }, 4000);
+  }
+  btn.disabled = false;
+}
+</script>
+{% endblock %}

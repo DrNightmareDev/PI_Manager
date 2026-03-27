@@ -12,7 +12,7 @@ from app.config import get_settings
 from app.database import engine, SessionLocal
 from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_translations
 from app.models import SSOState
-from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan
+from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -110,6 +110,7 @@ app.include_router(system.router)
 app.include_router(planner.router)
 app.include_router(skyhook.router)
 app.include_router(colony_plan.router)
+app.include_router(pi_templates.router)
 
 
 @app.get("/", response_class=HTMLResponse)
