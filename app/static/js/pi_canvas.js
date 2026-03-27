@@ -154,31 +154,69 @@ function extractLinks(layoutData) {
 // ── Projection helpers ─────────────────────────────────────────────────────────
 
 /**
- * Returns a toXY(la, lo) → [x, y] function for the given canvas + layout data.
- * Uses equirectangular projection (La = latitude, Lo = longitude, both in radians).
+ * Azimuthal equidistant projection centred on the pin cluster.
+ *
+ * EVE coordinate system (confirmed from calli-eve/eve-pi source):
+ *   La = colatitude in radians  (0 = north pole, π/2 = equator, π = south pole)
+ *   Lo = longitude  in radians  (0 … 2π)
+ *
+ * Three.js equivalent: setFromSphericalCoords(r, La, Lo)
+ *   → x = r·sin(La)·sin(Lo),  y = r·cos(La),  z = r·sin(La)·cos(Lo)
+ *
+ * The azimuthal equidistant projection preserves great-circle distances from
+ * the centre point, so the on-screen layout matches the actual surface layout.
+ *
+ * Returns a toXY(La, Lo) → [canvasX, canvasY] closure.
  */
 function buildProjection(pins, W, H, pad, extraTransform) {
   if (!pins.length) return null;
   extraTransform = extraTransform || { x: 0, y: 0, scale: 1 };
 
-  const lats = pins.map(p => p.La);
-  const lons = pins.map(p => p.Lo);
-  const minLa = Math.min(...lats), maxLa = Math.max(...lats);
-  const minLo = Math.min(...lons), maxLo = Math.max(...lons);
-  const dLa = maxLa - minLa || 0.01;
-  const dLo = maxLo - minLo || 0.01;
+  // ── Cluster centroid (mean on the sphere via 3-D average) ──────────────────
+  let cx = 0, cy = 0, cz = 0;
+  for (const p of pins) {
+    cx += Math.sin(p.La) * Math.cos(p.Lo);
+    cy += Math.cos(p.La);
+    cz += Math.sin(p.La) * Math.sin(p.Lo);
+  }
+  cx /= pins.length; cy /= pins.length; cz /= pins.length;
+  // Back to spherical
+  const La0 = Math.atan2(Math.sqrt(cx*cx + cz*cz), cy);  // colatitude
+  const Lo0 = Math.atan2(cz, cx);                          // longitude
+
+  // ── Azimuthal equidistant projection ──────────────────────────────────────
+  // Angular distance c from centre, then scale by c/sin(c).
+  // x points "east" (increasing Lo), y points "south" (increasing La).
+  function project(La, Lo) {
+    const cosC = Math.cos(La0)*Math.cos(La)
+               + Math.sin(La0)*Math.sin(La)*Math.cos(Lo - Lo0);
+    const c = Math.acos(Math.max(-1, Math.min(1, cosC)));
+    if (c < 1e-10) return [0, 0];
+    const k = c / Math.sin(c);
+    return [
+       k * Math.sin(La) * Math.sin(Lo - Lo0),
+      -k * (Math.sin(La0)*Math.cos(La) - Math.cos(La0)*Math.sin(La)*Math.cos(Lo - Lo0)),
+    ];
+  }
+
+  // ── Fit projected coords to canvas ────────────────────────────────────────
+  const pts = pins.map(p => project(p.La, p.Lo));
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const dX = maxX - minX || 1e-4;
+  const dY = maxY - minY || 1e-4;
 
   const usableW = W - pad * 2, usableH = H - pad * 2;
-  const baseScale = Math.min(usableW / dLo, usableH / dLa);
-  const baseOffX = pad + (usableW - dLo * baseScale) / 2;
-  const baseOffY = pad + (usableH - dLa * baseScale) / 2;
+  const baseScale = Math.min(usableW / dX, usableH / dY);
+  const baseOffX  = pad + (usableW - dX * baseScale) / 2;
+  const baseOffY  = pad + (usableH - dY * baseScale) / 2;
 
-  return function(la, lo) {
-    const bx = baseOffX + (lo - minLo) * baseScale;
-    const by = baseOffY + (maxLa - la) * baseScale;
+  return function(La, Lo) {
+    const [px, py] = project(La, Lo);
     return [
-      bx * extraTransform.scale + extraTransform.x,
-      by * extraTransform.scale + extraTransform.y,
+      (baseOffX + (px - minX) * baseScale) * extraTransform.scale + extraTransform.x,
+      (baseOffY + (py - minY) * baseScale) * extraTransform.scale + extraTransform.y,
     ];
   };
 }
