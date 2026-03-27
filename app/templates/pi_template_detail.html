@@ -54,6 +54,37 @@
     font-size: .95rem;
     font-weight: 600;
 }
+.res-bar-wrap {
+    background: var(--eve-bg-1);
+    border-radius: 4px;
+    height: 7px;
+    overflow: hidden;
+    margin-top: 3px;
+}
+.res-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .3s;
+}
+.res-bar.over { background: #f07075 !important; }
+.skill-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,180,216,.08);
+    border: 1px solid rgba(0,180,216,.25);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: .78rem;
+}
+.skill-level-pip {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    border: 1.5px solid rgba(0,180,216,.5);
+}
+.skill-level-pip.filled { background: var(--eve-accent); border-color: var(--eve-accent); }
 </style>
 {% endblock %}
 
@@ -145,6 +176,51 @@
           </div>
           {% endfor %}
         </div>
+      </div>
+
+      <!-- CPU / PG resource card -->
+      <div class="meta-card" id="resourceCard">
+        <div class="meta-label mb-2">Power &amp; CPU</div>
+
+        <!-- Skill chip -->
+        <div class="skill-chip mb-3">
+          <i class="bi bi-mortarboard-fill" style="color:var(--eve-accent);font-size:.85rem;"></i>
+          <div>
+            <div style="font-weight:600;font-size:.8rem;">Command Center Upgrades</div>
+            <div style="font-size:.7rem;color:var(--eve-text-muted);">
+              Level required:
+              <span id="skillPips" style="display:inline-flex;gap:2px;margin-left:4px;vertical-align:middle;"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CPU -->
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-baseline" style="font-size:.78rem;">
+            <span style="color:var(--eve-text-muted);text-transform:uppercase;font-size:.65rem;letter-spacing:.04em;">CPU</span>
+            <span id="cpuText" class="fw-semibold">–</span>
+          </div>
+          <div class="res-bar-wrap">
+            <div id="cpuBar" class="res-bar" style="background:#00b4d8;width:0%;"></div>
+          </div>
+        </div>
+
+        <!-- Power Grid -->
+        <div class="mb-1">
+          <div class="d-flex justify-content-between align-items-baseline" style="font-size:.78rem;">
+            <span style="color:var(--eve-text-muted);text-transform:uppercase;font-size:.65rem;letter-spacing:.04em;">Power Grid</span>
+            <span id="pgText" class="fw-semibold">–</span>
+          </div>
+          <div class="res-bar-wrap">
+            <div id="pgBar" class="res-bar" style="background:#f4a300;width:0%;"></div>
+          </div>
+        </div>
+
+        <!-- Per-family breakdown (toggled) -->
+        <div id="resBreakdown" style="margin-top:10px;display:none;font-size:.72rem;border-top:1px solid var(--eve-card-border);padding-top:8px;"></div>
+        <button class="btn btn-sm eve-btn-ghost mt-2 py-0 px-1" style="font-size:.7rem;" onclick="toggleBreakdown()">
+          <i class="bi bi-list-ul me-1"></i>Details
+        </button>
       </div>
 
       {% if tmpl.source_url %}
@@ -267,6 +343,130 @@ document.querySelectorAll('[data-planet-type]').forEach(el => {
 });
 
 renderFull();
+
+// ── CPU / PG resource calculation ────────────────────────────────────────────
+// Source: ESI dogma attributes (cpuLoad attr 49, powerLoad attr 15)
+// CC output verified from ESI dogma on Barren CC tiers (all planet types same).
+
+const CC_OUTPUT = [
+  // [cpu_tf, pg_mw]        // CCU skill level
+  [  1_675,  6_000 ],      // 0 – Base
+  [  7_057,  9_000 ],      // 1 – Limited
+  [ 12_136, 12_000 ],      // 2 – Standard
+  [ 17_215, 15_000 ],      // 3 – Improved
+  [ 21_315, 17_000 ],      // 4 – Advanced
+  [ 25_415, 19_000 ],      // 5 – Elite
+];
+
+// Family → [cpu_tf, pg_mw] per unit
+const FAMILY_COST = {
+  command_center:   [    0,    0 ],   // provides resources, zero draw
+  launchpad:        [ 3600,  700 ],
+  storage:          [  500,  700 ],
+  ecu:              [  400, 2600 ],
+  extractor_head:   [  110,  550 ],
+  adv_industrial:   [  500,  700 ],
+  basic_industrial: [  200,  800 ],
+  high_tech:        [ 1100,  400 ],
+  unknown:          [    0,    0 ],
+};
+
+// Mirror of PI_TYPE_FAMILY from pi_canvas.js (same data, needed here)
+const TYPE_FAMILY_LOCAL = {
+  ...Object.fromEntries([2254,2524,2525,2533,2534,2549,2550,2551,
+    2129,2130,2131,2132,2133,2134,2135,2136,2137,2138,2139,2140,
+    2141,2142,2143,2144,2145,2146,2147,2148,2149,2150,2151,2152,
+    2153,2154,2155,2156,2157,2158,2159,2160,2574,2576,2577,2578,
+    2581,2582,2585,2586].map(id => [id, 'command_center'])),
+  ...Object.fromEntries([2256,2542,2543,2544,2552,2555,2556,2557].map(id=>[id,'launchpad'])),
+  ...Object.fromEntries([2257,2535,2536,2541,2558,2560,2561,2562].map(id=>[id,'storage'])),
+  ...Object.fromEntries([2848,3060,3061,3062,3063,3064,3067,3068].map(id=>[id,'ecu'])),
+  2481: 'extractor_head',
+  ...Object.fromEntries([2470,2472,2474,2480,2484,2485,2491,2494].map(id=>[id,'adv_industrial'])),
+  ...Object.fromEntries([2469,2471,2473,2483,2490,2492,2493].map(id=>[id,'basic_industrial'])),
+  ...Object.fromEntries([2475,2482].map(id=>[id,'high_tech'])),
+};
+
+const FAMILY_LABEL = {
+  command_center: 'Command Center', launchpad: 'Launch Pad',
+  storage: 'Storage Facility',     ecu: 'ECU',
+  extractor_head: 'Extractor Head', adv_industrial: 'Adv. Industrial',
+  basic_industrial: 'Basic Industrial', high_tech: 'High-Tech Plant',
+};
+
+function calcResources() {
+  if (!layoutData) return;
+  const pins = layoutData.P || [];
+  const ccLevel = Math.min(5, Math.max(0, layoutData.CmdCtrLv || 0));
+  const [cpuAvail, pgAvail] = CC_OUTPUT[ccLevel];
+
+  let cpuUsed = 0, pgUsed = 0;
+  const breakdown = {}; // family → {count, cpu, pg}
+
+  for (const pin of pins) {
+    const fam = TYPE_FAMILY_LOCAL[pin.T] || 'unknown';
+    if (fam === 'command_center') continue; // CC provides, doesn't consume
+    const [cpu, pg] = FAMILY_COST[fam] || [0, 0];
+    cpuUsed += cpu;
+    pgUsed  += pg;
+    if (!breakdown[fam]) breakdown[fam] = { count: 0, cpu: 0, pg: 0 };
+    breakdown[fam].count++;
+    breakdown[fam].cpu += cpu;
+    breakdown[fam].pg  += pg;
+  }
+
+  // Skill pips
+  const pipsEl = document.getElementById('skillPips');
+  if (pipsEl) {
+    pipsEl.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      const pip = document.createElement('span');
+      pip.className = 'skill-level-pip' + (i <= ccLevel ? ' filled' : '');
+      pipsEl.appendChild(pip);
+    }
+  }
+
+  // CPU bar
+  const cpuPct = Math.min(100, cpuUsed / cpuAvail * 100);
+  const cpuOver = cpuUsed > cpuAvail;
+  document.getElementById('cpuText').textContent =
+    `${cpuUsed.toLocaleString()} / ${cpuAvail.toLocaleString()} tf`;
+  const cpuBar = document.getElementById('cpuBar');
+  cpuBar.style.width = cpuPct + '%';
+  cpuBar.classList.toggle('over', cpuOver);
+
+  // PG bar
+  const pgPct = Math.min(100, pgUsed / pgAvail * 100);
+  const pgOver = pgUsed > pgAvail;
+  document.getElementById('pgText').textContent =
+    `${pgUsed.toLocaleString()} / ${pgAvail.toLocaleString()} MW`;
+  const pgBar = document.getElementById('pgBar');
+  pgBar.style.width = pgPct + '%';
+  pgBar.classList.toggle('over', pgOver);
+
+  // Per-family breakdown
+  const bEl = document.getElementById('resBreakdown');
+  if (bEl) {
+    bEl.innerHTML = Object.entries(breakdown).map(([fam, v]) => {
+      const color = (PI_FAMILIES[fam] || {}).ring || '#888';
+      return `<div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--eve-card-border);">
+        <span style="color:${color};">${FAMILY_LABEL[fam] || fam} ×${v.count}</span>
+        <span class="text-muted">CPU ${v.cpu.toLocaleString()} · PG ${v.pg.toLocaleString()}</span>
+      </div>`;
+    }).join('') +
+    `<div class="d-flex justify-content-between pt-1 fw-semibold">
+      <span>Total</span>
+      <span>CPU ${cpuUsed.toLocaleString()} · PG ${pgUsed.toLocaleString()}</span>
+    </div>`;
+  }
+}
+
+function toggleBreakdown() {
+  const el = document.getElementById('resBreakdown');
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+calcResources();
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 async function deleteTemplate(id) {
