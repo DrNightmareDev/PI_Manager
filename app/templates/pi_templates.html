@@ -117,7 +117,15 @@
     </div>
   </div>
 
-  <!-- Filter bar -->
+  <!-- Search + Filter bar -->
+  <div class="d-flex gap-2 flex-wrap align-items-center mb-3">
+    <div class="position-relative" style="flex:0 0 220px;">
+      <i class="bi bi-search position-absolute" style="left:9px;top:50%;transform:translateY(-50%);color:var(--eve-text-muted);font-size:.8rem;pointer-events:none;"></i>
+      <input type="text" id="nameSearch" class="form-control form-control-sm"
+             placeholder="Search by name…"
+             style="padding-left:28px;background:var(--eve-bg-2);border-color:var(--eve-card-border);color:inherit;">
+    </div>
+  </div>
   <div class="d-flex gap-2 flex-wrap mb-3" id="filterBar">
     <button class="filter-btn active" data-filter="all">All</button>
     <button class="filter-btn" data-filter="Factory">Factory</button>
@@ -284,25 +292,39 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Filter
+// Filter (tag buttons + name search, both applied together)
 // ──────────────────────────────────────────────────────────────────────────────
+let activeTagFilter = 'all';
+
+function applyFilters() {
+  const q = (document.getElementById('nameSearch').value || '').trim().toLowerCase();
+  document.querySelectorAll('.template-item').forEach(item => {
+    const name   = item.getAttribute('data-name')   || '';
+    const planet = item.getAttribute('data-planet')  || '';
+    const type   = item.getAttribute('data-type')    || '';
+
+    const tagOk = activeTagFilter === 'all'
+      || name.includes(activeTagFilter) || planet.includes(activeTagFilter)
+      || type.includes(activeTagFilter)
+      || (activeTagFilter === 'miner'   && type === 'miner')
+      || (activeTagFilter === 'factory' && type === 'factory');
+
+    const nameOk = !q || name.includes(q);
+
+    item.style.display = (tagOk && nameOk) ? '' : 'none';
+  });
+}
+
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const f = btn.getAttribute('data-filter').toLowerCase();
-    document.querySelectorAll('.template-item').forEach(item => {
-      if (f === 'all') { item.style.display = ''; return; }
-      const name = item.getAttribute('data-name') || '';
-      const planet = item.getAttribute('data-planet') || '';
-      const type = item.getAttribute('data-type') || '';
-      const match = name.includes(f) || planet.includes(f) || type.includes(f) ||
-                    (f === 'miner' && type === 'miner') ||
-                    (f === 'factory' && type === 'factory');
-      item.style.display = match ? '' : 'none';
-    });
+    activeTagFilter = btn.getAttribute('data-filter').toLowerCase();
+    applyFilters();
   });
 });
+
+document.getElementById('nameSearch').addEventListener('input', applyFilters);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Upload
