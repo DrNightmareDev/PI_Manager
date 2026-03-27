@@ -905,20 +905,27 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
     _update_character_colony_sync_status(characters, char_fetch_results, db)
 
     # Schritt 2: planet_info + planet_detail parallel abrufen
+    # Extract plain values before threading — ORM objects must not be accessed from
+    # multiple threads (SQLAlchemy session is not thread-safe; expire_on_commit=True
+    # would trigger concurrent lazy-loads, causing the isce error).
     def _fetch_planet(args):
-        char, colony, token = args
+        char_eve_id, colony, token = args
         planet_id = colony.get("planet_id")
         info = get_planet_info(planet_id) if planet_id else {}
         detail = {}
         if token and planet_id:
             try:
-                detail = get_planet_detail(char.eve_character_id, planet_id, token)
+                detail = get_planet_detail(char_eve_id, planet_id, token)
             except Exception as e:
                 logger.warning(f"Fehler bei Planet {planet_id}: {e}")
         return info, detail
 
+    planet_fetch_args = [
+        (char.eve_character_id, colony, token)
+        for char, colony, token in char_colony_token
+    ]
     with ThreadPoolExecutor(max_workers=10) as ex:
-        planet_data = list(ex.map(_fetch_planet, char_colony_token))
+        planet_data = list(ex.map(_fetch_planet, planet_fetch_args))
 
     # Schritt 3: Produktionen berechnen — ohne Preisabfrage
     colony_prods: list[tuple] = []
@@ -1210,6 +1217,84 @@ def dashboard(
         "price_mode": current_price_mode,
         "refreshing": refreshing,
         "market_last_updated_iso": market_last_updated_iso,
+    })
+
+
+@router.get("/pi-check")
+def pi_check(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """P4 production vs. P0 extraction balance check."""
+    from app import sde
+
+    cached = _load_colony_cache(account.id, db)
+    colonies: list[dict] = (cached.get("colonies") or []) if cached else []
+
+    # 1. Sum P4 productions across all colonies (per day)
+    p4_totals: dict[str, float] = {}
+    for colony in colonies:
+        productions = colony.get("productions") or {}
+        prod_tiers = colony.get("prod_tiers") or {}
+        for product, qty in productions.items():
+            if prod_tiers.get(product, 0) == 4:
+                p4_totals[product] = p4_totals.get(product, 0.0) + float(qty)
+
+    # 2. Sum active extractor output per P0 material type (per day)
+    p0_gathered: dict[str, dict] = {}
+    for colony in colonies:
+        ers = colony.get("extractor_rate_summary") or {}
+        for ext in (ers.get("extractors") or []):
+            name = ext.get("name") or "Unknown"
+            per_day = float(ext.get("avg_per_hour") or 0) * 24.0
+            if name not in p0_gathered:
+                p0_gathered[name] = {"count": 0, "per_day": 0.0}
+            p0_gathered[name]["count"] += 1
+            p0_gathered[name]["per_day"] += per_day
+
+    # 3. Build reverse schematic index: output_type_id -> schematic
+    schematic_by_output: dict[int, dict] = {
+        s["output_type_id"]: s
+        for s in sde._schematics.values()
+        if s.get("output_type_id")
+    }
+
+    # 4. Recursive: expand a product to its P0 raw-material requirements
+    def _trace_p0(type_id: int, qty_needed: float, depth: int = 0) -> dict[int, float]:
+        if depth > 8:
+            return {type_id: qty_needed}
+        sch = schematic_by_output.get(type_id)
+        if not sch:
+            return {type_id: qty_needed}  # base-case: already a P0
+        out_qty = max(float(sch.get("output_quantity") or 1), 1e-9)
+        cycles = qty_needed / out_qty
+        result: dict[int, float] = {}
+        for in_tid, in_qty in (sch.get("input_type_ids") or {}).items():
+            for tid, q in _trace_p0(int(in_tid), float(in_qty) * cycles, depth + 1).items():
+                result[tid] = result.get(tid, 0.0) + q
+        return result
+
+    # 5. Compute P0 requirements for each P4 product
+    p4_results = []
+    for product_name, qty_day in sorted(p4_totals.items(), key=lambda x: -x[1]):
+        type_id = sde.find_type_id_by_name(product_name)
+        p0_reqs: dict[str, float] = {}
+        if type_id:
+            for tid, qty in _trace_p0(type_id, qty_day).items():
+                name = sde.get_type_name(tid, "en") or f"TypeID {tid}"
+                p0_reqs[name] = p0_reqs.get(name, 0.0) + qty
+        p4_results.append({
+            "name": product_name,
+            "qty_day": round(qty_day, 1),
+            "p0_requirements": {k: round(v) for k, v in sorted(p0_reqs.items(), key=lambda x: -x[1])},
+        })
+
+    return JSONResponse({
+        "p4_products": p4_results,
+        "p0_gathered": {
+            k: {"count": v["count"], "per_day": round(v["per_day"])}
+            for k, v in sorted(p0_gathered.items())
+        },
     })
 
 
