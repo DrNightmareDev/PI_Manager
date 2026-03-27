@@ -1225,13 +1225,24 @@ def pi_check(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """P4 production vs. P0 extraction balance check."""
-    from app import sde
+    """P4 production vs. P0 extraction balance check.
+
+    Uses the hardcoded PI chain from pi_data.py — avoids relying on
+    SDE schematic output_type_id which is stored as the dict key in
+    EVERef schematics.json, not as a field, causing lookups to fail.
+
+    Production ratios (per cycle):
+      P0 → P1 :  3000 P0 → 20 P1    → 150 P0 per P1
+      P1 → P2 :  40 P1A + 40 P1B → 5 P2   → 8 P1 per P2 per input
+      P2 → P3 :  10 P2(each) → 3 P3        → 10/3 P2 per P3 per input
+      P3 → P4 :  6 P3(each) → 1 P4         → 6 P3 per P4 per input
+    """
+    from app.pi_data import P0_TO_P1, P1_TO_P2, P2_TO_P3, P3_TO_P4
 
     cached = _load_colony_cache(account.id, db)
     colonies: list[dict] = (cached.get("colonies") or []) if cached else []
 
-    # 1. Sum P4 productions across all colonies (per day)
+    # 1. Sum P4 productions across all colonies (units/day)
     p4_totals: dict[str, float] = {}
     for colony in colonies:
         productions = colony.get("productions") or {}
@@ -1240,53 +1251,69 @@ def pi_check(
             if prod_tiers.get(product, 0) == 4:
                 p4_totals[product] = p4_totals.get(product, 0.0) + float(qty)
 
-    # 2. Sum active extractor output per P0 material type (per day)
-    p0_gathered: dict[str, dict] = {}
+    # 2. Sum active extractor output per P0 material type (units/day)
+    p0_gathered_raw: dict[str, dict] = {}
     for colony in colonies:
         ers = colony.get("extractor_rate_summary") or {}
         for ext in (ers.get("extractors") or []):
-            name = ext.get("name") or "Unknown"
+            name = (ext.get("name") or "Unknown").strip()
             per_day = float(ext.get("avg_per_hour") or 0) * 24.0
-            if name not in p0_gathered:
-                p0_gathered[name] = {"count": 0, "per_day": 0.0}
-            p0_gathered[name]["count"] += 1
-            p0_gathered[name]["per_day"] += per_day
+            if name not in p0_gathered_raw:
+                p0_gathered_raw[name] = {"count": 0, "per_day": 0.0}
+            p0_gathered_raw[name]["count"] += 1
+            p0_gathered_raw[name]["per_day"] += per_day
 
-    # 3. Build reverse schematic index: output_type_id -> schematic
-    schematic_by_output: dict[int, dict] = {
-        s["output_type_id"]: s
-        for s in sde._schematics.values()
-        if s.get("output_type_id")
+    # Normalise P0 names: ESI may use "Micro Organisms" or "Microorganisms" etc.
+    # Build key: stripped-lowercase → canonical pi_data name
+    _p0_canon: dict[str, str] = {
+        k.lower().replace(" ", ""): k for k in P0_TO_P1
     }
+    def _norm_p0(name: str) -> str:
+        return _p0_canon.get(name.lower().replace(" ", ""), name)
 
-    # 4. Recursive: expand a product to its P0 raw-material requirements
-    def _trace_p0(type_id: int, qty_needed: float, depth: int = 0) -> dict[int, float]:
-        if depth > 8:
-            return {type_id: qty_needed}
-        sch = schematic_by_output.get(type_id)
-        if not sch:
-            return {type_id: qty_needed}  # base-case: already a P0
-        out_qty = max(float(sch.get("output_quantity") or 1), 1e-9)
-        cycles = qty_needed / out_qty
-        result: dict[int, float] = {}
-        for in_tid, in_qty in (sch.get("input_type_ids") or {}).items():
-            for tid, q in _trace_p0(int(in_tid), float(in_qty) * cycles, depth + 1).items():
-                result[tid] = result.get(tid, 0.0) + q
+    p0_gathered: dict[str, dict] = {}
+    for raw_name, v in p0_gathered_raw.items():
+        canon = _norm_p0(raw_name)
+        if canon not in p0_gathered:
+            p0_gathered[canon] = {"count": 0, "per_day": 0.0}
+        p0_gathered[canon]["count"] += v["count"]
+        p0_gathered[canon]["per_day"] += v["per_day"]
+
+    # Reverse maps
+    _p1_to_p0: dict[str, str] = {v: k for k, v in P0_TO_P1.items()}
+
+    def _p4_to_p0(p4_name: str, qty_day: float) -> dict[str, float]:
+        """Return {p0_name: required_per_day} for producing qty_day units of p4_name."""
+        result: dict[str, float] = {}
+        for inp in P3_TO_P4.get(p4_name, []):
+            inp_qty = qty_day * 6.0          # 6 of each input per P4 per cycle
+
+            if inp in _p1_to_p0:
+                # Input is a P1 (e.g. Reactive Metals, Bacteria, Water)
+                p0 = _p1_to_p0[inp]
+                result[p0] = result.get(p0, 0.0) + inp_qty * 150.0
+            elif inp in P2_TO_P3:
+                # Input is a P3 — trace P3 → P2 → P1 → P0
+                for p2 in P2_TO_P3[inp]:
+                    p2_qty = inp_qty * (10.0 / 3.0)  # 10/3 P2 per P3 per input type
+                    for p1 in (P1_TO_P2.get(p2) or []):
+                        p1_qty = p2_qty * 8.0        # 8 P1 per P2 per input type
+                        p0 = _p1_to_p0.get(p1)
+                        if p0:
+                            result[p0] = result.get(p0, 0.0) + p1_qty * 150.0
         return result
 
-    # 5. Compute P0 requirements for each P4 product
+    # 3. Compute P0 requirements per P4 product
     p4_results = []
-    for product_name, qty_day in sorted(p4_totals.items(), key=lambda x: -x[1]):
-        type_id = sde.find_type_id_by_name(product_name)
-        p0_reqs: dict[str, float] = {}
-        if type_id:
-            for tid, qty in _trace_p0(type_id, qty_day).items():
-                name = sde.get_type_name(tid, "en") or f"TypeID {tid}"
-                p0_reqs[name] = p0_reqs.get(name, 0.0) + qty
+    for p4_name, qty_day in sorted(p4_totals.items(), key=lambda x: -x[1]):
+        p0_reqs = _p4_to_p0(p4_name, qty_day)
         p4_results.append({
-            "name": product_name,
+            "name": p4_name,
             "qty_day": round(qty_day, 1),
-            "p0_requirements": {k: round(v) for k, v in sorted(p0_reqs.items(), key=lambda x: -x[1])},
+            "p0_requirements": {
+                k: round(v)
+                for k, v in sorted(p0_reqs.items(), key=lambda x: -x[1])
+            },
         })
 
     return JSONResponse({
