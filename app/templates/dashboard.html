@@ -658,18 +658,25 @@
                 <div id="piCheckContent" style="display:none;">
                     <div class="row g-3">
                         <!-- Left: Extractor P0 summary -->
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <div class="fw-semibold mb-2" style="color:#f4a300;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;">
-                                <i class="bi bi-minecart-loaded me-1"></i>Rohstoffe (P0) — Aktive Extraktoren
+                                <i class="bi bi-minecart-loaded me-1"></i>Rohstoffe (P0) — Extraktoren
                             </div>
                             <div id="piCheckP0Table"></div>
                         </div>
-                        <!-- Right: P4 products -->
-                        <div class="col-md-7">
+                        <!-- Middle: P4 products breakdown -->
+                        <div class="col-md-4">
                             <div class="fw-semibold mb-2" style="color:#e63946;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;">
                                 <i class="bi bi-box-seam me-1"></i>P4 Produkte — Bedarf vs. Abbau
                             </div>
                             <div id="piCheckP4List"></div>
+                        </div>
+                        <!-- Right: P0 balance summary -->
+                        <div class="col-md-4">
+                            <div class="fw-semibold mb-2" style="color:#2dc653;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;">
+                                <i class="bi bi-bar-chart-line me-1"></i>P0 Gesamtbilanz
+                            </div>
+                            <div id="piCheckBalanceTable"></div>
                         </div>
                     </div>
                 </div>
@@ -1656,6 +1663,7 @@ function openPiCheck() {
             document.getElementById('piCheckContent').style.display = '';
             _renderPiCheckP0(p0);
             _renderPiCheckP4(p4, p0);
+            _renderPiCheckBalance(p0, data.p0_total_needed || {});
         })
         .catch(() => {
             document.getElementById('piCheckLoading').innerHTML = '<span class="text-danger">Fehler beim Laden.</span>';
@@ -1736,6 +1744,50 @@ function togglePiCheckCard(i) {
     if (!card || !body) return;
     const open = card.classList.toggle('open');
     body.style.display = open ? '' : 'none';
+}
+
+function _renderPiCheckBalance(p0, needed) {
+    const el = document.getElementById('piCheckBalanceTable');
+    // Merge keys from both gathered and needed
+    const allMats = new Set([...Object.keys(p0), ...Object.keys(needed)]);
+    if (!allMats.size) {
+        el.innerHTML = '<div class="text-muted small">Keine Daten.</div>';
+        return;
+    }
+    // Sort: deficits first, then by needed desc
+    const rows = [...allMats].map(name => ({
+        name,
+        gathered: (p0[name] || {}).per_day || 0,
+        needed: needed[name] || 0,
+    })).sort((a, b) => {
+        const aOk = a.gathered >= a.needed;
+        const bOk = b.gathered >= b.needed;
+        if (aOk !== bOk) return aOk ? 1 : -1;  // deficits first
+        return b.needed - a.needed;
+    });
+
+    let html = `<table class="picheck-p0-table">
+        <thead><tr>
+            <th>P0 Material</th>
+            <th style="text-align:right">Abbau/T</th>
+            <th style="text-align:right">Bedarf/T</th>
+            <th style="text-align:center">Status</th>
+        </tr></thead><tbody>`;
+    for (const r of rows) {
+        const ok = r.gathered >= r.needed;
+        const statusIcon = ok
+            ? '<span style="color:#2dc653;font-size:1rem;">✓</span>'
+            : '<span style="color:#e63946;font-size:1rem;">✗</span>';
+        const gatheredStyle = ok ? 'color:#2dc653' : 'color:#e63946';
+        html += `<tr>
+            <td>${r.name}</td>
+            <td class="picheck-num" style="${gatheredStyle}">${_fmtNum(r.gathered)}</td>
+            <td class="picheck-num" style="color:#c9d1d9">${r.needed > 0 ? _fmtNum(r.needed) : '—'}</td>
+            <td style="text-align:center">${r.needed > 0 ? statusIcon : '<span style="color:#586e75">—</span>'}</td>
+        </tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
 }
 </script>
 {% endblock %}

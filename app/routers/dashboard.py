@@ -1316,12 +1316,19 @@ def pi_check(
             },
         })
 
+    # 4. Sum total P0 needed across all P4 products
+    p0_total_needed: dict[str, float] = {}
+    for p4 in p4_results:
+        for p0_name, qty in p4["p0_requirements"].items():
+            p0_total_needed[p0_name] = p0_total_needed.get(p0_name, 0.0) + qty
+
     return JSONResponse({
         "p4_products": p4_results,
         "p0_gathered": {
             k: {"count": v["count"], "per_day": round(v["per_day"])}
             for k, v in sorted(p0_gathered.items())
         },
+        "p0_total_needed": {k: round(v) for k, v in sorted(p0_total_needed.items())},
     })
 
 
