@@ -417,3 +417,27 @@ def search_access_policy_entity(
             add_alliance(aid)
 
     return JSONResponse({"corporations": corps[:10], "alliances": alliances[:10]})
+
+
+@router.post("/reload-account/{target_account_id}")
+def admin_reload_account(
+    target_account_id: int,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Admin: force-refresh colony cache for any account (no corp restriction)."""
+    from app.routers.dashboard import _build_dashboard_payload, _save_colony_cache, _dashboard_cache
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    target = db.query(Account).filter(Account.id == target_account_id).first()
+    if not target:
+        raise HTTPException(status_code=404)
+    chars = db.query(Character).filter(Character.account_id == target_account_id).all()
+    try:
+        payload = _build_dashboard_payload(target, chars, db, price_mode=getattr(target, "price_mode", "sell"))
+        _save_colony_cache(target_account_id, payload, db)
+        _dashboard_cache[target_account_id] = payload
+        return JSONResponse({"ok": True, "colony_count": payload["colony_count"]})
+    except Exception as e:
+        _logger.warning(f"admin_reload_account {target_account_id}: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
