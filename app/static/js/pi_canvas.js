@@ -1,146 +1,125 @@
 /**
  * PI Surface Template canvas renderer
- * Shared by pi_templates.html and pi_template_detail.html
+ * Style: dark circle + coloured ring + icon, white links — matches eve-webtools.com/Planetary/
  *
  * JSON format (DalShooth / EVE in-game export):
- *   P  – pins:   [{T: typeId, La: lat_rad, Lo: lon_rad, ...}]
+ *   P  – pins:   [{T: typeId, La: lat_rad (colatitude), Lo: lon_rad, ...}]
  *   L  – links:  [{S: src_pin_idx, D: dst_pin_idx, Lv: level}]
  *   R  – routes: [{P: [idx0, idx1, …, idxN], T: typeId, Q: qty}]
- *                 R[i].P is the FULL path through all intermediate pins.
  */
 
-// ── Building type IDs ──────────────────────────────────────────────────────────
-const PI_COLORS = {
-  2542: '#c8a600',  // Command Center       – gold
-  2524: '#00b4d8',  // Launch Pad           – cyan
-  2562: '#4cc9f0',  // Storage Facility     – light-blue
-  3068: '#f4a300',  // ECU                  – amber
-  2481: '#57cc99',  // Extractor Head       – green
-  2474: '#9b5de5',  // Adv. Industrial Fac. – purple
-  2552: '#3a86ff',  // Basic Industrial Fac.– blue
-  2256: '#ff006e',  // High-Tech Plant      – pink
+// ── Building family → display config ──────────────────────────────────────────
+// icon: Unicode char rendered as white text on dark circle
+// ring: coloured outer ring colour
+// name: canonical display name
+
+const PI_FAMILIES = {
+  command_center:  { icon: '✦', ring: '#c8a600', name: 'Command Center' },
+  launchpad:       { icon: '⬆', ring: '#00b4d8', name: 'Launch Pad' },
+  storage:         { icon: '▣', ring: '#4cc9f0', name: 'Storage Facility' },
+  ecu:             { icon: '⚙', ring: '#f4a300', name: 'Extractor Control Unit' },
+  extractor_head:  { icon: '⊙', ring: '#57cc99', name: 'Extractor Head' },
+  adv_industrial:  { icon: '⚙', ring: '#9b5de5', name: 'Adv. Industrial Facility' },
+  basic_industrial:{ icon: '⚙', ring: '#3a86ff', name: 'Basic Industrial Facility' },
+  high_tech:       { icon: '◈', ring: '#ff006e', name: 'High-Tech Production Plant' },
+  unknown:         { icon: '?',  ring: '#666',    name: 'Unknown' },
 };
 
-const PI_NAMES = {
-  2542: 'Command Center',
-  2524: 'Launch Pad',
-  2562: 'Storage Facility',
-  3068: 'Extractor Control Unit',
-  2481: 'Extractor Head',
-  2474: 'Advanced Industrial Facility',
-  2552: 'Basic Industrial Facility',
-  2256: 'High-Tech Production Plant',
+// ── Type ID → family mapping (all planet-type variants from ESI) ───────────────
+const PI_TYPE_FAMILY = {
+  // Command Centers (base per planet type)
+  2254: 'command_center', 2524: 'command_center', 2525: 'command_center',
+  2533: 'command_center', 2534: 'command_center', 2549: 'command_center',
+  2550: 'command_center', 2551: 'command_center',
+  // Command Center upgrade tiers (Limited/Standard/Improved/Advanced/Elite)
+  2129:'command_center',2130:'command_center',2131:'command_center',2132:'command_center',2133:'command_center',
+  2134:'command_center',2135:'command_center',2136:'command_center',2137:'command_center',2138:'command_center',
+  2139:'command_center',2140:'command_center',2141:'command_center',2142:'command_center',2143:'command_center',
+  2144:'command_center',2145:'command_center',2146:'command_center',2147:'command_center',2148:'command_center',
+  2149:'command_center',2150:'command_center',2151:'command_center',2152:'command_center',2153:'command_center',
+  2154:'command_center',2155:'command_center',2156:'command_center',2157:'command_center',2158:'command_center',
+  2159:'command_center',2160:'command_center',2574:'command_center',2576:'command_center',2577:'command_center',
+  2578:'command_center',2581:'command_center',2582:'command_center',2585:'command_center',2586:'command_center',
+
+  // Launch Pads (one per planet type)
+  2256: 'launchpad', 2542: 'launchpad', 2543: 'launchpad', 2544: 'launchpad',
+  2552: 'launchpad', 2555: 'launchpad', 2556: 'launchpad', 2557: 'launchpad',
+
+  // Storage Facilities
+  2257: 'storage', 2535: 'storage', 2536: 'storage', 2541: 'storage',
+  2558: 'storage', 2560: 'storage', 2561: 'storage', 2562: 'storage',
+
+  // Extractor Control Units (ECU)
+  2848: 'ecu', 3060: 'ecu', 3061: 'ecu', 3062: 'ecu',
+  3063: 'ecu', 3064: 'ecu', 3067: 'ecu', 3068: 'ecu',
+
+  // Extractor Heads (template-internal IDs — may reuse building IDs for the
+  // planet type; 2481 behaves as extractor head in miner templates)
+  2481: 'extractor_head',
+
+  // Advanced Industrial Facilities
+  2470: 'adv_industrial', 2472: 'adv_industrial', 2474: 'adv_industrial',
+  2480: 'adv_industrial', 2484: 'adv_industrial', 2485: 'adv_industrial',
+  2491: 'adv_industrial', 2494: 'adv_industrial',
+
+  // Basic Industrial Facilities
+  2469: 'basic_industrial', 2471: 'basic_industrial', 2473: 'basic_industrial',
+  2483: 'basic_industrial', 2490: 'basic_industrial', 2492: 'basic_industrial',
+  2493: 'basic_industrial',
+
+  // High-Tech Production Plants
+  2475: 'high_tech', 2482: 'high_tech',
 };
 
-// Base radius per type (scaled at render time)
-const PI_RADII = {
-  2542: 1.3,   // Command Center  – big
-  2524: 1.15,  // Launch Pad
-  2562: 1.0,   // Storage
-  3068: 1.2,   // ECU
-  2481: 0.75,  // Extractor Head – small
-  2474: 1.0,   // Adv. Industrial
-  2552: 0.9,   // Basic Industrial
-  2256: 1.0,   // High-Tech Plant
-};
+// Convenience lookups used by the legend
+const PI_COLORS = Object.fromEntries(
+  Object.entries(PI_TYPE_FAMILY).map(([tid, fam]) => [tid, PI_FAMILIES[fam].ring])
+);
+const PI_NAMES = Object.fromEntries(
+  Object.entries(PI_TYPE_FAMILY).map(([tid, fam]) => [tid, PI_FAMILIES[fam].name])
+);
 
-// ── Shape helpers (ctx must be translated to pin centre) ───────────────────────
-
-function _polygon(ctx, sides, r, rotation) {
-  rotation = rotation || 0;
-  ctx.beginPath();
-  for (let i = 0; i < sides; i++) {
-    const a = (i / sides) * Math.PI * 2 + rotation;
-    i === 0 ? ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r)
-             : ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
-  }
-  ctx.closePath();
+function _getFamily(typeId) {
+  return PI_TYPE_FAMILY[typeId] || 'unknown';
+}
+function _getFamilyConfig(typeId) {
+  return PI_FAMILIES[_getFamily(typeId)];
 }
 
-function _diamond(ctx, r) {
+// ── Pin drawer ─────────────────────────────────────────────────────────────────
+// Style: dark filled circle + coloured outer ring + white icon text
+
+const _BASE_PIN_R = 5; // base radius in px at scale=1
+
+function drawPIPin(ctx, x, y, baseR, typeId, _unused) {
+  const cfg = _getFamilyConfig(typeId);
+  const outerR = baseR * 1.45;
+  const innerR = baseR;
+
+  // Outer coloured ring
   ctx.beginPath();
-  ctx.moveTo(0, -r); ctx.lineTo(r * 0.65, 0);
-  ctx.lineTo(0, r);  ctx.lineTo(-r * 0.65, 0);
-  ctx.closePath();
-}
-
-function _roundedRect(ctx, hw, hh, rad) {
-  ctx.beginPath();
-  ctx.roundRect(-hw, -hh, hw*2, hh*2, rad);
-}
-
-function _gear(ctx, rOuter, rInner, teeth) {
-  // Star-like shape for ECU
-  ctx.beginPath();
-  for (let i = 0; i < teeth * 2; i++) {
-    const a = (i / (teeth * 2)) * Math.PI * 2 - Math.PI / 2;
-    const r = i % 2 === 0 ? rOuter : rInner;
-    i === 0 ? ctx.moveTo(Math.cos(a)*r, Math.sin(a)*r)
-             : ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
-  }
-  ctx.closePath();
-}
-
-function _house(ctx, r) {
-  // Launch Pad: square with pointed roof
-  const h = r * 0.9, w = r * 0.85;
-  ctx.beginPath();
-  ctx.moveTo(0, -r);          // top
-  ctx.lineTo(w, -h * 0.1);    // roof right
-  ctx.lineTo(w, h);           // bottom right
-  ctx.lineTo(-w, h);          // bottom left
-  ctx.lineTo(-w, -h * 0.1);   // roof left
-  ctx.closePath();
-}
-
-function _factory(ctx, r) {
-  // Square with stepped top (factory silhouette)
-  const s = r * 0.9;
-  ctx.beginPath();
-  ctx.moveTo(-s, s);   ctx.lineTo(-s, -s * 0.4);
-  ctx.lineTo(-s * 0.3, -s * 0.4); ctx.lineTo(-s * 0.3, -s);
-  ctx.lineTo(s * 0.3, -s);  ctx.lineTo(s * 0.3, -s * 0.4);
-  ctx.lineTo(s, -s * 0.4);  ctx.lineTo(s, s);
-  ctx.closePath();
-}
-
-// ── Main pin drawer ────────────────────────────────────────────────────────────
-
-function drawPIPin(ctx, x, y, baseR, typeId, lineWidth) {
-  const color = PI_COLORS[typeId] || '#888';
-  const scale = PI_RADII[typeId] || 1.0;
-  const r = baseR * scale;
-
-  ctx.save();
-  ctx.translate(x, y);
-
-  switch (typeId) {
-    case 2542: _polygon(ctx, 6, r, Math.PI / 6); break;  // Command Center – hexagon
-    case 2524: _house(ctx, r); break;                      // Launch Pad – house/rocket
-    case 2562: _roundedRect(ctx, r * 0.85, r * 0.65, r * 0.25); break; // Storage – pill
-    case 3068: _gear(ctx, r, r * 0.55, 6); break;          // ECU – gear (6 teeth)
-    case 2481: _diamond(ctx, r); break;                    // Extractor Head – diamond
-    case 2474: _factory(ctx, r); break;                    // Adv. Industrial – factory
-    case 2552: _polygon(ctx, 4, r, Math.PI / 4); break;    // Basic Industrial – square
-    case 2256: _polygon(ctx, 3, r, -Math.PI / 2); break;   // High-Tech Plant – triangle
-    default:   ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); break;
-  }
-
-  ctx.fillStyle = color + '30';
-  ctx.fill();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth || 1.5;
+  ctx.arc(x, y, outerR, 0, Math.PI * 2);
+  ctx.strokeStyle = cfg.ring;
+  ctx.lineWidth = Math.max(1.5, outerR * 0.28);
   ctx.stroke();
 
-  ctx.restore();
+  // Dark filled inner circle
+  ctx.beginPath();
+  ctx.arc(x, y, innerR, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(8,10,14,0.88)';
+  ctx.fill();
+
+  // Icon text (white, centred)
+  const fontSize = Math.max(7, innerR * 1.1);
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(cfg.icon, x, y);
+  ctx.textBaseline = 'alphabetic'; // reset
 }
 
-// ── Link extraction (from L array) ────────────────────────────────────────────
-
-/**
- * Returns a Set of "min_min_max" strings for unique physical links.
- * L[i] = { S: source_pin_idx, D: dest_pin_idx }
- */
+// ── Link extraction (from L array: {S: src_idx, D: dst_idx}) ──────────────────
 function extractLinks(layoutData) {
   const links = new Set();
   for (const lnk of (layoutData.L || [])) {
@@ -151,28 +130,15 @@ function extractLinks(layoutData) {
   return links;
 }
 
-// ── Projection helpers ─────────────────────────────────────────────────────────
+// ── Azimuthal equidistant projection ──────────────────────────────────────────
+// La = colatitude (0=north pole, π/2=equator, π=south pole), Lo = longitude
+// Same spherical convention as Three.js setFromSphericalCoords used by calli-eve/eve-pi
 
-/**
- * Azimuthal equidistant projection centred on the pin cluster.
- *
- * EVE coordinate system (confirmed from calli-eve/eve-pi source):
- *   La = colatitude in radians  (0 = north pole, π/2 = equator, π = south pole)
- *   Lo = longitude  in radians  (0 … 2π)
- *
- * Three.js equivalent: setFromSphericalCoords(r, La, Lo)
- *   → x = r·sin(La)·sin(Lo),  y = r·cos(La),  z = r·sin(La)·cos(Lo)
- *
- * The azimuthal equidistant projection preserves great-circle distances from
- * the centre point, so the on-screen layout matches the actual surface layout.
- *
- * Returns a toXY(La, Lo) → [canvasX, canvasY] closure.
- */
 function buildProjection(pins, W, H, pad, extraTransform) {
   if (!pins.length) return null;
   extraTransform = extraTransform || { x: 0, y: 0, scale: 1 };
 
-  // ── Cluster centroid (mean on the sphere via 3-D average) ──────────────────
+  // Cluster centroid via 3-D Cartesian mean (handles longitude wrap-around)
   let cx = 0, cy = 0, cz = 0;
   for (const p of pins) {
     cx += Math.sin(p.La) * Math.cos(p.Lo);
@@ -180,13 +146,9 @@ function buildProjection(pins, W, H, pad, extraTransform) {
     cz += Math.sin(p.La) * Math.sin(p.Lo);
   }
   cx /= pins.length; cy /= pins.length; cz /= pins.length;
-  // Back to spherical
-  const La0 = Math.atan2(Math.sqrt(cx*cx + cz*cz), cy);  // colatitude
-  const Lo0 = Math.atan2(cz, cx);                          // longitude
+  const La0 = Math.atan2(Math.sqrt(cx*cx + cz*cz), cy);
+  const Lo0 = Math.atan2(cz, cx);
 
-  // ── Azimuthal equidistant projection ──────────────────────────────────────
-  // Angular distance c from centre, then scale by c/sin(c).
-  // x points "east" (increasing Lo), y points "south" (increasing La).
   function project(La, Lo) {
     const cosC = Math.cos(La0)*Math.cos(La)
                + Math.sin(La0)*Math.sin(La)*Math.cos(Lo - Lo0);
@@ -199,7 +161,6 @@ function buildProjection(pins, W, H, pad, extraTransform) {
     ];
   }
 
-  // ── Fit projected coords to canvas ────────────────────────────────────────
   const pts = pins.map(p => project(p.La, p.Lo));
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
@@ -221,20 +182,56 @@ function buildProjection(pins, W, H, pad, extraTransform) {
   };
 }
 
-// ── Full render ────────────────────────────────────────────────────────────────
+// ── Planet-type background gradient ───────────────────────────────────────────
+const PI_PLANET_BG = {
+  barren:    ['#1a0e00', '#2a1800', '#0a0500'],
+  gas:       ['#0a1400', '#0e1c00', '#050a00'],
+  oceanic:   ['#00080f', '#001018', '#00040a'],
+  temperate: ['#050f05', '#081408', '#020802'],
+  ice:       ['#060a10', '#080e18', '#04060c'],
+  storm:     ['#0d0516', '#150820', '#08030d'],
+  plasma:    ['#150500', '#1e0800', '#0a0300'],
+  lava:      ['#1c0300', '#280400', '#0e0200'],
+};
 
+function drawPlanetBackground(ctx, W, H, planetType) {
+  const pt = (planetType || '').toLowerCase();
+  const [mid, edge, deep] = PI_PLANET_BG[pt] || ['#0a0c10', '#101418', '#060708'];
+  const grad = ctx.createRadialGradient(W*0.45, H*0.4, 0, W*0.5, H*0.5, W*0.75);
+  grad.addColorStop(0, mid);
+  grad.addColorStop(0.55, edge);
+  grad.addColorStop(1, deep);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle noise overlay (random "surface texture" seeded by canvas size)
+  const imageData = ctx.getImageData(0, 0, W, H);
+  const d = imageData.data;
+  // Cheap deterministic noise using sin
+  for (let i = 0; i < d.length; i += 4) {
+    const px = (i / 4) % W, py = Math.floor((i / 4) / W);
+    const n = (Math.sin(px * 0.31 + py * 0.17) * 0.5 +
+               Math.sin(px * 0.07 - py * 0.41) * 0.5) * 12 | 0;
+    d[i]   = Math.min(255, Math.max(0, d[i]   + n));
+    d[i+1] = Math.min(255, Math.max(0, d[i+1] + n));
+    d[i+2] = Math.min(255, Math.max(0, d[i+2] + n));
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// ── Full render ────────────────────────────────────────────────────────────────
 /**
- * Renders a PI template onto a canvas element.
- *
  * @param {HTMLCanvasElement} canvas
- * @param {object|string} layoutData  – parsed object or raw JSON string
+ * @param {object|string} layoutData
  * @param {object} opts
- *   pad          {number}  canvas padding in px (default 12)
- *   pinScale     {number}  base pin radius = pinScale * 5 (default 1)
- *   lineWidth    {number}  link line width (default 1)
- *   linkAlpha    {number}  link opacity 0-1 (default 0.3)
- *   showLabels   {boolean} draw abbreviated labels when zoomed (default false)
- *   transform    {object}  {x, y, scale} for pan/zoom (default identity)
+ *   pad          – canvas padding px  (default 12)
+ *   pinScale     – base pin radius = pinScale * 5  (default 1)
+ *   lineWidth    – link line width  (default 1)
+ *   linkAlpha    – link opacity  (default 0.55)
+ *   showLabels   – draw abbreviated labels when zoomed  (default false)
+ *   transform    – {x, y, scale} for pan/zoom
+ *   planetType   – string for background colour ("barren", "gas", …)
+ *   showBg       – draw planet background  (default false)
  */
 function renderPITemplate(canvas, layoutData, opts) {
   opts = opts || {};
@@ -250,18 +247,26 @@ function renderPITemplate(canvas, layoutData, opts) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
 
-  const pad = opts.pad !== undefined ? opts.pad : 12;
+  const pad       = opts.pad !== undefined ? opts.pad : 12;
   const transform = opts.transform || { x: 0, y: 0, scale: 1 };
-  const toXY = buildProjection(pins, W, H, pad, transform);
+  const toXY      = buildProjection(pins, W, H, pad, transform);
   if (!toXY) return;
 
-  const baseR = (opts.pinScale || 1) * 5;
-  const alpha = opts.linkAlpha !== undefined ? opts.linkAlpha : 0.28;
+  const baseR = (opts.pinScale || 1) * _BASE_PIN_R;
 
-  // ── Draw physical links (L array, correct S+D fields) ──
+  // Background
+  if (opts.showBg) {
+    drawPlanetBackground(ctx, W, H, opts.planetType || '');
+  } else {
+    ctx.fillStyle = 'rgba(8,10,14,0.0)'; // transparent — CSS handles it
+  }
+
+  // ── Links ─────────────────────────────────────────────────────────────────
   const links = extractLinks(layoutData);
-  ctx.strokeStyle = `rgba(100,165,210,${alpha})`;
+  const alpha = opts.linkAlpha !== undefined ? opts.linkAlpha : 0.55;
+  ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
   ctx.lineWidth = opts.lineWidth || 1;
+  ctx.lineCap = 'round';
   for (const pair of links) {
     const [ai, bi] = pair.split('_').map(Number);
     if (ai >= pins.length || bi >= pins.length) continue;
@@ -270,27 +275,25 @@ function renderPITemplate(canvas, layoutData, opts) {
     ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
   }
 
-  // ── Draw pins ──────────────────────────────────────────
-  const lw = (opts.pinLineWidth || 1.5) * Math.min(transform.scale, 2);
+  // ── Pins ──────────────────────────────────────────────────────────────────
   for (const pin of pins) {
     const [x, y] = toXY(pin.La, pin.Lo);
-    drawPIPin(ctx, x, y, baseR * transform.scale, pin.T, lw);
+    drawPIPin(ctx, x, y, baseR * transform.scale, pin.T);
   }
 
-  // ── Optional labels (detail view when zoomed in) ──────
-  if (opts.showLabels && transform.scale > 1.4) {
-    const fontSize = Math.min(11, 8 * transform.scale);
-    ctx.font = `${fontSize}px sans-serif`;
+  // ── Labels (zoomed detail view) ───────────────────────────────────────────
+  if (opts.showLabels && transform.scale > 1.6) {
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
     for (const pin of pins) {
       const [x, y] = toXY(pin.La, pin.Lo);
-      const name = (PI_NAMES[pin.T] || '');
-      // Abbreviated: first letter of each word
-      const abbr = name.split(' ').filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('');
-      if (!abbr) continue;
-      const r = baseR * transform.scale * (PI_RADII[pin.T] || 1);
-      ctx.fillStyle = (PI_COLORS[pin.T] || '#aaa') + 'cc';
-      ctx.fillText(abbr, x, y + r + fontSize + 1);
+      const cfg = _getFamilyConfig(pin.T);
+      const r = baseR * transform.scale * 1.45;
+      const fontSize = Math.max(8, Math.min(11, r * 0.55));
+      ctx.font = `${fontSize}px sans-serif`;
+      ctx.fillStyle = cfg.ring + 'dd';
+      ctx.fillText(cfg.name.split(' ')[0], x, y + r + 3);
     }
+    ctx.textBaseline = 'alphabetic';
   }
 }

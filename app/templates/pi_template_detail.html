@@ -8,7 +8,7 @@
     width: 100%;
     aspect-ratio: 1 / 1;
     max-height: 600px;
-    background: var(--eve-bg-1);
+    background: #080a0e;
     border-radius: 8px;
     border: 1px solid var(--eve-card-border);
 }
@@ -186,13 +186,17 @@ const canvas = document.getElementById('piCanvas');
 let transform = { x: 0, y: 0, scale: 1 };
 let dragging = false, dragStart = null;
 
+const PLANET_TYPE_STR = {{ (meta.planet_type or '') | tojson }}.toLowerCase();
+
 function renderFull() {
   renderPITemplate(canvas, layoutData, {
     pad: 40,
     pinScale: 2,
-    lineWidth: 1.5,
-    linkAlpha: 0.25,
+    lineWidth: 2,
+    linkAlpha: 0.65,
     showLabels: true,
+    showBg: true,
+    planetType: PLANET_TYPE_STR,
     transform,
   });
 }

@@ -24,7 +24,7 @@
 .template-card-preview {
     width: 100%;
     aspect-ratio: 1 / 1;
-    background: var(--eve-bg-1);
+    background: #080a0e;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -154,7 +154,7 @@
          data-type="{{ 'miner' if 'extractor' in tmpl.building_counts|list|join(' ')|lower else 'factory' }}">
       <a href="/templates/{{ tmpl.id }}" class="template-card h-100">
         <div class="template-card-preview">
-          <canvas class="pi-preview" data-layout="{{ tmpl.layout_json | e }}" width="160" height="160"></canvas>
+          <canvas class="pi-preview" data-layout="{{ tmpl.layout_json | e }}" data-planet-type="{{ tmpl.planet_type|lower }}" width="160" height="160"></canvas>
         </div>
         <div class="template-card-body">
           <div class="template-card-name" title="{{ tmpl.name }}">{{ tmpl.name }}</div>
@@ -191,7 +191,7 @@
          data-type="{{ 'miner' if 'extractor' in tmpl.building_counts|list|join(' ')|lower else 'factory' }}">
       <a href="/templates/{{ tmpl.id }}" class="template-card h-100">
         <div class="template-card-preview">
-          <canvas class="pi-preview" data-layout="{{ tmpl.layout_json | e }}" width="160" height="160"></canvas>
+          <canvas class="pi-preview" data-layout="{{ tmpl.layout_json | e }}" data-planet-type="{{ tmpl.planet_type|lower }}" width="160" height="160"></canvas>
         </div>
         <div class="template-card-body">
           <div class="template-card-name" title="{{ tmpl.name }}">{{ tmpl.name }}</div>
@@ -280,7 +280,11 @@ const PLANET_COLORS = {
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('canvas.pi-preview').forEach(canvas => {
     const raw = canvas.getAttribute('data-layout');
-    if (raw) renderPITemplate(canvas, raw, { pad: 7, pinScale: 0.75, lineWidth: 0.8 });
+    const pt  = canvas.getAttribute('data-planet-type') || '';
+    if (raw) renderPITemplate(canvas, raw, {
+      pad: 7, pinScale: 0.75, lineWidth: 0.8, linkAlpha: 0.6,
+      showBg: true, planetType: pt,
+    });
   });
   document.querySelectorAll('[data-planet-type]').forEach(el => {
     const pt = (el.getAttribute('data-planet-type') || '').toLowerCase();

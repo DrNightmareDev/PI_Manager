@@ -17,29 +17,67 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/templates", tags=["pi-templates"])
 
-# EVE type IDs for PI buildings
-_BUILDING_NAMES: dict[int, str] = {
-    2542: "Command Center",
-    2524: "Launch Pad",
-    2562: "Storage Facility",
-    3068: "Extractor Control Unit",
-    2481: "Extractor Head",
-    2474: "Advanced Industrial Facility",
-    2552: "Basic Industrial Facility",
-    2256: "High-Tech Production Plant",
+# Building family → canonical display name (for grouping in the legend)
+_BUILDING_FAMILY_NAME: dict[str, str] = {
+    "command_center":   "Command Center",
+    "launchpad":        "Launch Pad",
+    "storage":          "Storage Facility",
+    "ecu":              "Extractor Control Unit",
+    "extractor_head":   "Extractor Head",
+    "adv_industrial":   "Adv. Industrial Facility",
+    "basic_industrial": "Basic Industrial Facility",
+    "high_tech":        "High-Tech Production Plant",
+}
+
+# Type ID → building family (all planet-type variants — mirrors pi_canvas.js)
+_TYPE_FAMILY: dict[int, str] = {
+    # Command Centers
+    **{tid: "command_center" for tid in [
+        2254, 2524, 2525, 2533, 2534, 2549, 2550, 2551,
+        2129,2130,2131,2132,2133,2134,2135,2136,2137,2138,
+        2139,2140,2141,2142,2143,2144,2145,2146,2147,2148,
+        2149,2150,2151,2152,2153,2154,2155,2156,2157,2158,
+        2159,2160,2574,2576,2577,2578,2581,2582,2585,2586,
+    ]},
+    # Launch Pads
+    **{tid: "launchpad" for tid in [2256,2542,2543,2544,2552,2555,2556,2557]},
+    # Storage Facilities
+    **{tid: "storage" for tid in [2257,2535,2536,2541,2558,2560,2561,2562]},
+    # Extractor Control Units
+    **{tid: "ecu" for tid in [2848,3060,3061,3062,3063,3064,3067,3068]},
+    # Extractor Heads (template-internal)
+    2481: "extractor_head",
+    # Advanced Industrial Facilities
+    **{tid: "adv_industrial" for tid in [2470,2472,2474,2480,2484,2485,2491,2494]},
+    # Basic Industrial Facilities
+    **{tid: "basic_industrial" for tid in [2469,2471,2473,2483,2490,2492,2493]},
+    # High-Tech Production Plants
+    **{tid: "high_tech" for tid in [2475,2482]},
 }
 
 # Planet type IDs → readable names
 _PLANET_TYPES: dict[int, str] = {
-    2014: "Temperate",
-    2015: "Ice",
-    2016: "Gas",
-    2017: "Oceanic",
-    2018: "Barren",
-    2019: "Storm",
-    2063: "Plasma",
-    13: "Lava",
+    2014: "Temperate", 2015: "Ice",    2016: "Gas",
+    2017: "Oceanic",   2018: "Barren", 2019: "Storm",
+    2063: "Plasma",    13:   "Lava",
 }
+
+
+def _type_display_name(type_id: int | None) -> str:
+    if type_id is None:
+        return "Unknown"
+    family = _TYPE_FAMILY.get(type_id)
+    if family:
+        return _BUILDING_FAMILY_NAME[family]
+    # Fallback: try SDE
+    try:
+        from app import sde as _sde
+        name = _sde.get_type_name(type_id, "en")
+        if name:
+            return name
+    except Exception:
+        pass
+    return f"TypeID {type_id}"
 
 
 def _parse_template_meta(layout_json: str) -> dict:
@@ -53,7 +91,7 @@ def _parse_template_meta(layout_json: str) -> dict:
     building_counts: dict[str, int] = {}
     for pin in pins:
         t = pin.get("T")
-        name = _BUILDING_NAMES.get(t, f"TypeID {t}")
+        name = _type_display_name(t)
         building_counts[name] = building_counts.get(name, 0) + 1
 
     planet_type_id = data.get("Pln")
