@@ -253,10 +253,61 @@
   </div>
 </div>
 
-<!-- Seed progress toast -->
-<div id="seedToast" style="position:fixed;bottom:20px;right:20px;z-index:9000;display:none;min-width:240px;">
-  <div class="p-3 rounded shadow" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);font-size:.85rem;">
-    <div id="seedMsg">Seeding templates…</div>
+<!-- Seed Preview Modal -->
+<div class="modal fade" id="seedModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+      <div class="modal-header" style="border-bottom:1px solid var(--eve-card-border);">
+        <h5 class="modal-title fw-bold"><i class="bi bi-cloud-download me-2" style="color:var(--eve-accent)"></i>Seed from GitHub — DalShooth/EVE_PI_Templates</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="seedModalBody" style="min-height:180px;">
+        <div class="text-center text-muted py-5" id="seedPreviewLoading">
+          <span class="spinner-border spinner-border-sm me-2"></span>Fetching file list from GitHub…
+        </div>
+        <div id="seedPreviewContent" style="display:none;">
+          <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+            <span id="seedPreviewSummary" class="text-muted small"></span>
+            <div class="d-flex gap-2 align-items-center">
+              <label class="form-check-label small text-muted" for="seedOnlyNew">Only new</label>
+              <input class="form-check-input" type="checkbox" id="seedOnlyNew" checked onchange="filterSeedTable()">
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0" style="font-size:.82rem;" id="seedPreviewTable">
+              <thead>
+                <tr style="color:var(--eve-text-muted);border-bottom:1px solid var(--eve-card-border);">
+                  <th style="width:38%">Template Name</th>
+                  <th style="width:14%">Author</th>
+                  <th>Source URL</th>
+                  <th style="width:90px;text-align:center">Status</th>
+                </tr>
+              </thead>
+              <tbody id="seedPreviewRows"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="seedProgress" style="display:none;">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="spinner-border spinner-border-sm" style="color:var(--eve-accent)"></span>
+            <span id="seedProgressMsg" class="small">Seeding…</span>
+          </div>
+          <div class="progress" style="height:6px;background:var(--eve-bg-1);">
+            <div id="seedProgressBar" class="progress-bar" style="background:var(--eve-accent);width:0%;transition:width .3s;"></div>
+          </div>
+        </div>
+        <div id="seedDone" style="display:none;" class="text-center py-3">
+          <i class="bi bi-check-circle-fill fs-3 mb-2 d-block" style="color:#2dc653"></i>
+          <div id="seedDoneMsg" class="fw-semibold"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--eve-card-border);" id="seedModalFooter">
+        <button class="btn btn-sm eve-btn-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm eve-btn-primary" id="seedConfirmBtn" onclick="runSeed()" disabled>
+          <i class="bi bi-cloud-download me-1"></i>Seed All New
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -383,30 +434,95 @@ async function submitUpload() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Admin: seed from GitHub
+// Admin: seed from GitHub — preview modal
 // ──────────────────────────────────────────────────────────────────────────────
+let _seedTemplates = [];
+
 async function seedCommunity() {
-  const toast = document.getElementById('seedToast');
-  const msg = document.getElementById('seedMsg');
-  const btn = document.getElementById('seedBtn');
-  btn.disabled = true;
-  toast.style.display = '';
-  msg.textContent = 'Fetching templates from GitHub…';
+  const modal = new bootstrap.Modal(document.getElementById('seedModal'));
+  // Reset state
+  document.getElementById('seedPreviewLoading').style.display = '';
+  document.getElementById('seedPreviewContent').style.display = 'none';
+  document.getElementById('seedProgress').style.display = 'none';
+  document.getElementById('seedDone').style.display = 'none';
+  document.getElementById('seedModalFooter').style.display = '';
+  document.getElementById('seedConfirmBtn').disabled = true;
+  document.getElementById('seedPreviewRows').innerHTML = '';
+  modal.show();
+
+  try {
+    const resp = await fetch('/templates/admin/seed-preview');
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Error');
+    _seedTemplates = data.templates || [];
+    document.getElementById('seedPreviewLoading').style.display = 'none';
+    document.getElementById('seedPreviewContent').style.display = '';
+    document.getElementById('seedPreviewSummary').textContent =
+      `${data.templates.length} templates found — ${data.new_count} new, ${data.templates.length - data.new_count} already seeded`;
+    document.getElementById('seedConfirmBtn').disabled = data.new_count === 0;
+    if (data.new_count === 0) {
+      document.getElementById('seedConfirmBtn').textContent = 'All up to date';
+    }
+    renderSeedTable();
+  } catch(e) {
+    document.getElementById('seedPreviewLoading').innerHTML =
+      `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>${e.message}</span>`;
+  }
+}
+
+function renderSeedTable() {
+  const tbody = document.getElementById('seedPreviewRows');
+  tbody.innerHTML = _seedTemplates.map((t, i) => `
+    <tr id="seed-row-${i}" style="${t.already_seeded ? 'opacity:.45' : ''}">
+      <td class="fw-medium">${_esc(t.name)}</td>
+      <td style="color:var(--eve-accent)">${_esc(t.author)}</td>
+      <td style="word-break:break-all;">
+        <a href="${_esc(t.html_url)}" target="_blank" rel="noopener"
+           style="color:var(--eve-text-muted);font-size:.75rem;">
+          ${_esc(t.url)}
+        </a>
+      </td>
+      <td id="seed-status-${i}" style="text-align:center">
+        ${t.already_seeded
+          ? '<span style="color:#586e75;font-size:.75rem;">seeded</span>'
+          : '<span style="color:var(--eve-accent);font-size:.75rem;">new</span>'}
+      </td>
+    </tr>`).join('');
+}
+
+function filterSeedTable() {
+  const onlyNew = document.getElementById('seedOnlyNew').checked;
+  _seedTemplates.forEach((t, i) => {
+    const row = document.getElementById(`seed-row-${i}`);
+    if (row) row.style.display = onlyNew && t.already_seeded ? 'none' : '';
+  });
+}
+
+function _esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function runSeed() {
+  document.getElementById('seedPreviewContent').style.display = 'none';
+  document.getElementById('seedConfirmBtn').disabled = true;
+  document.getElementById('seedProgress').style.display = '';
+  document.getElementById('seedProgressMsg').textContent = 'Seeding templates from GitHub…';
+  document.getElementById('seedProgressBar').style.width = '30%';
+
   try {
     const resp = await fetch('/templates/admin/seed', { method: 'POST' });
     const data = await resp.json();
-    if (resp.ok) {
-      msg.textContent = `Done! Inserted: ${data.inserted}, skipped: ${data.skipped}${data.errors ? ', errors: ' + data.errors : ''}.`;
-      setTimeout(() => { toast.style.display = 'none'; window.location.reload(); }, 3000);
-    } else {
-      msg.textContent = 'Error: ' + (data.detail || 'unknown');
-      setTimeout(() => { toast.style.display = 'none'; }, 4000);
-    }
+    document.getElementById('seedProgressBar').style.width = '100%';
+    document.getElementById('seedProgress').style.display = 'none';
+    document.getElementById('seedDone').style.display = '';
+    document.getElementById('seedModalFooter').style.display = 'none';
+    document.getElementById('seedDoneMsg').textContent =
+      `Inserted: ${data.inserted}  ·  Skipped: ${data.skipped}${data.errors ? '  ·  Errors: ' + data.errors : ''}`;
+    setTimeout(() => { bootstrap.Modal.getInstance(document.getElementById('seedModal')).hide(); window.location.reload(); }, 2500);
   } catch(e) {
-    msg.textContent = 'Network error.';
-    setTimeout(() => { toast.style.display = 'none'; }, 4000);
+    document.getElementById('seedProgress').innerHTML =
+      `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Network error.</span>`;
   }
-  btn.disabled = false;
 }
 </script>
 {% endblock %}

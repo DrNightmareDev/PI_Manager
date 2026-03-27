@@ -257,6 +257,59 @@ def delete_template(
     return JSONResponse({"ok": True})
 
 
+@router.get("/admin/seed-preview")
+def seed_preview(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Return the GitHub file list without inserting — used by the seed modal."""
+    if not account.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    import urllib.request
+
+    GITHUB_API = "https://api.github.com/repos/DalShooth/EVE_PI_Templates/contents/PlanetaryInteractionTemplates"
+
+    try:
+        req = urllib.request.Request(GITHUB_API, headers={"User-Agent": "EVE-PI-Manager/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            file_list: list[dict] = json.loads(resp.read().decode())
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}")
+
+    # Pre-fetch all already-seeded source_urls in one query
+    seeded_urls: set[str] = {
+        row.source_url
+        for row in db.query(PlanetTemplate.source_url)
+        .filter(PlanetTemplate.is_community == True, PlanetTemplate.source_url != None)
+        .all()
+    }
+
+    items = []
+    for entry in file_list:
+        if not entry.get("name", "").endswith(".json"):
+            continue
+        download_url: str = entry.get("download_url", "")
+        html_url: str = entry.get("html_url", "")
+        raw_name = entry["name"].removesuffix(".json")
+
+        # Author = GitHub owner extracted from html_url
+        # html_url: https://github.com/{owner}/{repo}/blob/...
+        parts = html_url.lstrip("https://github.com/").split("/")
+        author = parts[0] if parts else "DalShooth"
+
+        items.append({
+            "name": raw_name,
+            "url": download_url,
+            "html_url": html_url,
+            "author": author,
+            "already_seeded": download_url in seeded_urls,
+        })
+
+    new_count = sum(1 for i in items if not i["already_seeded"])
+    return JSONResponse({"templates": items, "new_count": new_count})
+
+
 @router.post("/admin/seed")
 async def seed_community_templates(
     request: Request,
