@@ -175,14 +175,41 @@ function buildProjection(pins, W, H, pad, extraTransform) {
   const baseOffX  = pad + (usableW - dX * baseScale) / 2;
   const baseOffY  = pad + (usableH - dY * baseScale) / 2;
 
-  return function(La, Lo) {
+  const fn = function(La, Lo) {
     const [px, py] = project(La, Lo);
     return [
       (baseOffX + (px - minX) * baseScale) * extraTransform.scale + extraTransform.x,
       (baseOffY + (py - minY) * baseScale) * extraTransform.scale + extraTransform.y,
     ];
   };
+  fn.baseScale = baseScale;
+  return fn;
 }
+
+// ── Planet radius (metres, approximate per-type average) ──────────────────────
+const PI_PLANET_RADIUS_M = {
+  barren:     5_500_000,
+  gas:       57_000_000,
+  ice:       12_000_000,
+  lava:       6_500_000,
+  oceanic:   13_000_000,
+  plasma:     7_500_000,
+  storm:     35_000_000,
+  temperate: 14_000_000,
+};
+
+// ── Structure footprint radius (metres, from EVE SDE radius attribute) ─────────
+const PI_STRUCT_RADIUS_M = {
+  command_center:   600,
+  launchpad:        500,
+  storage:          450,
+  ecu:              400,
+  extractor_head:   110,
+  adv_industrial:   280,
+  basic_industrial: 280,
+  high_tech:        280,
+  unknown:          250,
+};
 
 // ── Planet-type background gradient ───────────────────────────────────────────
 const PI_PLANET_BG = {
@@ -255,6 +282,7 @@ function renderPITemplate(canvas, layoutData, opts) {
   if (!toXY) return;
 
   const baseR = (opts.pinScale || 1) * _BASE_PIN_R;
+  const scaleMode = !!(opts.scaleMode && opts.planetRadiusM);
 
   // Background
   if (opts.showBg) {
@@ -280,7 +308,15 @@ function renderPITemplate(canvas, layoutData, opts) {
   // ── Pins ──────────────────────────────────────────────────────────────────
   for (const pin of pins) {
     const [x, y] = toXY(pin.La, pin.Lo);
-    drawPIPin(ctx, x, y, baseR * transform.scale, pin.T);
+    let r;
+    if (scaleMode) {
+      const fam = _getFamily(pin.T);
+      const structM = PI_STRUCT_RADIUS_M[fam] || PI_STRUCT_RADIUS_M.unknown;
+      r = Math.max(2, (structM / opts.planetRadiusM) * toXY.baseScale * transform.scale);
+    } else {
+      r = baseR * transform.scale;
+    }
+    drawPIPin(ctx, x, y, r, pin.T);
   }
 
   // ── Labels (zoomed detail view) ───────────────────────────────────────────
@@ -290,7 +326,15 @@ function renderPITemplate(canvas, layoutData, opts) {
     for (const pin of pins) {
       const [x, y] = toXY(pin.La, pin.Lo);
       const cfg = _getFamilyConfig(pin.T);
-      const r = baseR * transform.scale * 1.45;
+      let _lr;
+      if (scaleMode) {
+        const fam = _getFamily(pin.T);
+        const structM = PI_STRUCT_RADIUS_M[fam] || PI_STRUCT_RADIUS_M.unknown;
+        _lr = Math.max(2, (structM / opts.planetRadiusM) * toXY.baseScale * transform.scale);
+      } else {
+        _lr = baseR * transform.scale;
+      }
+      const r = _lr * 1.45;
       const fontSize = Math.max(8, Math.min(11, r * 0.55));
       ctx.font = `${fontSize}px sans-serif`;
       ctx.fillStyle = cfg.ring + 'dd';

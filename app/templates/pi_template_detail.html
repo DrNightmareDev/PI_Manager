@@ -85,6 +85,31 @@
     border: 1.5px solid rgba(0,180,216,.5);
 }
 .skill-level-pip.filled { background: var(--eve-accent); border-color: var(--eve-accent); }
+.pt-btn {
+    padding: 2px 8px;
+    font-size: .7rem;
+    border-radius: 4px;
+    border: 1px solid var(--eve-card-border);
+    background: var(--eve-bg-2);
+    color: var(--eve-text-muted);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.pt-btn:hover { border-color: var(--eve-accent); color: var(--eve-accent); }
+.pt-btn.active { background: rgba(0,180,216,.15); border-color: var(--eve-accent); color: var(--eve-accent); font-weight: 600; }
+.scale-btn {
+    padding: 2px 8px;
+    font-size: .7rem;
+    border-radius: 4px;
+    border: 1px solid var(--eve-card-border);
+    background: var(--eve-bg-2);
+    color: var(--eve-text-muted);
+    cursor: pointer;
+    transition: all .15s;
+}
+.scale-btn:hover { border-color: #9b5de5; color: #9b5de5; }
+.scale-btn.active { background: rgba(155,93,229,.15); border-color: #9b5de5; color: #9b5de5; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -128,6 +153,17 @@
         <div style="position:absolute;bottom:8px;right:10px;font-size:.65rem;color:var(--eve-text-muted);pointer-events:none;">
           Scroll to zoom · Drag to pan
         </div>
+      </div>
+      <!-- Planet type selector + scale toggle -->
+      <div class="d-flex align-items-center gap-1 flex-wrap mt-2" style="font-size:.7rem;">
+        <span style="color:var(--eve-text-muted);margin-right:2px;">Planet:</span>
+        {% for pt in ['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'] %}
+        <button class="pt-btn" data-pt="{{ pt.lower() }}" onclick="setPlanetType('{{ pt.lower() }}')">{{ pt }}</button>
+        {% endfor %}
+        <span style="color:var(--eve-card-border);margin:0 4px;">|</span>
+        <button class="scale-btn" id="scaleToggle" onclick="toggleScaleMode()">
+          <i class="bi bi-rulers me-1"></i>Scale
+        </button>
       </div>
     </div>
 
@@ -262,9 +298,11 @@ const canvas = document.getElementById('piCanvas');
 let transform = { x: 0, y: 0, scale: 1 };
 let dragging = false, dragStart = null;
 
-const PLANET_TYPE_STR = {{ (meta.planet_type or '') | tojson }}.toLowerCase();
+let currentPlanetType = ({{ (meta.planet_type or '') | tojson }}.toLowerCase()) || 'barren';
+let scaleMode = false;
 
 function renderFull() {
+  const planetRadiusM = PI_PLANET_RADIUS_M[currentPlanetType] || PI_PLANET_RADIUS_M.barren;
   renderPITemplate(canvas, layoutData, {
     pad: 40,
     pinScale: 2,
@@ -272,9 +310,23 @@ function renderFull() {
     linkAlpha: 0.65,
     showLabels: true,
     showBg: true,
-    planetType: PLANET_TYPE_STR,
+    planetType: currentPlanetType,
+    scaleMode,
+    planetRadiusM,
     transform,
   });
+}
+
+function setPlanetType(pt) {
+  currentPlanetType = pt;
+  document.querySelectorAll('.pt-btn').forEach(b => b.classList.toggle('active', b.dataset.pt === pt));
+  renderFull();
+}
+
+function toggleScaleMode() {
+  scaleMode = !scaleMode;
+  document.getElementById('scaleToggle').classList.toggle('active', scaleMode);
+  renderFull();
 }
 
 canvas.addEventListener('wheel', e => {
@@ -341,6 +393,9 @@ document.querySelectorAll('[data-planet-type]').forEach(el => {
   const [fg, bg] = PLANET_COLORS[pt] || ['#888', '#222'];
   el.style.color = fg; el.style.background = bg + '88'; el.style.borderColor = fg + '66';
 });
+
+// Mark the active planet type button
+document.querySelectorAll('.pt-btn').forEach(b => b.classList.toggle('active', b.dataset.pt === currentPlanetType));
 
 renderFull();
 
