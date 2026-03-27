@@ -120,11 +120,13 @@ function drawPIPin(ctx, x, y, baseR, typeId, _unused) {
 }
 
 // ── Link extraction (from L array: {S: src_idx, D: dst_idx}) ──────────────────
+// IMPORTANT: S and D are 1-based pin indices — subtract 1 to get array index.
 function extractLinks(layoutData) {
   const links = new Set();
   for (const lnk of (layoutData.L || [])) {
     if (lnk.S !== undefined && lnk.D !== undefined) {
-      links.add(Math.min(lnk.S, lnk.D) + '_' + Math.max(lnk.S, lnk.D));
+      const s = lnk.S - 1, d = lnk.D - 1;
+      links.add(Math.min(s, d) + '_' + Math.max(s, d));
     }
   }
   return links;
