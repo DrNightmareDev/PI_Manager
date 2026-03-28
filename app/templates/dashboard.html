@@ -27,6 +27,25 @@
 .eve-tier-filter-p4 { background: rgba(230,57,70,.12); border-color: rgba(230,57,70,.45); color: #ff6f7b; }
 .eve-tier-filter-p4.active { background: rgba(230,57,70,.24); border-color: rgba(230,57,70,.95); color: #ffc1c7; }
 
+/* Colonies table loading overlay */
+#coloniesTableWrap { position: relative; }
+#coloniesLoadingOverlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: rgba(8,10,14,0.72);
+    backdrop-filter: blur(2px);
+    border-radius: 0 0 8px 8px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+}
+#coloniesLoadingOverlay.active { display: flex; }
+#coloniesLoadingOverlay .spinner-border { width: 2rem; height: 2rem; border-width: 3px; color: var(--eve-accent); }
+#coloniesLoadingOverlay .overlay-label { font-size: .8rem; color: var(--eve-text-muted); }
+
 /* PI Check modal */
 .picheck-p0-table { width:100%; border-collapse:collapse; font-size:.82rem; }
 .picheck-p0-table th { color:var(--eve-text-muted); font-weight:500; padding:4px 6px; border-bottom:1px solid #1a2d3d; text-align:left; }
@@ -221,7 +240,7 @@
                     {% if colonies %}
                     <button class="btn btn-sm eve-btn-outline" onclick="openPiCheck()"
                             title="P4 Produktion vs. P0 Abbau analysieren">
-                        <i class="bi bi-clipboard-data me-1"></i>Check
+                        <i class="bi bi-clipboard-data me-1"></i>Check P4
                     </button>
                     {% endif %}
                     <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
@@ -310,6 +329,11 @@
             <div class="card-body p-0">
                 {% if colonies %}
                 <div id="coloniesTablePaginationTop"></div>
+                <div id="coloniesTableWrap">
+                <div id="coloniesLoadingOverlay">
+                    <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+                    <div class="overlay-label">Daten werden aktualisiert…</div>
+                </div>
                 <div class="table-responsive">
                     <table class="table eve-table mb-0" id="coloniesTable">
                         <thead>
@@ -526,6 +550,7 @@
                         </tbody>
                     </table>
                 </div>
+                </div><!-- /coloniesTableWrap -->
                 <div id="coloniesTablePagination"></div>
                 {% else %}
                 <div class="text-center py-5">
@@ -595,7 +620,7 @@
                         <div class="card-body text-center p-4">
                             <i class="bi bi-diagram-3 fs-2 eve-accent d-block mb-3"></i>
                             <h6 class="fw-semibold">PI Chain Planner</h6>
-                            <p class="text-muted small mb-2">Vollständige Produktionsketten P0?P4 planen</p>
+                            <p class="text-muted small mb-2">Vollständige Produktionsketten P0-P4 planen</p>
                             <span class="badge" style="background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;">Verfügbar</span>
                         </div>
                     </div>
@@ -894,6 +919,11 @@ function openColonyDetail(idx) {
 // -- Refresh Button ------------------------------------------------------------
 let cooldownTimer = null;
 
+function showColoniesOverlay() {
+    const el = document.getElementById('coloniesLoadingOverlay');
+    if (el) el.classList.add('active');
+}
+
 async function forceRefresh() {
     const btn = document.getElementById('refreshBtn');
     const icon = document.getElementById('refreshIcon');
@@ -903,6 +933,7 @@ async function forceRefresh() {
         const res = await fetch('/dashboard/refresh', {method: 'POST'});
         const data = await res.json();
         if (data.ok) {
+            showColoniesOverlay();
             location.reload();
         } else {
             startCooldownUI(data.wait || 60);
@@ -1046,6 +1077,7 @@ function setPriceMode(mode) {
 
 // -- Hintergrund-Refresh Polling -----------------------------------------------
 {% if refreshing %}
+showColoniesOverlay();
 (function pollBgRefresh() {
     let polls = 0;
     const MAX_POLLS = 20; // max 60s (3s * 20)
