@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import logging
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.config import get_settings
 from app.database import engine, SessionLocal
@@ -20,41 +20,40 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+# Celery Beat handles scheduled jobs (market refresh, SSO cleanup, colony refresh).
+# APScheduler is kept as a fallback only when CELERY_BROKER_URL is not set,
+# so the app still works without RabbitMQ in dev/single-process setups.
+_USE_CELERY = bool(os.getenv("CELERY_BROKER_URL"))
 
 
-def cleanup_old_sso_states():
-    """Löscht abgelaufene SSO States (älter als 1 Stunde)."""
-    try:
-        with SessionLocal() as db:
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-            deleted = db.query(SSOState).filter(SSOState.created_at < cutoff).delete()
-            db.commit()
-            if deleted:
-                logger.info(f"Bereinigt: {deleted} abgelaufene SSO-States")
-    except Exception as e:
-        logger.warning(f"SSO-State-Bereinigung fehlgeschlagen: {e}")
-
-
-def refresh_market_prices():
-    """Stündlicher Marktpreis-Refresh via Janice API."""
+def _fallback_refresh_market_prices():
+    """Fallback market refresh — only used when Celery is not configured."""
     from app.market import refresh_all_pi_prices
     from app.routers.dashboard import refresh_dashboard_price_cache
     from app.routers.skyhook import refresh_skyhook_value_cache
     db = SessionLocal()
     try:
-        logger.info("Starte stündlichen Marktpreis-Refresh...")
+        logger.info("Starte Marktpreis-Refresh (APScheduler fallback)...")
         refresh_all_pi_prices(db)
         refresh_dashboard_price_cache(db)
         refresh_skyhook_value_cache(db)
-        logger.info("Marktpreis- und Wert-Cache-Refresh abgeschlossen.")
     except Exception as e:
         logger.warning(f"Marktpreis-Refresh fehlgeschlagen: {e}")
     finally:
         db.close()
 
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(refresh_market_prices, 'interval', minutes=15)
+def _fallback_cleanup_sso():
+    """Fallback SSO cleanup — only used when Celery is not configured."""
+    try:
+        with SessionLocal() as db:
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+            deleted = db.query(SSOState).filter(SSOState.created_at < cutoff).delete()
+            db.commit()
+            if deleted:
+                logger.info("Bereinigt: %d abgelaufene SSO-States", deleted)
+    except Exception as e:
+        logger.warning(f"SSO-State-Bereinigung fehlgeschlagen: {e}")
 
 
 @asynccontextmanager
@@ -72,12 +71,26 @@ async def lifespan(app: FastAPI):
     inserted_static_planets = bootstrap_static_planets()
     if inserted_static_planets:
         logger.info("SDE: %s statische Planeten in DB gebootstrapped.", inserted_static_planets)
-    cleanup_old_sso_states()
-    scheduler.start()
-    logger.info("APScheduler gestartet (15-min Marktpreis-Refresh).")
+
+    _fallback_cleanup_sso()
+
+    if not _USE_CELERY:
+        # Dev mode: run scheduled jobs in-process via APScheduler
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(_fallback_refresh_market_prices, "interval", minutes=15)
+        scheduler.add_job(_fallback_cleanup_sso, "interval", hours=1)
+        scheduler.start()
+        logger.info("APScheduler gestartet (dev-Fallback, kein Celery konfiguriert).")
+    else:
+        scheduler = None
+        logger.info("Celery erkannt — APScheduler deaktiviert. Jobs laufen via Celery Beat.")
+
     yield
+
     # Shutdown
-    scheduler.shutdown(wait=False)
+    if scheduler:
+        scheduler.shutdown(wait=False)
     logger.info("EVE PI Manager beendet.")
 
 

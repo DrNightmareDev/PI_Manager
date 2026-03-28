@@ -15,20 +15,73 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-evepi}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-evepi_rabbit}
+    ports:
+      - "15672:15672"   # management UI — restrict to localhost in production
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
   app:
     build: .
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     env_file: .env
     environment:
       DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
     volumes:
       - ./app/static:/app/app/static:ro
       - sde_data:/app/data
     expose:
       - "8000"
+
+  celery_worker:
+    build: .
+    restart: unless-stopped
+    entrypoint: ["/app/docker/celery_entrypoint.sh"]
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+    volumes:
+      - sde_data:/app/data
+
+  celery_beat:
+    build: .
+    restart: unless-stopped
+    entrypoint: ["/app/docker/celery_entrypoint.sh"]
+    command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
+      CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
+    volumes:
+      - sde_data:/app/data
 
   nginx:
     image: nginx:alpine
@@ -43,4 +96,5 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:
   sde_data:

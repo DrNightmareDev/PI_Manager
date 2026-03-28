@@ -53,6 +53,8 @@ class Character(Base):
     colony_sync_issue = Column(Boolean, nullable=False, default=False, server_default="false")
     colony_sync_issue_note = Column(String(255), nullable=True)
     last_colony_sync_at = Column(DateTime(timezone=True), nullable=True)
+    last_esi_refresh_at = Column(DateTime(timezone=True), nullable=True)
+    esi_consecutive_errors = Column(Integer, nullable=False, default=0, server_default="0")
 
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
@@ -207,6 +209,21 @@ class StaticPlanet(Base):
     radius = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PlanetEsiCache(Base):
+    """Per-planet ESI response cache with ETag support to avoid redundant fetches."""
+    __tablename__ = "planet_esi_cache"
+    __table_args__ = (
+        UniqueConstraint("eve_character_id", "planet_id", name="uq_planet_esi_cache"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    eve_character_id = Column(BigInteger, nullable=False, index=True)
+    planet_id = Column(Integer, nullable=False, index=True)
+    etag = Column(String(255), nullable=True)
+    response_json = Column(Text, nullable=False, server_default="{}")
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class PlanetTemplate(Base):
