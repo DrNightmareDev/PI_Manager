@@ -108,6 +108,54 @@ def _parse_template_meta(layout_json: str) -> dict:
     }
 
 
+# ── Community seed sources ────────────────────────────────────────────────────
+_SEED_SOURCES = [
+    {
+        "api_url": "https://api.github.com/repos/DalShooth/EVE_PI_Templates/contents/PlanetaryInteractionTemplates",
+        "author": "DalShooth",
+    },
+    {
+        "api_url": "https://api.github.com/repos/TheLegi0n-NBI/PlayingWithPP/contents",
+        "author": "TheLegi0n-NBI",
+    },
+]
+
+
+def _list_github_json_files(api_url: str, author: str) -> list[dict]:
+    """Recursively list all .json files under a GitHub Contents API URL."""
+    import urllib.request
+    req = urllib.request.Request(api_url, headers={"User-Agent": "EVE-PI-Manager/1.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        entries: list[dict] = json.loads(resp.read().decode())
+    results = []
+    for entry in entries:
+        if entry.get("type") == "file" and entry.get("name", "").endswith(".json"):
+            results.append({
+                "name": entry["name"].removesuffix(".json"),
+                "download_url": entry.get("download_url", ""),
+                "html_url": entry.get("html_url", ""),
+                "author": author,
+            })
+        elif entry.get("type") == "dir":
+            subdir_url = entry.get("url", "")
+            if subdir_url:
+                try:
+                    results.extend(_list_github_json_files(subdir_url, author))
+                except Exception as exc:
+                    logger.warning("seed: failed to recurse into %s: %s", subdir_url, exc)
+    return results
+
+
+def _source_label(source_url: str | None) -> str:
+    if not source_url:
+        return ""
+    if "TheLegi0n-NBI" in source_url:
+        return "TheLegi0n-NBI"
+    if "DalShooth" in source_url:
+        return "DalShooth"
+    return ""
+
+
 def _guess_planet_type(name: str, layout_json: str) -> str | None:
     """Guess planet type from name or embedded comment."""
     for t in ("Barren", "Gas", "Oceanic", "Temperate", "Ice", "Storm", "Plasma", "Lava"):
@@ -149,6 +197,7 @@ def list_templates(
             "pin_count": meta.get("pin_count", 0),
             "building_counts": meta.get("building_counts", {}),
             "layout_json": tmpl.layout_json,
+            "source_label": _source_label(tmpl.source_url),
         }
 
     return templates.TemplateResponse("pi_templates.html", {
@@ -266,17 +315,6 @@ def seed_preview(
     if not account.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    import urllib.request
-
-    GITHUB_API = "https://api.github.com/repos/DalShooth/EVE_PI_Templates/contents/PlanetaryInteractionTemplates"
-
-    try:
-        req = urllib.request.Request(GITHUB_API, headers={"User-Agent": "EVE-PI-Manager/1.0"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            file_list: list[dict] = json.loads(resp.read().decode())
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}")
-
     # Pre-fetch all already-seeded source_urls in one query
     seeded_urls: set[str] = {
         row.source_url
@@ -285,29 +323,30 @@ def seed_preview(
         .all()
     }
 
-    items = []
-    for entry in file_list:
-        if not entry.get("name", "").endswith(".json"):
-            continue
-        download_url: str = entry.get("download_url", "")
-        html_url: str = entry.get("html_url", "")
-        raw_name = entry["name"].removesuffix(".json")
+    all_files: list[dict] = []
+    errors: list[str] = []
+    for src in _SEED_SOURCES:
+        try:
+            all_files.extend(_list_github_json_files(src["api_url"], src["author"]))
+        except Exception as exc:
+            errors.append(f"{src['author']}: {exc}")
 
-        # Author = GitHub owner extracted from html_url
-        # html_url: https://github.com/{owner}/{repo}/blob/...
-        parts = html_url.lstrip("https://github.com/").split("/")
-        author = parts[0] if parts else "DalShooth"
+    if not all_files and errors:
+        raise HTTPException(status_code=502, detail="; ".join(errors))
 
-        items.append({
-            "name": raw_name,
-            "url": download_url,
-            "html_url": html_url,
-            "author": author,
-            "already_seeded": download_url in seeded_urls,
-        })
+    items = [
+        {
+            "name": f["name"],
+            "url": f["download_url"],
+            "html_url": f["html_url"],
+            "author": f["author"],
+            "already_seeded": f["download_url"] in seeded_urls,
+        }
+        for f in all_files
+    ]
 
     new_count = sum(1 for i in items if not i["already_seeded"])
-    return JSONResponse({"templates": items, "new_count": new_count})
+    return JSONResponse({"templates": items, "new_count": new_count, "errors": errors})
 
 
 @router.post("/admin/seed")
@@ -316,33 +355,27 @@ async def seed_community_templates(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Fetch all templates from DalShooth/EVE_PI_Templates on GitHub and seed them as community templates."""
+    """Fetch all templates from all seed sources on GitHub and seed them as community templates."""
     if not account.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
     import urllib.request
 
-    GITHUB_API = "https://api.github.com/repos/DalShooth/EVE_PI_Templates/contents/PlanetaryInteractionTemplates"
-    BRANCH = "main"
-
-    try:
-        req = urllib.request.Request(GITHUB_API, headers={"User-Agent": "EVE-PI-Manager/1.0"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            file_list: list[dict] = json.loads(resp.read().decode())
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}")
+    all_files: list[dict] = []
+    for src in _SEED_SOURCES:
+        try:
+            all_files.extend(_list_github_json_files(src["api_url"], src["author"]))
+        except Exception as exc:
+            logger.warning("seed: failed to list %s: %s", src["api_url"], exc)
 
     inserted = 0
     skipped = 0
     errors = 0
 
-    for entry in file_list:
-        if not entry.get("name", "").endswith(".json"):
-            continue
-        download_url: str = entry.get("download_url", "")
-        raw_name = entry["name"].removesuffix(".json")
+    for f in all_files:
+        download_url = f["download_url"]
+        raw_name = f["name"]
 
-        # Skip if already seeded
         existing = db.query(PlanetTemplate).filter_by(
             is_community=True, source_url=download_url
         ).first()
@@ -351,9 +384,9 @@ async def seed_community_templates(
             continue
 
         try:
-            req2 = urllib.request.Request(download_url, headers={"User-Agent": "EVE-PI-Manager/1.0"})
-            with urllib.request.urlopen(req2, timeout=15) as resp2:
-                raw_json = resp2.read().decode("utf-8")
+            req = urllib.request.Request(download_url, headers={"User-Agent": "EVE-PI-Manager/1.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw_json = resp.read().decode("utf-8")
             parsed = json.loads(raw_json)
         except Exception as exc:
             logger.warning("seed: failed to fetch %s: %s", download_url, exc)
