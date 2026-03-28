@@ -122,20 +122,32 @@ _SEED_SOURCES = [
 
 
 def _list_github_json_files(api_url: str, author: str) -> list[dict]:
-    """Recursively list all .json files under a GitHub Contents API URL."""
+    """Recursively list all PI template files under a GitHub Contents API URL.
+
+    Accepts .json, .txt, and extensionless files (repos like TheLegi0n-NBI/PlayingWithPP
+    use mixed conventions). Skips files named 'readme' (case-insensitive).
+    """
     import urllib.request
     req = urllib.request.Request(api_url, headers={"User-Agent": "EVE-PI-Manager/1.0"})
     with urllib.request.urlopen(req, timeout=15) as resp:
         entries: list[dict] = json.loads(resp.read().decode())
     results = []
     for entry in entries:
-        if entry.get("type") == "file" and entry.get("name", "").endswith(".json"):
-            results.append({
-                "name": entry["name"].removesuffix(".json"),
-                "download_url": entry.get("download_url", ""),
-                "html_url": entry.get("html_url", ""),
-                "author": author,
-            })
+        name: str = entry.get("name", "")
+        if entry.get("type") == "file":
+            # Skip readme/license files
+            base = name.lower().removesuffix(".json").removesuffix(".txt")
+            if base in ("readme", "license", ""):
+                continue
+            # Accept .json, .txt, or no extension
+            if name.endswith(".json") or name.endswith(".txt") or "." not in name:
+                display_name = name.removesuffix(".json").removesuffix(".txt")
+                results.append({
+                    "name": display_name,
+                    "download_url": entry.get("download_url", ""),
+                    "html_url": entry.get("html_url", ""),
+                    "author": author,
+                })
         elif entry.get("type") == "dir":
             subdir_url = entry.get("url", "")
             if subdir_url:
@@ -391,6 +403,11 @@ async def seed_community_templates(
         except Exception as exc:
             logger.warning("seed: failed to fetch %s: %s", download_url, exc)
             errors += 1
+            continue
+
+        if "P" not in parsed:
+            logger.debug("seed: skipping %s — not a PI template (no 'P' array)", download_url)
+            skipped += 1
             continue
 
         planet_type = _guess_planet_type(raw_name, raw_json)
