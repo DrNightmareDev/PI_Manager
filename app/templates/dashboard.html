@@ -252,6 +252,7 @@
                             {% if cooldown_remaining > 0 %}{{ cooldown_remaining }}s{% endif %}
                         </span>
                     </button>
+                    <span id="autoRefreshCountdown" class="small text-muted ms-1" style="font-size:.75rem;" title="Next automatic background refresh"></span>
                 </div>
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -966,6 +967,26 @@ function startCooldownUI(seconds) {
 const serverCooldown = {{ cooldown_remaining }};
 if (serverCooldown > 0) startCooldownUI(serverCooldown);
 enableMarketAutoReload(MARKET_LAST_UPDATED_ISO);
+
+// Auto-refresh countdown (Celery refreshes stale accounts every 30 min)
+(function startAutoRefreshCountdown() {
+    const AUTO_REFRESH_INTERVAL = 30 * 60; // seconds, must match STALE_AFTER_MINUTES in tasks.py
+    const cacheAgeSec = {{ cache_age_sec | default(0) }};
+    const el = document.getElementById('autoRefreshCountdown');
+    if (!el) return;
+    let remaining = Math.max(0, AUTO_REFRESH_INTERVAL - cacheAgeSec);
+    function fmt(s) {
+        if (s <= 0) return 'refreshing…';
+        const m = Math.floor(s / 60), sec = s % 60;
+        return m > 0 ? `auto in ${m}m ${sec}s` : `auto in ${sec}s`;
+    }
+    el.textContent = fmt(remaining);
+    const t = setInterval(() => {
+        remaining = Math.max(0, remaining - 1);
+        el.textContent = fmt(remaining);
+        if (remaining <= 0) clearInterval(t);
+    }, 1000);
+})();
 
 // -- ISK-Verlauf Chart ---------------------------------------------------------
 {% if isk_history | length > 1 %}

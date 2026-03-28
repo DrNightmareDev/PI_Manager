@@ -18,6 +18,20 @@ from app.templates_env import templates
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ── Sentry error tracking (optional) ──────────────────────────────────────────
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+if _SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+    logger.info("Sentry initialized.")
+
 settings = get_settings()
 
 # Celery Beat handles scheduled jobs (market refresh, SSO cleanup, colony refresh).
@@ -156,9 +170,33 @@ def index(request: Request):
 
 @app.get("/health")
 def health_check():
+    status = {}
+
+    # Database
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "ok", "database": "connected"}
+        status["database"] = "ok"
     except Exception as e:
-        return {"status": "error", "database": str(e)}
+        status["database"] = f"error: {e}"
+
+    # RabbitMQ / Celery broker (optional)
+    broker_url = os.getenv("CELERY_BROKER_URL", "")
+    if broker_url:
+        try:
+            import amqp
+            parts = broker_url.replace("amqp://", "").split("@")
+            creds, hostpart = parts[0], parts[1].split("/")[0]
+            user, pwd = creds.split(":", 1)
+            host, port = (hostpart.split(":") + ["5672"])[:2]
+            conn = amqp.Connection(host=f"{host}:{port}", userid=user, password=pwd)
+            conn.connect()
+            conn.close()
+            status["rabbitmq"] = "ok"
+        except Exception as e:
+            status["rabbitmq"] = f"error: {e}"
+    else:
+        status["rabbitmq"] = "not_configured"
+
+    overall = "ok" if all(v in ("ok", "not_configured") for v in status.values()) else "degraded"
+    return {"status": overall, **status}

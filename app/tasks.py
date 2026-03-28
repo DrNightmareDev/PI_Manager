@@ -48,7 +48,7 @@ def _refresh_character_data(char, db) -> dict | None:
     """
     from app.esi import (
         ensure_valid_token, get_character_planets,
-        get_planet_detail, get_planet_info,
+        get_planet_detail_cached, get_planet_info,
     )
     from app.routers.dashboard import (
         _compute_colony_productions, _get_colony_expiry,
@@ -75,7 +75,7 @@ def _refresh_character_data(char, db) -> dict | None:
         detail = {}
         if tok and planet_id:
             try:
-                detail = get_planet_detail(char_eve_id, planet_id, tok)
+                detail = get_planet_detail_cached(char_eve_id, planet_id, tok, db)
             except Exception as e:
                 logger.warning("tasks: planet %s fetch failed: %s", planet_id, e)
         return info, detail
