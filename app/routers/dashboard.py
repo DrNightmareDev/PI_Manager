@@ -49,6 +49,7 @@ _dashboard_cache: dict[int, dict] = {}    # account_id -> {fetched_at, payload}
 _refresh_cooldown: dict[int, float] = {}  # account_id -> timestamp of last force refresh
 _bg_refresh_running: dict[int, bool] = {} # account_id -> True wenn Hintergrund-Refresh läuft
 _bg_refresh_done: dict[int, bool] = {}    # account_id -> True wenn gerade fertig geworden
+_bg_refresh_kicked_at: dict[int, float] = {}  # account_id -> timestamp when Celery task was dispatched
 
 
 _corp_load_running: dict[int, dict] = {}  # corp_id -> lock/status
@@ -303,6 +304,26 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
                 _bg_refresh_done[account_id] = True
 
     _threading.Thread(target=_worker, daemon=True).start()
+
+
+def _kick_bg_refresh(account, characters: list) -> None:
+    """Dispatch a background refresh via Celery (preferred) or in-process thread."""
+    import os
+    if os.getenv("CELERY_BROKER_URL"):
+        try:
+            from app.tasks import refresh_account_task
+            refresh_account_task.delay(account.id)
+            _bg_refresh_running[account.id] = True
+            _bg_refresh_done[account.id] = False
+            _bg_refresh_kicked_at[account.id] = _time.time()
+            logger.info("dashboard: dispatched Celery refresh for account %d", account.id)
+            return
+        except Exception as exc:
+            logger.warning("dashboard: Celery dispatch failed, falling back to thread: %s", exc)
+    char_ids = [c.id for c in characters]
+    price_mode = getattr(account, "price_mode", "sell")
+    _start_bg_refresh(account.id, char_ids, price_mode)
+
 
 DASHBOARD_CACHE_TTL = 600.0   # 10 Minuten (entspricht ESI-Cache von CCP)
 REFRESH_COOLDOWN_SEC = 60.0   # 60 Sekunden
@@ -1066,59 +1087,44 @@ def dashboard(
             )
             for colony in colonies
         )
-        if needs_balance_refresh:
-            payload = _build_dashboard_payload(account, characters, db, price_mode=current_price_mode)
-            _save_colony_cache(account.id, payload, db)
-            _dashboard_cache[account.id] = {**payload, "price_mode": current_price_mode}
+        if needs_balance_refresh and not refreshing:
+            # Trigger background refresh to populate missing fields — don't block the page
+            _kick_bg_refresh(account, characters)
+            refreshing = True
 
-            colonies = payload["colonies"]
-            total_isk_day = payload["total_isk_day"]
-            next_expiry_dt = payload["next_expiry"]
-            next_expiry_hours = payload["next_expiry_hours"]
-            next_expiry_char = payload["next_expiry_char"]
-            char_count = payload["char_count"]
-            colony_count = payload["colony_count"]
-            cache_age_sec = 0
-        else:
-            # Ablaufzeiten relativ zur jetzigen Zeit neu berechnen
-            next_expiry_dt, next_expiry_char = _recompute_expiry(colonies)
-
-            # ISK/Tag aus DB-Preiscache (MarketCache) neu berechnen — sehr schnell
-            colonies, total_isk_day = _apply_price_mode(colonies, meta, current_price_mode)
-            char_count = meta.get("char_count", len(characters))
-            colony_count = len(colonies)
-            next_expiry_hours = _hours_until(next_expiry_dt)
-            if next_expiry_hours is None:
-                next_expiry_hours = meta.get("next_expiry_hours")
-
-            # In-Memory-Cache synchron halten (für Skyhook)
-            _dashboard_cache[account.id] = {
-                "colonies": colonies,
-                "total_isk_day": total_isk_day,
-                "next_expiry": next_expiry_dt,
-                "next_expiry_hours": next_expiry_hours,
-                "next_expiry_char": next_expiry_char,
-                "char_count": char_count,
-                "colony_count": colony_count,
-                "fetched_at": db_cached["fetched_at"],
-                "price_mode": current_price_mode,
-            }
-
-            cache_age_sec = int(cache_age)
+        # Show cached data immediately (fast path — no ESI calls)
+        next_expiry_dt, next_expiry_char = _recompute_expiry(colonies)
+        colonies, total_isk_day = _apply_price_mode(colonies, meta, current_price_mode)
+        char_count = meta.get("char_count", len(characters))
+        colony_count = len(colonies)
+        next_expiry_hours = _hours_until(next_expiry_dt)
+        if next_expiry_hours is None:
+            next_expiry_hours = meta.get("next_expiry_hours")
+        _dashboard_cache[account.id] = {
+            "colonies": colonies,
+            "total_isk_day": total_isk_day,
+            "next_expiry": next_expiry_dt,
+            "next_expiry_hours": next_expiry_hours,
+            "next_expiry_char": next_expiry_char,
+            "char_count": char_count,
+            "colony_count": colony_count,
+            "fetched_at": db_cached["fetched_at"],
+            "price_mode": current_price_mode,
+        }
+        cache_age_sec = int(cache_age)
 
     else:
-        # Erster Start: synchron laden und sofort in DB speichern
-        payload = _build_dashboard_payload(account, characters, db, price_mode=current_price_mode)
-        _save_colony_cache(account.id, payload, db)
-        _dashboard_cache[account.id] = {**payload, "price_mode": current_price_mode}
-
-        colonies = payload["colonies"]
-        total_isk_day = payload["total_isk_day"]
-        next_expiry_dt = payload["next_expiry"]
-        next_expiry_hours = payload["next_expiry_hours"]
-        next_expiry_char = payload["next_expiry_char"]
-        char_count = payload["char_count"]
-        colony_count = payload["colony_count"]
+        # No cache yet — show loading state immediately and kick off background refresh
+        if not refreshing:
+            _kick_bg_refresh(account, characters)
+            refreshing = True
+        colonies = []
+        total_isk_day = 0.0
+        next_expiry_dt = None
+        next_expiry_hours = None
+        next_expiry_char = None
+        char_count = len(characters)
+        colony_count = 0
         cache_age_sec = 0
 
     # ── ISK-Historie (immer frisch aus DB) ───────────────────────────────────
@@ -1377,10 +1383,37 @@ def set_price_mode(
 
 
 @router.get("/refresh-status")
-def refresh_status(account=Depends(require_account)):
-    """Liefert ob ein Hintergrund-ESI-Refresh läuft oder gerade fertig wurde."""
+def refresh_status(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    """Liefert ob ein Hintergrund-ESI-Refresh läuft oder gerade fertig wurde.
+
+    Works for both in-process threads and Celery workers: detects completion by
+    checking whether a fresh DB cache row appeared since the request was issued.
+    """
+    import os as _os
     done = _bg_refresh_done.pop(account.id, False)
     running = (account.id in _bg_refresh_running) and not done
+
+    # When Celery is active the web process has no direct signal from the worker.
+    # Detect completion by checking whether the DB cache was updated after we kicked the task.
+    if not done and _os.getenv("CELERY_BROKER_URL") and account.id in _bg_refresh_running:
+        kicked_at = _bg_refresh_kicked_at.get(account.id, 0.0)
+        from app.models import DashboardCache as _DC
+        row = db.query(_DC).filter_by(account_id=account.id).first()
+        if row and row.fetched_at:
+            fetched = row.fetched_at
+            if fetched.tzinfo is None:
+                from datetime import timezone as _tz
+                fetched = fetched.replace(tzinfo=_tz.utc)
+            if fetched.timestamp() > kicked_at:
+                # DB cache updated after we kicked — Celery worker finished
+                _bg_refresh_running.pop(account.id, None)
+                _bg_refresh_kicked_at.pop(account.id, None)
+                done = True
+                running = False
+
     return JSONResponse({"running": running, "done": done})
 
 def _corp_access_flags(account: Account, main_char: Character | None, db: Session) -> dict:
