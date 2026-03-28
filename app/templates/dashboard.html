@@ -243,9 +243,10 @@
                         <i class="bi bi-clipboard-data me-1"></i>Check P4
                     </button>
                     {% endif %}
+                    {% if not refreshing %}
                     <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
                             onclick="forceRefresh()"
-                            title="Daten aktualisieren (max. 1Ã— pro Minute)"
+                            title="Daten aktualisieren (max. 1× pro Minute)"
                             {% if cooldown_remaining > 0 %}disabled{% endif %}>
                         <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
                         <span id="refreshCooldownLabel">
@@ -253,6 +254,7 @@
                         </span>
                     </button>
                     <span id="autoRefreshCountdown" class="small text-muted ms-1" style="font-size:.75rem;" title="Next automatic background refresh"></span>
+                    {% endif %}
                 </div>
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
