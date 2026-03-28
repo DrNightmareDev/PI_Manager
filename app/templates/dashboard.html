@@ -243,18 +243,14 @@
                         <i class="bi bi-clipboard-data me-1"></i>Check P4
                     </button>
                     {% endif %}
-                    {% if not refreshing %}
+                    {% if not refreshing and cooldown_remaining == 0 %}
                     <button class="btn btn-sm eve-btn-outline" id="refreshBtn"
                             onclick="forceRefresh()"
-                            title="Daten aktualisieren (max. 1× pro Minute)"
-                            {% if cooldown_remaining > 0 %}disabled{% endif %}>
+                            title="Daten aktualisieren (max. 1× pro Minute)">
                         <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
-                        <span id="refreshCooldownLabel">
-                            {% if cooldown_remaining > 0 %}{{ cooldown_remaining }}s{% endif %}
-                        </span>
                     </button>
-                    <span id="autoRefreshCountdown" class="small text-muted ms-1" style="font-size:.75rem;" title="Next automatic background refresh"></span>
                     {% endif %}
+                    <span id="autoRefreshCountdown" class="small text-muted" style="font-size:.75rem;" title="Next automatic background refresh"></span>
                 </div>
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -929,9 +925,7 @@ function showColoniesOverlay() {
 
 async function forceRefresh() {
     const btn = document.getElementById('refreshBtn');
-    const icon = document.getElementById('refreshIcon');
-    btn.disabled = true;
-    icon.classList.add('spin');
+    if (btn) btn.style.display = 'none';
     try {
         const res = await fetch('/dashboard/refresh', {method: 'POST'});
         const data = await res.json();
@@ -942,25 +936,21 @@ async function forceRefresh() {
             startCooldownUI(data.wait || 60);
         }
     } catch(e) {
-        btn.disabled = false;
-        icon.classList.remove('spin');
+        if (btn) btn.style.display = '';
     }
 }
 
 function startCooldownUI(seconds) {
     const btn = document.getElementById('refreshBtn');
-    const lbl = document.getElementById('refreshCooldownLabel');
-    const icon = document.getElementById('refreshIcon');
-    icon.classList.remove('spin');
+    if (btn) btn.style.display = 'none';
+    const lbl = document.getElementById('autoRefreshCountdown');
     let remaining = seconds;
-    lbl.textContent = remaining + 's';
     clearInterval(cooldownTimer);
     cooldownTimer = setInterval(() => {
         remaining--;
-        lbl.textContent = remaining > 0 ? remaining + 's' : '';
         if (remaining <= 0) {
             clearInterval(cooldownTimer);
-            btn.disabled = false;
+            if (btn) btn.style.display = '';
         }
     }, 1000);
 }
