@@ -296,6 +296,69 @@ def invalidate_planet_detail_cache(character_id: int) -> None:
 _schematic_cache = {}  # schematic_id -> data
 
 
+def get_planet_detail_cached(character_id: int, planet_id: int, access_token: str, db) -> dict:
+    """
+    Like get_planet_detail but uses the planet_esi_cache table for ETag-based
+    conditional requests. Returns cached data on 304 Not Modified without
+    re-processing. Writes new ETag + response on 200.
+    """
+    from app.models import PlanetEsiCache
+    import json as _json
+    from datetime import datetime, timezone
+
+    cache_row = (
+        db.query(PlanetEsiCache)
+        .filter_by(eve_character_id=character_id, planet_id=planet_id)
+        .first()
+    )
+
+    req_headers = {**HEADERS, "Authorization": f"Bearer {access_token}"}
+    if cache_row and cache_row.etag:
+        req_headers["If-None-Match"] = cache_row.etag
+
+    try:
+        response = requests.get(
+            f"{ESI_BASE}/characters/{character_id}/planets/{planet_id}/",
+            headers=req_headers,
+            params={"datasource": "tranquility"},
+            timeout=15,
+        )
+
+        if response.status_code == 304 and cache_row:
+            # Not Modified — return stored data
+            return _json.loads(cache_row.response_json or "{}")
+
+        response.raise_for_status()
+        data = response.json()
+        new_etag = response.headers.get("ETag", "").strip('"')
+
+        # Upsert cache row
+        if cache_row:
+            cache_row.etag = new_etag or cache_row.etag
+            cache_row.response_json = _json.dumps(data)
+            cache_row.fetched_at = datetime.now(timezone.utc)
+        else:
+            db.add(PlanetEsiCache(
+                eve_character_id=character_id,
+                planet_id=planet_id,
+                etag=new_etag or None,
+                response_json=_json.dumps(data),
+                fetched_at=datetime.now(timezone.utc),
+            ))
+        db.commit()
+
+        # Also populate in-memory cache
+        _planet_detail_cache[(character_id, planet_id)] = (data, _time.time())
+        return data
+
+    except Exception as exc:
+        # On error fall back to cached data if available
+        if cache_row and cache_row.response_json:
+            import json as _j
+            return _j.loads(cache_row.response_json)
+        return {}
+
+
 def get_planet_detail(character_id: int, planet_id: int, access_token: str) -> dict:
     """Holt Planet-Details (Pins, Links, Routen) mit Cache."""
     cache_key = (character_id, planet_id)

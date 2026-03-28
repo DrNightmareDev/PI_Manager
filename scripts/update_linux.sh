@@ -165,16 +165,30 @@ cd "${APP_DIR}"
 sudo -u "${APP_USER}" "${APP_DIR}/venv/bin/alembic" upgrade head
 log_ok "Migrations completed"
 
-log_info "Restarting service ${SERVICE_NAME}..."
+log_info "Restarting services..."
+# Restart all three services (web + worker + beat); ignore if worker/beat don't exist yet
 systemctl restart "${SERVICE_NAME}"
-sleep 2
-STATUS="$(systemctl is-active "${SERVICE_NAME}" 2>/dev/null || echo "failed")"
+systemctl restart "${SERVICE_NAME}-worker" 2>/dev/null || log_warn "Worker service not found — skipping (run setup_linux.sh to install it)"
+systemctl restart "${SERVICE_NAME}-beat"   2>/dev/null || log_warn "Beat service not found — skipping (run setup_linux.sh to install it)"
+sleep 3
+
+APP_STATUS="$(systemctl is-active "${SERVICE_NAME}"        2>/dev/null || echo "failed")"
+WRK_STATUS="$(systemctl is-active "${SERVICE_NAME}-worker" 2>/dev/null || echo "n/a")"
+BET_STATUS="$(systemctl is-active "${SERVICE_NAME}-beat"   2>/dev/null || echo "n/a")"
+
+_svc() { [ "$2" = "active" ] && echo -e "  $1 ${GREEN}active${NC}" || echo -e "  $1 ${RED}$2${NC}"; }
 
 echo ""
 echo -e "${BLUE}==================================================${NC}"
 echo -e "${BLUE}              Update completed                    ${NC}"
 echo -e "${BLUE}==================================================${NC}"
 echo ""
-echo -e "Service: $([ "${STATUS}" = "active" ] && echo -e "${GREEN}active${NC}" || echo -e "${RED}${STATUS}${NC}")"
-echo -e "${CYAN}Log check:${NC} journalctl -u ${SERVICE_NAME} -f"
+_svc "Web (gunicorn):  " "$APP_STATUS"
+_svc "Celery Worker:   " "$WRK_STATUS"
+_svc "Celery Beat:     " "$BET_STATUS"
+echo ""
+echo -e "${CYAN}Logs:${NC}"
+echo -e "  Web:    journalctl -u ${SERVICE_NAME} -f"
+echo -e "  Worker: journalctl -u ${SERVICE_NAME}-worker -f"
+echo -e "  Beat:   journalctl -u ${SERVICE_NAME}-beat -f"
 echo ""
