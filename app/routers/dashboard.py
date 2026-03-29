@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-DASHBOARD_PAGE_SIZES: tuple[int, ...] = (25, 50, 100)
+DASHBOARD_PAGE_SIZES: tuple[int, ...] = (6, 25, 100, 0)
 DASHBOARD_PAGE_WINDOW_RADIUS = 2
 
 PI_SKILL_NAMES = (
@@ -1141,7 +1141,10 @@ def dashboard(
     ]
     filtered_colonies = _sort_dashboard_colonies(filtered_colonies, view_state)
     filtered_colony_count = len(filtered_colonies)
-    page_size = view_state["page_size"]
+    requested_page_size = view_state["page_size"]
+    page_size = filtered_colony_count if requested_page_size == 0 else requested_page_size
+    if page_size <= 0:
+        page_size = max(1, filtered_colony_count)
     total_pages = max(1, ceil(filtered_colony_count / page_size)) if filtered_colony_count else 1
     current_page = min(view_state["page"], total_pages)
     page_start = (current_page - 1) * page_size
@@ -1171,7 +1174,8 @@ def dashboard(
             {
                 "value": size,
                 "url": _build_dashboard_page_url(pagination_base_path, view_state, page=1, page_size=size),
-                "is_current": size == page_size,
+                "is_current": size == requested_page_size,
+                "label": "Alle" if size == 0 else str(size),
             }
             for size in DASHBOARD_PAGE_SIZES
         ],
@@ -1909,7 +1913,7 @@ def _get_dashboard_view_state(request: Request) -> dict:
 
     return {
         "page": _parse_dashboard_int(params.get("page"), 1, minimum=1),
-        "page_size": _parse_dashboard_int(params.get("page_size"), 50, allowed=set(DASHBOARD_PAGE_SIZES)),
+        "page_size": _parse_dashboard_int(params.get("page_size"), 25, allowed=set(DASHBOARD_PAGE_SIZES)),
         "char": (params.get("char") or "").strip(),
         "tiers": tiers,
         "balanced": params.get("balanced") == "1",
@@ -2034,7 +2038,7 @@ def _build_dashboard_page_url(base_path: str, view_state: dict, **overrides) -> 
     query: dict[str, str] = {}
     if merged.get("page", 1) != 1:
         query["page"] = str(merged["page"])
-    if merged.get("page_size", 50) != 50:
+    if merged.get("page_size", 25) != 25:
         query["page_size"] = str(merged["page_size"])
     if merged.get("char"):
         query["char"] = str(merged["char"])
@@ -2135,7 +2139,7 @@ def export_colonies_csv(
         return values
 
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = csv.writer(output, delimiter=";")
     writer.writerow([
         "Character name",
         "Character ID",
