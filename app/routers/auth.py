@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timezone, timedelta
 
@@ -15,6 +16,7 @@ from app.models import Account, Character, SSOState, AccessPolicy
 from app.session import create_session, clear_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 def _check_access_policy(db: Session, corporation_id, alliance_id) -> bool:
@@ -106,7 +108,8 @@ def callback(
     try:
         token_data = exchange_code_for_tokens(code)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Token-Austausch fehlgeschlagen: {e}")
+        logger.warning("auth callback: token exchange failed for state=%s: %s", state, e)
+        raise HTTPException(status_code=502, detail="Token-Austausch fehlgeschlagen. Bitte erneut versuchen.")
 
     access_token = token_data["access_token"]
     refresh_token = token_data.get("refresh_token", "")
@@ -117,7 +120,8 @@ def callback(
     try:
         verified = verify_token(access_token)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Token-Verifizierung fehlgeschlagen: {e}")
+        logger.warning("auth callback: token verification failed: %s", e)
+        raise HTTPException(status_code=502, detail="Token-Verifizierung fehlgeschlagen. Bitte erneut versuchen.")
 
     eve_character_id = verified.get("CharacterID")
     character_name = verified.get("CharacterName", "Unbekannt")

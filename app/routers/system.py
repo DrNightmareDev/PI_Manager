@@ -22,7 +22,8 @@ from app.templates_env import templates
 
 router = APIRouter(prefix="/system", tags=["system"])
 
-_system_planet_cache: dict[int, list[dict]] = {}
+_system_planet_cache: dict[int, list[dict]] = {}  # insertion-order LRU
+_SYSTEM_PLANET_CACHE_MAX = 500
 
 PLANET_TYPE_MAP = {
     "temperate": "Temperate",
@@ -288,6 +289,8 @@ def _load_system_planets(system_id: int) -> list[dict]:
                 "region_name": region_name,
                 "constellation_name": local_info.get("constellation_name") if local_info else None,
             })
+    if len(_system_planet_cache) >= _SYSTEM_PLANET_CACHE_MAX:
+        _system_planet_cache.pop(next(iter(_system_planet_cache)))
     _system_planet_cache[system_id] = planets
     return planets
 
