@@ -638,6 +638,72 @@ function itemSignature(item) {
     return [item.name || '', item.quantity || 1].join('|').toLowerCase();
 }
 
+function normalizedWords(name) {
+    return String(name || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+}
+
+function itemTypeKey(item) {
+    const removablePrefixes = new Set([
+        'compact', 'enduring', 'restrained', 'scoped', 'proto', 'prototype', 'arbalest',
+        'sisters', 'republic', 'federation', 'imperial', 'dread', 'guristas', 'shadow',
+        'domination', 'true', 'dark', 'coreli', 'corelum', 'centii', 'centum', 'gistii',
+        'gistum', 'corpii', 'corpum', 'ameliorated', 'advanced', 'improved'
+    ]);
+    const removableSuffixes = new Set(['i', 'ii', 'iii', 'iv', 'v']);
+    const words = normalizedWords(item?.name);
+    const filtered = words.filter((word, index) => {
+        if (index === 0 && removablePrefixes.has(word)) {
+            return false;
+        }
+        return !removableSuffixes.has(word);
+    });
+    return filtered.join(' ') || words.join(' ') || String(item?.name || '').toLowerCase();
+}
+
+function compareItemsByTypeAndName(a, b) {
+    const typeCompare = itemTypeKey(a).localeCompare(itemTypeKey(b), undefined, { sensitivity: 'base' });
+    if (typeCompare !== 0) {
+        return typeCompare;
+    }
+    const nameCompare = String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' });
+    if (nameCompare !== 0) {
+        return nameCompare;
+    }
+    return Number(a?.quantity || 1) - Number(b?.quantity || 1);
+}
+
+function buildComparisonPairs(leftItems, rightItems) {
+    const leftPool = [...leftItems].sort(compareItemsByTypeAndName);
+    const rightPool = [...rightItems].sort(compareItemsByTypeAndName);
+    const pairs = [];
+
+    while (leftPool.length || rightPool.length) {
+        if (!leftPool.length) {
+            pairs.push({ left: null, right: rightPool.shift() });
+            continue;
+        }
+        if (!rightPool.length) {
+            pairs.push({ left: leftPool.shift(), right: null });
+            continue;
+        }
+
+        const leftItem = leftPool.shift();
+        const targetType = itemTypeKey(leftItem);
+        let matchIndex = rightPool.findIndex(candidate => itemTypeKey(candidate) === targetType);
+        if (matchIndex < 0) {
+            matchIndex = rightPool.findIndex(candidate => itemSignature(candidate) === itemSignature(leftItem));
+        }
+        const rightItem = matchIndex >= 0 ? rightPool.splice(matchIndex, 1)[0] : rightPool.shift();
+        pairs.push({ left: leftItem, right: rightItem || null });
+    }
+
+    return pairs;
+}
+
 function renderItemCell(item, otherItem) {
     if (!item) {
         return '<div class="fit-slot-cell is-missing"><div class="small">Kein Eintrag</div></div>';
@@ -683,12 +749,11 @@ function renderComparisonGrid() {
     compare.innerHTML = activeGroups.map(group => {
         const leftItems = leftGroups[group] || [];
         const rightItems = rightGroups[group] || [];
-        const rowCount = Math.max(leftItems.length, rightItems.length);
+        const pairs = buildComparisonPairs(leftItems, rightItems);
+        const rowCount = pairs.length;
         const label = state.dataset?.slot_labels?.[group] || group;
 
-        const rows = Array.from({ length: rowCount }, (_, index) => {
-            const leftItem = leftItems[index] || null;
-            const rightItem = rightItems[index] || null;
+        const rows = pairs.map(({ left: leftItem, right: rightItem }) => {
             return `
                 <div class="fit-slot-row">
                     ${renderItemCell(leftItem, rightItem)}
