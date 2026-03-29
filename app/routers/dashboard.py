@@ -1905,20 +1905,37 @@ def save_webhook_settings(
 
 @router.post("/webhook-test")
 def test_webhook(
+    data: dict = Body(default={}),
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    """Send a test message to the configured webhook."""
+    """Send a test message to the webhook URL.
+
+    Accepts an optional ``webhook_url`` in the request body so the URL
+    currently in the form can be tested before saving.
+    Falls back to the saved DB URL when no URL is supplied.
+    """
     import urllib.request
+    import urllib.error
     import json as _json
     from app.models import WebhookAlert
-    row = db.query(WebhookAlert).filter_by(account_id=account.id).first()
-    if not row or not row.webhook_url:
-        raise HTTPException(status_code=400, detail="No webhook URL configured")
-    payload = _json.dumps({"content": "✅ **EVE PI Manager** — Webhook test successful!"}).encode("utf-8")
+
+    # Prefer URL from request body (unsaved form value) over DB
+    webhook_url = (data.get("webhook_url") or "").strip()
+    if not webhook_url:
+        row = db.query(WebhookAlert).filter_by(account_id=account.id).first()
+        webhook_url = (row.webhook_url or "").strip() if row else ""
+
+    if not webhook_url:
+        return JSONResponse({"ok": False, "error": "Keine Webhook-URL angegeben. Bitte URL eingeben und speichern."}, status_code=400)
+
+    if not webhook_url.startswith("https://"):
+        return JSONResponse({"ok": False, "error": "URL muss mit https:// beginnen."}, status_code=400)
+
+    payload = _json.dumps({"content": "✅ **EVE PI Manager** — Webhook test erfolgreich!"}).encode("utf-8")
     try:
         req = urllib.request.Request(
-            row.webhook_url,
+            webhook_url,
             data=payload,
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -1926,9 +1943,17 @@ def test_webhook(
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status in (200, 204):
                 return JSONResponse({"ok": True})
-            return JSONResponse({"ok": False, "status": resp.status})
+            return JSONResponse({"ok": False, "error": f"HTTP {resp.status}"})
+    except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            msg = "403 Forbidden — Webhook-URL ungültig oder gelöscht. Bitte neuen Webhook in Discord erstellen."
+        elif exc.code == 404:
+            msg = "404 Not Found — Webhook-URL existiert nicht. URL prüfen."
+        else:
+            msg = f"HTTP {exc.code}: {exc.reason}"
+        return JSONResponse({"ok": False, "error": msg}, status_code=200)
     except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=200)
 
 
 @router.get("/characters", response_class=HTMLResponse)

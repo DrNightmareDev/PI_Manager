@@ -1407,13 +1407,18 @@ function saveWebhookSettings() {
 
 function testWebhook() {
     const msg = document.getElementById('webhookSaveMsg');
+    const url = (document.getElementById('webhookUrlInput').value || '').trim();
     if (msg) { msg.style.display = ''; msg.style.color = '#7ec8e3'; msg.textContent = 'Sende Test…'; }
-    fetch('/dashboard/webhook-test', {method: 'POST'})
+    fetch('/dashboard/webhook-test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({webhook_url: url}),
+    })
         .then(r => r.json())
         .then(d => {
             if (msg) {
                 msg.style.color = d.ok ? '#2dc653' : '#e74c3c';
-                msg.textContent = d.ok ? '✓ Test erfolgreich gesendet!' : '✗ Fehler: ' + (d.error || d.status || 'Unbekannt');
+                msg.textContent = d.ok ? '✓ Test erfolgreich gesendet!' : '✗ ' + (d.error || 'Unbekannter Fehler');
             }
         })
         .catch(() => { if (msg) { msg.style.color = '#e74c3c'; msg.textContent = '✗ Netzwerkfehler'; } });
