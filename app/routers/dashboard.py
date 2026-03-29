@@ -27,6 +27,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+# Allowed webhook hostnames — prevents SSRF by ensuring the server only calls
+# known external services, not internal IPs or arbitrary hosts.
+_ALLOWED_WEBHOOK_PREFIXES = (
+    "https://discord.com/api/webhooks/",
+    "https://discordapp.com/api/webhooks/",
+    "https://ptb.discord.com/api/webhooks/",
+    "https://canary.discord.com/api/webhooks/",
+)
+
+def _is_safe_webhook_url(url: str) -> bool:
+    return any(url.startswith(p) for p in _ALLOWED_WEBHOOK_PREFIXES)
+
 DASHBOARD_PAGE_SIZES: tuple[int, ...] = (6, 25, 100, 0)
 DASHBOARD_PAGE_WINDOW_RADIUS = 2
 
@@ -2231,8 +2243,8 @@ def save_webhook_settings(
     alert_hours = int(data.get("alert_hours") or 2)
     enabled = bool(data.get("enabled", True))
 
-    if webhook_url and not webhook_url.startswith("https://"):
-        raise HTTPException(status_code=400, detail="Webhook URL must start with https://")
+    if webhook_url and not _is_safe_webhook_url(webhook_url):
+        raise HTTPException(status_code=400, detail="Webhook URL muss mit https://discord.com/, https://discord.gg/ oder https://discordapp.com/ beginnen.")
     if alert_hours < 1 or alert_hours > 72:
         raise HTTPException(status_code=400, detail="alert_hours must be between 1 and 72")
 
@@ -2277,8 +2289,8 @@ def test_webhook(
     if not webhook_url:
         return JSONResponse({"ok": False, "error": "Keine Webhook-URL angegeben. Bitte URL eingeben und speichern."}, status_code=400)
 
-    if not webhook_url.startswith("https://"):
-        return JSONResponse({"ok": False, "error": "URL muss mit https:// beginnen."}, status_code=400)
+    if not _is_safe_webhook_url(webhook_url):
+        return JSONResponse({"ok": False, "error": "URL muss mit https://discord.com/ beginnen."}, status_code=400)
 
     try:
         resp = _requests.post(

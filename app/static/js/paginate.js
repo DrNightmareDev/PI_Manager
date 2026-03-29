@@ -13,15 +13,20 @@
 function EvePaginate(tableId, opts) {
     const o = Object.assign({ pageSize: 6, controlsId: null, onCount: null }, opts || {});
     const sizeStorageKey = `eve_paginate_size_${tableId}`;
+    const pageStorageKey = `eve_paginate_page_${tableId}`;
     let persistedSize = null;
+    let persistedPage = null;
     try {
         persistedSize = parseInt(localStorage.getItem(sizeStorageKey), 10);
         if (Number.isNaN(persistedSize)) persistedSize = null;
+        persistedPage = parseInt(localStorage.getItem(pageStorageKey), 10);
+        if (Number.isNaN(persistedPage) || persistedPage < 1) persistedPage = null;
     } catch (_) {
         persistedSize = null;
+        persistedPage = null;
     }
     let ps   = persistedSize !== null ? persistedSize : o.pageSize;
-    let page = 1;
+    let page = persistedPage !== null ? persistedPage : 1;
     const sizes = o.pageSizes || [6, 15, 25, 100, 0];
     const labels = o.pageSizeLabels || sizes.map(v => v === 0 ? 'Alle' : String(v));
 
@@ -37,6 +42,7 @@ function EvePaginate(tableId, opts) {
         const pgSize  = ps <= 0 ? Math.max(total, 1) : ps;
         const totPg   = Math.max(1, Math.ceil(total / pgSize));
         if (page > totPg) page = 1;
+        try { localStorage.setItem(pageStorageKey, String(page)); } catch (_) {}
         const start   = (page - 1) * pgSize;
         const end     = Math.min(start + pgSize, total);
         const showSet = new Set(fRows.slice(start, end));
@@ -110,6 +116,7 @@ function EvePaginate(tableId, opts) {
         },
         applyFilter(matchedRows) {
             page = 1;
+            try { localStorage.setItem(pageStorageKey, '1'); } catch (_) {}
             if (matchedRows !== undefined) {
                 const s = new Set(matchedRows);
                 allRows().forEach(r => r.dataset.fp = s.has(r) ? '' : 'hide');

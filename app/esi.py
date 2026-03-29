@@ -157,6 +157,7 @@ def get_character_planets(character_id: int, access_token: str) -> list:
             headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
             timeout=15,
         )
+        _update_esi_error_limit(response)
         response.raise_for_status()
         return response.json()
     except Exception:
@@ -297,6 +298,32 @@ _planet_info_cache: dict[int, dict] = {}  # planet_id -> data (permanent)
 _planet_detail_cache = {}  # (char_id, planet_id) -> (data, timestamp)
 PLANET_DETAIL_TTL = 600  # 10 Minuten (entspricht ESI-Cache von CCP)
 
+# ESI error-limit tracking — back off when the shared error budget is low
+_esi_error_limit_remain: int = 100  # start optimistic; updated from response headers
+_ESI_ERROR_LIMIT_BACKOFF_THRESHOLD = 20  # pause if fewer than 20 errors remain
+
+import logging as _esi_log
+_esi_logger = _esi_log.getLogger(__name__)
+
+
+def _update_esi_error_limit(response) -> None:
+    """Update the shared ESI error limit counter from a response object."""
+    global _esi_error_limit_remain
+    try:
+        remain = int(response.headers.get("X-ESI-Error-Limit-Remain", _esi_error_limit_remain))
+        _esi_error_limit_remain = remain
+        if remain < _ESI_ERROR_LIMIT_BACKOFF_THRESHOLD:
+            import time as _t
+            _esi_logger.warning("ESI error limit low (%d remain) — sleeping 10s", remain)
+            _t.sleep(10)
+    except Exception:
+        pass
+
+
+def esi_error_budget_ok() -> bool:
+    """Return False when ESI error budget is critically low and calls should be deferred."""
+    return _esi_error_limit_remain >= _ESI_ERROR_LIMIT_BACKOFF_THRESHOLD
+
 
 def invalidate_planet_detail_cache(character_id: int) -> None:
     """Löscht alle gecachten Planet-Details eines Charakters."""
@@ -336,6 +363,7 @@ def get_planet_detail_cached(
             timeout=15,
         )
 
+        _update_esi_error_limit(response)
         if response.status_code == 304:
             data = _json.loads(cached_json or "{}") if cached_json else {}
             return data, None, False

@@ -48,7 +48,7 @@ def _refresh_character_data(char, db) -> dict | None:
     """
     from app.esi import (
         ensure_valid_token, get_character_planets,
-        get_planet_detail_cached, get_planet_info,
+        get_planet_detail_cached, get_planet_info, esi_error_budget_ok,
     )
     from app.routers.dashboard import (
         _compute_colony_productions, _get_colony_expiry,
@@ -60,6 +60,10 @@ def _refresh_character_data(char, db) -> dict | None:
     token = ensure_valid_token(char, db)
     if not token:
         logger.warning("tasks: no valid token for %s — skipping", char.character_name)
+        return None
+
+    if not esi_error_budget_ok():
+        logger.warning("tasks: ESI error budget low — skipping %s", char.character_name)
         return None
 
     try:
@@ -419,6 +423,16 @@ def send_webhook_alerts_task() -> dict:
 
         for alert in alerts:
             if not alert.webhook_url:
+                continue
+            # SSRF guard — only call known Discord webhook endpoints
+            _safe_prefixes = (
+                "https://discord.com/api/webhooks/",
+                "https://discordapp.com/api/webhooks/",
+                "https://ptb.discord.com/api/webhooks/",
+                "https://canary.discord.com/api/webhooks/",
+            )
+            if not any(alert.webhook_url.startswith(p) for p in _safe_prefixes):
+                logger.warning("tasks: skipping webhook alert — unsafe URL for account %d", alert.account_id)
                 continue
 
             threshold_hours = float(alert.alert_hours or 2)
