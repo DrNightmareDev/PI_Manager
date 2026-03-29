@@ -251,6 +251,19 @@
     font-size: 0.75rem;
 }
 
+.fit-evaluate-btn-needs-action {
+    background: rgba(244, 163, 0, 0.16);
+    border-color: rgba(244, 163, 0, 0.7) !important;
+    color: #ffd166 !important;
+    box-shadow: 0 0 0 1px rgba(244, 163, 0, 0.18), 0 0 16px rgba(244, 163, 0, 0.14);
+}
+
+.fit-evaluate-btn-needs-action:hover {
+    background: rgba(244, 163, 0, 0.22);
+    border-color: rgba(244, 163, 0, 0.95) !important;
+    color: #ffe29a !important;
+}
+
 @media (max-width: 991.98px) {
     .fit-summary-grid {
         grid-template-columns: 1fr;
@@ -346,7 +359,28 @@
 <script>
 const FITTINGS_REQUIRED_SCOPE = {{ required_scope | tojson }};
 const FITTING_GROUP_ORDER = ['high', 'mid', 'low', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
-const IMPORT_GROUP_FALLBACKS = ['low', 'mid', 'high', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'implant', 'booster', 'other'];
+const IMPORT_GROUP_FALLBACKS = ['high', 'mid', 'low', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
+const IMPORT_SECTION_MAP = {
+    'high power': 'high',
+    'high slots': 'high',
+    'medium power': 'mid',
+    'mid slots': 'mid',
+    'medium slots': 'mid',
+    'low power': 'low',
+    'low slots': 'low',
+    'rig slot': 'rig',
+    'rig slots': 'rig',
+    'medium rig slots': 'rig',
+    'subsystems': 'subsystem',
+    'drones': 'drone',
+    'drone bay': 'drone',
+    'cargo': 'cargo',
+    'charges': 'cargo',
+    'modules': 'other',
+    'fighters': 'fighter',
+    'implants': 'implant',
+    'boosters': 'booster'
+};
 
 const state = {
     dataset: null,
@@ -533,28 +567,39 @@ function parseImportedFit(text) {
 
     const sections = [];
     let currentSection = [];
+    let currentGroup = null;
     lines.slice(bodyStart).forEach(rawLine => {
         const line = rawLine.trim();
         if (!line) {
             if (currentSection.length) {
-                sections.push(currentSection);
+                sections.push({ group: currentGroup, lines: currentSection });
                 currentSection = [];
+                currentGroup = null;
             }
             return;
         }
         if (/^\[empty/i.test(line)) {
             return;
         }
+        const sectionGroup = IMPORT_SECTION_MAP[line.toLowerCase()];
+        if (sectionGroup) {
+            if (currentSection.length) {
+                sections.push({ group: currentGroup, lines: currentSection });
+                currentSection = [];
+            }
+            currentGroup = sectionGroup;
+            return;
+        }
         currentSection.push(line);
     });
     if (currentSection.length) {
-        sections.push(currentSection);
+        sections.push({ group: currentGroup, lines: currentSection });
     }
 
     const items = [];
-    sections.forEach((sectionLines, sectionIndex) => {
-        const slotGroup = IMPORT_GROUP_FALLBACKS[sectionIndex] || 'other';
-        sectionLines.forEach((line, lineIndex) => {
+    sections.forEach((section, sectionIndex) => {
+        const slotGroup = section.group || IMPORT_GROUP_FALLBACKS[sectionIndex] || 'other';
+        (section.lines || []).forEach((line, lineIndex) => {
             const qtyMatch = line.match(/^(.*?)(?:\s+x(\d+))$/i);
             const itemName = (qtyMatch ? qtyMatch[1] : line).trim();
             const quantity = qtyMatch ? parseInt(qtyMatch[2], 10) : 1;
@@ -630,6 +675,7 @@ function getSelectedFit(side) {
 function syncFitTextFromSaved(side) {
     const source = state.sources[side];
     if (source.mode !== 'saved') {
+        updateEvaluateButtonState(side);
         return;
     }
     const fit = getSelectedFit(side);
@@ -644,6 +690,19 @@ function updateTextStatus(side, message, isError = false) {
     const status = document.getElementById(side + 'TextStatus');
     status.textContent = message || '';
     status.className = isError ? 'small text-danger' : 'small text-muted';
+    updateEvaluateButtonState(side);
+}
+
+function updateEvaluateButtonState(side) {
+    const button = document.getElementById(side + 'EvaluateFitBtn');
+    const source = state.sources[side];
+    const hasText = Boolean(String(source.text || '').trim());
+    const needsAction = hasText && source.text !== source.appliedText;
+    button.disabled = !hasText;
+    button.classList.toggle('fit-evaluate-btn-needs-action', needsAction);
+    button.classList.toggle('btn-warning', needsAction);
+    button.classList.toggle('eve-btn-outline', !needsAction);
+    button.textContent = needsAction ? 'Auswerten erforderlich' : 'Auswerten';
 }
 
 function applyTextFit(side) {
@@ -656,6 +715,8 @@ function applyTextFit(side) {
         return;
     }
     updateTextStatus(side, 'Fit-Text ausgewertet und in den Vergleich uebernommen.');
+    source.mode = 'text';
+    syncPane(side);
     renderComparisonGrid();
 }
 
@@ -876,6 +937,7 @@ function syncPane(side) {
     if (mode === 'text' && !state.sources[side].appliedText && state.sources[side].text) {
         updateTextStatus(side, 'Text bearbeitet. Mit "Auswerten" in den Vergleich uebernehmen.');
     }
+    updateEvaluateButtonState(side);
     setButtonState(side, mode);
 }
 
@@ -931,6 +993,7 @@ function attachEvents(side) {
         state.sources[side].text = fitText.value;
         applyTextFit(side);
     });
+    updateEvaluateButtonState(side);
 }
 
 function initializeDefaults() {
