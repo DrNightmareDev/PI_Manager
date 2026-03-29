@@ -148,6 +148,17 @@ main {
     background: rgba(230, 57, 70, 0.1);
 }
 
+.eve-dropdown .dropdown-item.active {
+    background: rgba(0, 180, 216, 0.14);
+    color: var(--eve-accent);
+}
+
+/* Nav dropdown toggle stays highlighted when a child is active */
+.navbar-nav .nav-item.dropdown .nav-link.active {
+    color: var(--eve-accent) !important;
+    background: rgba(0, 180, 216, 0.12);
+}
+
 .eve-alt-item {
     cursor: default;
     padding: 0.4rem 0.6rem !important;

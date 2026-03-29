@@ -47,6 +47,8 @@
   "lang.zh-Hans": "简体中文",
   "nav.dashboard": "仪表盘",
   "nav.skyhooks": "Skyhooks",
+  "nav.planer_group": "规划器",
+  "nav.analyse_group": "分析",
   "nav.planner": "PI 生产链规划器",
   "nav.colony_plan": "殖民地分配规划器",
   "nav.system": "星系分析器",

@@ -68,46 +68,63 @@
                         <i class="bi bi-box-seam me-1"></i>{{ t('nav.skyhooks') }}
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/planner') %}active{% endif %}"
-                       href="/planner">
-                        <i class="bi bi-diagram-3 me-1"></i>{{ t('nav.planner') }}
+
+                <!-- Planer Dropdown -->
+                {% set planer_active = request.url.path.startswith('/planner') or request.url.path.startswith('/colony-plan') or request.url.path.startswith('/templates') %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if planer_active %}active{% endif %}"
+                       href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-diagram-3 me-1"></i>{{ t('nav.planer_group') }}
                     </a>
+                    <ul class="dropdown-menu eve-dropdown">
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/planner') %}active{% endif %}" href="/planner">
+                                <i class="bi bi-diagram-3 me-2 text-muted"></i>{{ t('nav.planner') }}
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/colony-plan') %}active{% endif %}" href="/colony-plan">
+                                <i class="bi bi-diagram-2 me-2 text-muted"></i>{{ t('nav.colony_plan') }}
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/templates') %}active{% endif %}" href="/templates">
+                                <i class="bi bi-geo-alt me-2 text-muted"></i>PI Templates
+                            </a>
+                        </li>
+                    </ul>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/colony-plan') %}active{% endif %}"
-                       href="/colony-plan">
-                        <i class="bi bi-diagram-2 me-1"></i>{{ t('nav.colony_plan') }}
+
+                <!-- Analyse Dropdown -->
+                {% set analyse_active = request.url.path.startswith('/system') %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if analyse_active %}active{% endif %}"
+                       href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-globe2 me-1"></i>{{ t('nav.analyse_group') }}
                     </a>
+                    <ul class="dropdown-menu eve-dropdown">
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') and not request.url.path.startswith('/system/mix') %}active{% endif %}" href="/system">
+                                <i class="bi bi-globe2 me-2 text-muted"></i>{{ t('nav.system') }}
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/system/mix') %}active{% endif %}" href="/system/mix">
+                                <i class="bi bi-collection me-2 text-muted"></i>{{ t('nav.system_mix') }}
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/system/compare') %}active{% endif %}" href="/system/compare">
+                                <i class="bi bi-layout-split me-2 text-muted"></i>{{ t('nav.compare') }}
+                            </a>
+                        </li>
+                    </ul>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') and not request.url.path.startswith('/system/mix') %}active{% endif %}"
-                       href="/system">
-                        <i class="bi bi-globe2 me-1"></i>{{ t('nav.system') }}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/system/mix') %}active{% endif %}"
-                       href="/system/mix">
-                        <i class="bi bi-collection me-1"></i>{{ t('nav.system_mix') }}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/system/compare') %}active{% endif %}"
-                       href="/system/compare">
-                        <i class="bi bi-layout-split me-1"></i>{{ t('nav.compare') }}
-                    </a>
-                </li>
+
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/market') %}active{% endif %}"
                        href="/market">
                         <i class="bi bi-graph-up-arrow me-1"></i>{{ t('nav.market') }}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/templates') %}active{% endif %}"
-                       href="/templates">
-                        <i class="bi bi-geo-alt me-1"></i>PI Templates
                     </a>
                 </li>
                 {% if account_can_access_corp_nav(account) %}
