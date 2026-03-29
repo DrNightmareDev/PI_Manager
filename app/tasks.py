@@ -354,7 +354,7 @@ def send_webhook_alerts_task() -> dict:
     Runs every 15 minutes via Celery Beat. Each account is alerted at most once
     per threshold window to avoid notification spam.
     """
-    import urllib.request
+    import requests as _requests
     from app.database import SessionLocal
     from app.models import Account, DashboardCache, WebhookAlert
 
@@ -417,20 +417,17 @@ def send_webhook_alerts_task() -> dict:
                 + ("\n…and more" if len(expiring) > 10 else "")
             )
 
-            payload = json.dumps({"content": message}).encode("utf-8")
             try:
-                req = urllib.request.Request(
+                resp = _requests.post(
                     alert.webhook_url,
-                    data=payload,
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
+                    json={"content": message},
+                    timeout=10,
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    if resp.status in (200, 204):
-                        alert.last_alert_at = now
-                        sent += 1
-                    else:
-                        logger.warning("tasks: webhook alert returned %d for account %d", resp.status, alert.account_id)
+                if resp.status_code in (200, 204):
+                    alert.last_alert_at = now
+                    sent += 1
+                else:
+                    logger.warning("tasks: webhook alert returned %d for account %d", resp.status_code, alert.account_id)
             except Exception as exc:
                 logger.warning("tasks: webhook alert failed for account %d: %s", alert.account_id, exc)
 

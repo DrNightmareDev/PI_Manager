@@ -1915,9 +1915,7 @@ def test_webhook(
     currently in the form can be tested before saving.
     Falls back to the saved DB URL when no URL is supplied.
     """
-    import urllib.request
-    import urllib.error
-    import json as _json
+    import requests as _requests
     from app.models import WebhookAlert
 
     # Prefer URL from request body (unsaved form value) over DB
@@ -1932,25 +1930,20 @@ def test_webhook(
     if not webhook_url.startswith("https://"):
         return JSONResponse({"ok": False, "error": "URL muss mit https:// beginnen."}, status_code=400)
 
-    payload = _json.dumps({"content": "✅ **EVE PI Manager** — Webhook test erfolgreich!"}).encode("utf-8")
     try:
-        req = urllib.request.Request(
+        resp = _requests.post(
             webhook_url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
+            json={"content": "✅ **EVE PI Manager** — Webhook test erfolgreich!"},
+            timeout=10,
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            if resp.status in (200, 204):
-                return JSONResponse({"ok": True})
-            return JSONResponse({"ok": False, "error": f"HTTP {resp.status}"})
-    except urllib.error.HTTPError as exc:
-        if exc.code == 403:
+        if resp.status_code in (200, 204):
+            return JSONResponse({"ok": True})
+        if resp.status_code == 403:
             msg = "403 Forbidden — Webhook-URL ungültig oder gelöscht. Bitte neuen Webhook in Discord erstellen."
-        elif exc.code == 404:
+        elif resp.status_code == 404:
             msg = "404 Not Found — Webhook-URL existiert nicht. URL prüfen."
         else:
-            msg = f"HTTP {exc.code}: {exc.reason}"
+            msg = f"HTTP {resp.status_code}"
         return JSONResponse({"ok": False, "error": msg}, status_code=200)
     except Exception as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=200)
