@@ -24,6 +24,7 @@ APP_USER="evepi"
 APP_PORT="8000"
 SERVICE_NAME="eve-pi-manager"
 RABBITMQ_USER="evepi"
+FITTINGS_SCOPE="esi-fittings.read_fittings.v1"
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════╗${NC}"
@@ -148,7 +149,7 @@ SECRET_KEY=$(openssl rand -base64 48 | tr -d '/+=\n' | head -c 48)
 EVE_CLIENT_ID_VAL="BITTE_AUSFULLEN"
 EVE_CLIENT_SECRET_VAL="BITTE_AUSFULLEN"
 EVE_CALLBACK_URL_VAL="http://$(hostname -I | awk '{print $1}')/auth/callback"
-EVE_SCOPES_VAL="esi-planets.manage_planets.v1 esi-planets.read_customs_offices.v1 esi-location.read_location.v1 esi-search.search_structures.v1 esi-characters.read_corporation_roles.v1 esi-skills.read_skills.v1"
+EVE_SCOPES_VAL="esi-planets.manage_planets.v1 esi-planets.read_customs_offices.v1 esi-location.read_location.v1 esi-search.search_structures.v1 esi-characters.read_corporation_roles.v1 esi-skills.read_skills.v1 ${FITTINGS_SCOPE}"
 
 if [[ -f "${_src_env}" ]]; then
     _id=$(grep  "^EVE_CLIENT_ID="     "${_src_env}" | cut -d= -f2- | tr -d '[:space:]')
@@ -161,6 +162,11 @@ if [[ -f "${_src_env}" ]]; then
     [[ -n "$_cb"  && "$_cb"  != "BITTE_AUSFULLEN" ]] && EVE_CALLBACK_URL_VAL="$_cb"
     [[ -n "$_sk"  && ${#_sk} -ge 32               ]] && SECRET_KEY="$_sk"
     [[ -n "$_sc"                                   ]] && EVE_SCOPES_VAL="$_sc"
+fi
+
+if [[ " ${EVE_SCOPES_VAL} " != *" ${FITTINGS_SCOPE} "* ]]; then
+    EVE_SCOPES_VAL="${EVE_SCOPES_VAL} ${FITTINGS_SCOPE}"
+    log_info "Fittings-Scope zur EVE_SCOPES Konfiguration hinzugefuegt"
 fi
 
 if [[ "$EVE_CLIENT_ID_VAL" != "BITTE_AUSFULLEN" ]]; then

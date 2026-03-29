@@ -44,6 +44,7 @@ APP_USER="evepi"
 SERVICE_NAME="eve-pi-manager"
 MODE="native"
 BRANCH="main"
+FITTINGS_SCOPE="esi-fittings.read_fittings.v1"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -88,6 +89,28 @@ git reset --hard "origin/${BRANCH}"
 log_ok "Repository updated"
 
 if [[ "${MODE}" == "compose" ]]; then
+    env_file="${PROJECT_DIR}/.env"
+    if [[ -f "${env_file}" ]]; then
+        current_scopes=$(grep "^EVE_SCOPES=" "${env_file}" | cut -d= -f2- || true)
+        if [[ -n "${current_scopes}" && " ${current_scopes} " != *" ${FITTINGS_SCOPE} "* ]]; then
+            updated_scopes="${current_scopes} ${FITTINGS_SCOPE}"
+            python3 - "${env_file}" "${updated_scopes}" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+new_value = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+lines = text.splitlines()
+for idx, line in enumerate(lines):
+    if line.startswith("EVE_SCOPES="):
+        lines[idx] = f"EVE_SCOPES={new_value}"
+        break
+path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+PY
+            log_ok "Added fittings scope to ${env_file}"
+        fi
+    fi
+
     if ! command -v docker &>/dev/null; then
         log_error "docker was not found."
         exit 1
@@ -146,6 +169,28 @@ git clean -fd \
     -e venv/ \
     -e .cache/
 log_ok "Git checkout updated"
+
+env_file="${APP_DIR}/.env"
+if [[ -f "${env_file}" ]]; then
+    current_scopes=$(grep "^EVE_SCOPES=" "${env_file}" | cut -d= -f2- || true)
+    if [[ -n "${current_scopes}" && " ${current_scopes} " != *" ${FITTINGS_SCOPE} "* ]]; then
+        updated_scopes="${current_scopes} ${FITTINGS_SCOPE}"
+        python3 - "${env_file}" "${updated_scopes}" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+new_value = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+lines = text.splitlines()
+for idx, line in enumerate(lines):
+    if line.startswith("EVE_SCOPES="):
+        lines[idx] = f"EVE_SCOPES={new_value}"
+        break
+path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+PY
+        log_ok "Added fittings scope to ${env_file}"
+    fi
+fi
 
 log_info "Setting ownership and file permissions..."
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"

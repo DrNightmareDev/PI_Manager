@@ -30,6 +30,7 @@ APP_USER="evepi"
 SERVICE_NAME="eve-pi-manager"
 MODE="native"
 BRANCH="main"
+FITTINGS_SCOPE="esi-fittings.read_fittings.v1"
 
 usage() {
     cat << 'EOF'
@@ -72,6 +73,33 @@ env_add_if_missing() {
     fi
 }
 
+env_ensure_scope() {
+    local file="$1" scope="$2"
+    local current
+    current=$(grep "^EVE_SCOPES=" "${file}" 2>/dev/null | cut -d= -f2- || true)
+    if [[ -z "${current}" ]]; then
+        return
+    fi
+    if [[ " ${current} " == *" ${scope} "* ]]; then
+        return
+    fi
+    local updated="${current} ${scope}"
+    python3 - "${file}" "${updated}" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+new_value = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+lines = text.splitlines()
+for idx, line in enumerate(lines):
+    if line.startswith("EVE_SCOPES="):
+        lines[idx] = f"EVE_SCOPES={new_value}"
+        break
+path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+PY
+    log_ok ".env: added missing scope ${scope}"
+}
+
 # =============================================================================
 # DOCKER COMPOSE MODE
 # =============================================================================
@@ -100,6 +128,7 @@ if [[ "${MODE}" == "compose" ]]; then
     env_add_if_missing "${ENV_FILE}" "SENTRY_DSN"       ""
     env_add_if_missing "${ENV_FILE}" "FLOWER_USER"      "admin"
     env_add_if_missing "${ENV_FILE}" "FLOWER_PASS"      "change_me_flower"
+    env_ensure_scope "${ENV_FILE}" "${FITTINGS_SCOPE}"
 
     log_step "Rebuild and restart containers"
     docker compose build
@@ -183,6 +212,7 @@ fi
 env_add_if_missing "${ENV_FILE}" "CELERY_BROKER_URL" "amqp://evepi:${RABBITMQ_PASS_VAL}@localhost:5672//"
 env_add_if_missing "${ENV_FILE}" "WEB_WORKERS"       "4"
 env_add_if_missing "${ENV_FILE}" "SENTRY_DSN"        ""
+env_ensure_scope "${ENV_FILE}" "${FITTINGS_SCOPE}"
 chmod 600 "${ENV_FILE}"
 
 # ── Step 4: Set up RabbitMQ user ─────────────────────────────────────────────

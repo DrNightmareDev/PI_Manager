@@ -14,11 +14,16 @@ if [[ ! -f ".env" ]]; then
     exit 1
 fi
 
-if [[ ! -d "venv" ]]; then
+VENV_DIR=".venv"
+if [[ -d "venv" && ! -d "${VENV_DIR}" ]]; then
+    VENV_DIR="venv"
+fi
+
+if [[ ! -d "${VENV_DIR}" ]]; then
     echo "Erstelle Virtual Environment..."
-    python3 -m venv venv
-    ./venv/bin/pip install -r requirements.txt
+    python3 -m venv "${VENV_DIR}"
+    "./${VENV_DIR}/bin/pip" install -r requirements.txt
 fi
 
 echo "Starte EVE PI Manager (Entwicklung)..."
-./venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+"./${VENV_DIR}/bin/uvicorn" app.main:app --host 0.0.0.0 --port 8000 --reload

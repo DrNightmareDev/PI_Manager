@@ -9,10 +9,31 @@ $ErrorActionPreference = "Stop"
 function Write-Info($msg) { Write-Host "[INFO]  $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "[OK]    $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "[WARN]  $msg" -ForegroundColor Yellow }
+function Ensure-EnvKey($Path, $Key, $Value) {
+    if (-not (Test-Path $Path)) { return }
+    $content = Get-Content $Path
+    if ($content -notmatch "^$([regex]::Escape($Key))=") {
+        Add-Content -Path $Path -Value "$Key=$Value"
+        Write-Ok ".env: added $Key"
+    }
+}
+function Ensure-EnvScope($Path, $Scope) {
+    if (-not (Test-Path $Path)) { return }
+    $content = Get-Content $Path -Raw
+    $match = [regex]::Match($content, '(?m)^EVE_SCOPES=(.*)$')
+    if (-not $match.Success) { return }
+    $current = $match.Groups[1].Value.Trim()
+    if ((" " + $current + " ").Contains(" $Scope ")) { return }
+    $updated = ($current + " " + $Scope).Trim()
+    $content = [regex]::Replace($content, '(?m)^EVE_SCOPES=.*$', "EVE_SCOPES=$updated")
+    Set-Content -Path $Path -Value $content
+    Write-Ok ".env: added missing scope $Scope"
+}
 
 $projectPath = (Resolve-Path $ProjectRoot).Path
 $venvPath = Join-Path $projectPath $VenvDir
 $python = Get-Command py -ErrorAction SilentlyContinue
+$envPath = Join-Path $projectPath ".env"
 
 if (-not $python) {
     throw "Python Launcher 'py' nicht gefunden. Bitte Python 3.11+ installieren."
@@ -20,10 +41,20 @@ if (-not $python) {
 
 Write-Info "Projektpfad: $projectPath"
 
-if (-not (Test-Path (Join-Path $projectPath ".env"))) {
-    Copy-Item (Join-Path $projectPath ".env.example") (Join-Path $projectPath ".env")
+if (-not (Test-Path $envPath)) {
+    Copy-Item (Join-Path $projectPath ".env.example") $envPath
     Write-Warn ".env wurde aus .env.example erstellt. Bitte EVE_CLIENT_ID, EVE_CLIENT_SECRET und DATABASE_URL ausfuellen."
 }
+
+Ensure-EnvKey $envPath "RABBITMQ_USER" "evepi"
+Ensure-EnvKey $envPath "RABBITMQ_PASS" "change_me_rabbit"
+Ensure-EnvKey $envPath "CELERY_BROKER_URL" "amqp://evepi:change_me_rabbit@rabbitmq:5672//"
+Ensure-EnvKey $envPath "WEB_WORKERS" "2"
+Ensure-EnvKey $envPath "SENTRY_DSN" ""
+Ensure-EnvKey $envPath "FLOWER_USER" "admin"
+Ensure-EnvKey $envPath "FLOWER_PASS" "change_me_flower"
+Ensure-EnvKey $envPath "NGINX_PORT" "80"
+Ensure-EnvScope $envPath "esi-fittings.read_fittings.v1"
 
 if (-not (Test-Path $venvPath)) {
     Write-Info "Erstelle Virtual Environment..."
