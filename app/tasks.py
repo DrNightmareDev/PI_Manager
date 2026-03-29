@@ -370,7 +370,8 @@ def _min_expiry_hours(cache) -> float:
             if c.get("expiry_hours") is not None
         ]
         return min(hours) if hours else 9999.0
-    except Exception:
+    except Exception as exc:
+        logger.warning("_min_expiry_hours: failed to parse value: %s", exc)
         return 9999.0
 
 

@@ -51,6 +51,8 @@ def _load_latest(account_id: int, planet_ids: list[int], db: Session) -> dict:
     if not rows:
         return {}
     entry_id_to_planet = {r.max_id: r.planet_id for r in rows}
+    if not entry_id_to_planet:
+        return {}
     items = db.query(SkyhookItem).filter(SkyhookItem.entry_id.in_(entry_id_to_planet.keys())).all()
 
     result: dict[int, list[dict]] = {}
@@ -72,6 +74,8 @@ def _load_history(account_id: int, planet_ids: list[int], db: Session, limit: in
         .order_by(SkyhookEntry.id.desc())
         .all()
     )
+    if not entries:
+        return {}
     result: dict[int, list[dict]] = {}
     planet_seen: dict[int, int] = {}
     for e in entries:

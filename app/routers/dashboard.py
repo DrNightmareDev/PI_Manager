@@ -2320,9 +2320,7 @@ def characters_page(
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
-    db.refresh(account)
-    characters = db.query(Character).filter(Character.account_id == account.id).all()
-    _backfill_character_colony_sync_status_from_cache(account.id, characters, db)
+    _backfill_character_colony_sync_status_from_cache(account.id, [], db)
     characters = db.query(Character).filter(Character.account_id == account.id).all()
     _attach_pi_skills(characters, db)
     return templates.TemplateResponse("characters.html", {

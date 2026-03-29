@@ -1,6 +1,5 @@
 import json
 import logging
-from functools import lru_cache
 from pathlib import Path
 
 from jinja2 import pass_context
@@ -15,6 +14,7 @@ SUPPORTED_LANGUAGES = ("de", "en", "zh-Hans")
 logger = logging.getLogger(__name__)
 
 TYPE_TRANSLATION_PREFIX = "type"
+_translations_cache: dict[str, dict[str, str]] | None = None
 
 
 def _load_seed_translations() -> dict[str, dict[str, str]]:
@@ -33,10 +33,14 @@ def _translation_table_exists() -> bool:
         return False
 
 
-@lru_cache(maxsize=1)
 def load_translations() -> dict[str, dict[str, str]]:
+    global _translations_cache
+    if _translations_cache is not None:
+        return _translations_cache
+
     seeds = _load_seed_translations()
     if not _translation_table_exists():
+        _translations_cache = seeds
         return seeds
 
     try:
@@ -46,18 +50,26 @@ def load_translations() -> dict[str, dict[str, str]]:
         with SessionLocal() as db:
             rows = db.query(TranslationEntry).all()
         if not rows:
+            _translations_cache = seeds
             return seeds
         for row in rows:
             if row.locale in catalogs:
                 catalogs[row.locale][row.key] = row.text or ""
+        _translations_cache = catalogs
         return catalogs
     except Exception as exc:
         logger.warning("Translation load from DB failed, using seed files: %s", exc)
+        _translations_cache = seeds
         return seeds
 
 
+def _invalidate_translations_cache() -> None:
+    global _translations_cache
+    _translations_cache = None
+
+
 def clear_translation_cache() -> None:
-    load_translations.cache_clear()
+    _invalidate_translations_cache()
 
 
 def normalize_language(value: str | None) -> str:
@@ -166,7 +178,7 @@ def save_translation(locale: str, key: str, value: str) -> None:
         else:
             entry.text = value
         db.commit()
-    clear_translation_cache()
+    _invalidate_translations_cache()
 
 
 def bootstrap_translations() -> int:

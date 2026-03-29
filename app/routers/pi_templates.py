@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+import urllib.error
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,6 +16,7 @@ from app.models import PlanetTemplate
 from app.templates_env import templates
 
 logger = logging.getLogger(__name__)
+_SEED_TOTAL_TIMEOUT_SECONDS = 60
 
 router = APIRouter(prefix="/templates", tags=["pi-templates"])
 
@@ -337,9 +340,17 @@ def seed_preview(
 
     all_files: list[dict] = []
     errors: list[str] = []
+    started_at = time.monotonic()
     for src in _SEED_SOURCES:
+        if time.monotonic() - started_at >= _SEED_TOTAL_TIMEOUT_SECONDS:
+            note = f"Seed preview stopped after {_SEED_TOTAL_TIMEOUT_SECONDS}s total timeout."
+            logger.warning("seed-preview: %s", note)
+            errors.append(note)
+            break
         try:
             all_files.extend(_list_github_json_files(src["api_url"], src["author"]))
+        except (urllib.error.URLError, TimeoutError) as exc:
+            errors.append(f"{src['author']}: timed out or unreachable ({exc})")
         except Exception as exc:
             errors.append(f"{src['author']}: {exc}")
 
@@ -374,9 +385,15 @@ async def seed_community_templates(
     import urllib.request
 
     all_files: list[dict] = []
+    started_at = time.monotonic()
     for src in _SEED_SOURCES:
+        if time.monotonic() - started_at >= _SEED_TOTAL_TIMEOUT_SECONDS:
+            logger.warning("seed: stopping source listing after %ss total timeout", _SEED_TOTAL_TIMEOUT_SECONDS)
+            break
         try:
             all_files.extend(_list_github_json_files(src["api_url"], src["author"]))
+        except (urllib.error.URLError, TimeoutError) as exc:
+            logger.warning("seed: source %s timed out or was unreachable: %s", src["api_url"], exc)
         except Exception as exc:
             logger.warning("seed: failed to list %s: %s", src["api_url"], exc)
 
