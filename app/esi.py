@@ -56,17 +56,32 @@ def exchange_code_for_tokens(code: str) -> dict:
 
 
 def refresh_access_token(refresh_token: str) -> dict:
-    response = requests.post(
-        SSO_TOKEN_URL,
-        data={"grant_type": "refresh_token", "refresh_token": refresh_token},
-        headers={
-            "Authorization": _basic_auth_header(),
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        timeout=15,
-    )
-    response.raise_for_status()
-    return response.json()
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        if attempt:
+            _time.sleep(2 ** attempt)  # 2s, 4s
+        try:
+            response = requests.post(
+                SSO_TOKEN_URL,
+                data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+                headers={
+                    "Authorization": _basic_auth_header(),
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                timeout=15,
+            )
+            # 4xx errors are permanent (bad token / revoked) — don't retry
+            if response.status_code in (400, 401, 403):
+                response.raise_for_status()
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code in (400, 401, 403):
+                raise
+            last_exc = exc
+        except requests.RequestException as exc:
+            last_exc = exc
+    raise last_exc  # type: ignore[misc]
 
 
 def verify_token(access_token: str) -> dict:
@@ -277,8 +292,11 @@ def get_system_info(system_id: int) -> dict:
 
 
 def get_planet_info(planet_id: int) -> dict:
-    if planet_id in _planet_info_cache:
-        return _planet_info_cache[planet_id]
+    entry = _planet_info_cache.get(planet_id)
+    if entry is not None:
+        data, ts = entry
+        if _time.time() - ts < _PLANET_INFO_CACHE_TTL:
+            return data
     try:
         response = requests.get(
             f"{ESI_BASE}/universe/planets/{planet_id}/",
@@ -288,13 +306,14 @@ def get_planet_info(planet_id: int) -> dict:
         )
         response.raise_for_status()
         data = response.json()
-        _planet_info_cache[planet_id] = data
+        _planet_info_cache[planet_id] = (data, _time.time())
         return data
     except Exception:
         return {}
 
 
-_planet_info_cache: dict[int, dict] = {}  # planet_id -> data (permanent)
+_planet_info_cache: dict[int, tuple[dict, float]] = {}  # planet_id -> (data, timestamp)
+_PLANET_INFO_CACHE_TTL = 86400  # 24h — planet type/name never changes in practice
 _planet_detail_cache = {}  # (char_id, planet_id) -> (data, timestamp)
 PLANET_DETAIL_TTL = 600  # 10 Minuten (entspricht ESI-Cache von CCP)
 

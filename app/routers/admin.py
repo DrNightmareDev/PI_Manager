@@ -401,5 +401,5 @@ def admin_reload_account(
         _dashboard_cache[target_account_id] = payload
         return JSONResponse({"ok": True, "colony_count": payload["colony_count"]})
     except Exception as e:
-        _logger.warning(f"admin_reload_account {target_account_id}: {e}")
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        _logger.exception("admin_reload_account %s failed", target_account_id)
+        return JSONResponse({"ok": False, "error": "Laden fehlgeschlagen"}, status_code=500)

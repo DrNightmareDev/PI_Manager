@@ -1,3 +1,4 @@
+import logging
 from datetime import timezone
 
 from fastapi import APIRouter, Depends, Request
@@ -17,6 +18,7 @@ from app.models import MarketCache
 from app.templates_env import templates
 
 router = APIRouter(prefix="/market", tags=["market"])
+logger = logging.getLogger(__name__)
 
 TIER_COLORS = {"P1": "#586e75", "P2": "#00b4d8", "P3": "#f4a300", "P4": "#e63946"}
 
@@ -128,5 +130,6 @@ def market_refresh(
     try:
         refresh_all_pi_prices(db)
     except Exception as e:
-        return JSONResponse(content={"ok": False, "error": str(e)}, status_code=500)
+        logger.exception("market force-refresh failed")
+        return JSONResponse(content={"ok": False, "error": "Marktdaten-Refresh fehlgeschlagen"}, status_code=500)
     return JSONResponse(content={"ok": True, "cooldown_remaining": 300})

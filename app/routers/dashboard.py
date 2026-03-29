@@ -84,12 +84,14 @@ _CORP_ACCESS_CACHE_TTL = 300.0  # 5 minutes
 def _get_corp_load_lock(corp_id: int | None) -> dict | None:
     if not corp_id:
         return None
+    now = _time.time()
+    # Sweep expired entries to prevent unbounded growth
+    expired = [k for k, v in _corp_load_running.items()
+               if (now - float(v.get("started_at") or 0.0)) > _CORP_LOAD_LOCK_TTL]
+    for k in expired:
+        _corp_load_running.pop(k, None)
     lock = _corp_load_running.get(corp_id)
     if not lock:
-        return None
-    started_at = float(lock.get("started_at") or 0.0)
-    if started_at and (_time.time() - started_at) > _CORP_LOAD_LOCK_TTL:
-        _corp_load_running.pop(corp_id, None)
         return None
     return lock
 
@@ -1865,8 +1867,8 @@ def force_load_account(
         _dashboard_cache[target_account_id] = payload
         return JSONResponse({"ok": True, "colony_count": payload["colony_count"]})
     except Exception as e:
-        logger.warning(f"force_load_account {target_account_id}: {e}")
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        logger.exception("force_load_account %s failed", target_account_id)
+        return JSONResponse({"ok": False, "error": "Laden fehlgeschlagen"}, status_code=500)
 
 
 def _attach_pi_skills(characters: list[Character], db: Session) -> None:
@@ -2308,7 +2310,8 @@ def test_webhook(
             msg = f"HTTP {resp.status_code}"
         return JSONResponse({"ok": False, "error": msg}, status_code=200)
     except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=200)
+        logger.warning("webhook test failed: %s", exc)
+        return JSONResponse({"ok": False, "error": "Webhook-Test fehlgeschlagen. Verbindung prüfen."}, status_code=200)
 
 
 @router.get("/characters", response_class=HTMLResponse)

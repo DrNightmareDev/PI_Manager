@@ -1,6 +1,9 @@
+import logging
 import re
 
 import requests
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -344,7 +347,8 @@ def search_system(q: str, account=Depends(require_account)):
         systems = search_systems_local(q, limit=10)
         return JSONResponse(content={"systems": systems})
     except Exception as e:
-        return JSONResponse(content={"systems": [], "error": str(e)})
+        logger.warning("system search error: %s", e)
+        return JSONResponse(content={"systems": [], "error": "Suche fehlgeschlagen"})
 
 
 @router.get("/search/constellations")
@@ -355,7 +359,8 @@ def search_constellations(q: str, account=Depends(require_account)):
         constellations = search_constellations_local(q, limit=10)
         return JSONResponse(content={"constellations": constellations})
     except Exception as e:
-        return JSONResponse(content={"constellations": [], "error": str(e)})
+        logger.warning("constellation search error: %s", e)
+        return JSONResponse(content={"constellations": [], "error": "Suche fehlgeschlagen"})
 
 
 @router.get("/constellations/{constellation_id}/systems")
@@ -364,7 +369,8 @@ def constellation_systems(constellation_id: int, account=Depends(require_account
         systems = get_constellation_systems_local(constellation_id)
         return JSONResponse(content={"systems": systems})
     except Exception as e:
-        return JSONResponse(content={"systems": [], "error": str(e)})
+        logger.warning("constellation systems error: %s", e)
+        return JSONResponse(content={"systems": [], "error": "Fehler beim Laden"})
 
 
 @router.get("/analyze/{system_id}")
@@ -482,7 +488,8 @@ def analyze(system_id: int, account=Depends(require_account)):
             "recommendations": recommendations,
         })
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        logger.exception("analyze/%s failed", system_id)
+        return JSONResponse(content={"error": "Systemanalyse fehlgeschlagen"}, status_code=500)
 
 
 @router.get("/compare", response_class=HTMLResponse)
