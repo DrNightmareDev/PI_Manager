@@ -309,6 +309,10 @@
                             <label class="form-label">Charakter</label>
                             <select id="{{ side }}CharacterSelect" class="form-select eve-input"></select>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Huelle</label>
+                            <select id="{{ side }}ShipSelect" class="form-select eve-input"></select>
+                        </div>
                         <div class="mb-2">
                             <label class="form-label">Fitting</label>
                             <select id="{{ side }}FittingSelect" class="form-select eve-input"></select>
@@ -341,8 +345,8 @@ const IMPORT_GROUP_FALLBACKS = ['low', 'mid', 'high', 'rig', 'subsystem', 'servi
 const state = {
     dataset: null,
     sources: {
-        left: { mode: 'saved', characterId: '', fittingId: '', text: '' },
-        right: { mode: 'saved', characterId: '', fittingId: '', text: '' },
+        left: { mode: 'saved', characterId: '', shipName: '', fittingId: '', text: '' },
+        right: { mode: 'saved', characterId: '', shipName: '', fittingId: '', text: '' },
     }
 };
 
@@ -373,20 +377,12 @@ function getSortedFittings(character) {
     });
 }
 
-function buildFittingOptions(fittings) {
-    const grouped = new Map();
-    fittings.forEach(fit => {
-        const key = fit.ship_name || 'Unknown ship';
-        if (!grouped.has(key)) {
-            grouped.set(key, []);
-        }
-        grouped.get(key).push(fit);
-    });
-    return Array.from(grouped.entries()).map(([shipName, shipFits]) => `
-        <optgroup label="${escapeHtml(shipName)}">
-            ${shipFits.map(fit => `<option value="${fit.fitting_id}">${escapeHtml(fit.name || 'Unnamed Fit')}</option>`).join('')}
-        </optgroup>
-    `).join('');
+function getShipNames(character) {
+    return Array.from(new Set(getSortedFittings(character).map(fit => fit.ship_name || 'Unknown ship')));
+}
+
+function getFilteredFittings(character, shipName) {
+    return getSortedFittings(character).filter(fit => String(fit.ship_name || 'Unknown ship') === String(shipName || ''));
 }
 
 function setButtonState(side, mode) {
@@ -457,12 +453,15 @@ function populateCharacterSelect(side) {
 }
 
 function populateFittingSelect(side) {
+    const shipSelect = document.getElementById(side + 'ShipSelect');
     const select = document.getElementById(side + 'FittingSelect');
     const hint = document.getElementById(side + 'SavedHint');
     const warning = document.getElementById(side + 'SourceWarning');
     const character = findCharacter(state.sources[side].characterId);
 
     if (!character) {
+        shipSelect.innerHTML = '<option value="">Keine Huellen</option>';
+        shipSelect.disabled = true;
         select.innerHTML = '<option value="">Keine Charaktere</option>';
         select.disabled = true;
         hint.textContent = 'Keine Charaktere mit gueltigem Fitting-ESI verfuegbar.';
@@ -476,10 +475,22 @@ function populateFittingSelect(side) {
         warning.innerHTML = `<span class="badge eve-badge-ok">ESI</span> <span class="text-muted">${character.fittings.length} Fittings verfuegbar.</span>`;
     }
 
-    const fittings = getSortedFittings(character);
+    const shipNames = getShipNames(character);
+    if (!shipNames.includes(state.sources[side].shipName)) {
+        state.sources[side].shipName = shipNames[0] || '';
+    }
+    shipSelect.disabled = shipNames.length === 0;
+    shipSelect.innerHTML = shipNames.length
+        ? shipNames.map(shipName => `<option value="${shipName}">${escapeHtml(shipName)}</option>`).join('')
+        : '<option value="">Keine Huellen verfuegbar</option>';
+    if (state.sources[side].shipName) {
+        shipSelect.value = state.sources[side].shipName;
+    }
+
+    const fittings = getFilteredFittings(character, state.sources[side].shipName);
     select.disabled = fittings.length === 0;
     select.innerHTML = fittings.length
-        ? buildFittingOptions(fittings)
+        ? fittings.map(fit => `<option value="${fit.fitting_id}">${escapeHtml(fit.name || 'Unnamed Fit')}</option>`).join('')
         : '<option value="">Keine Fits verfuegbar</option>';
 
     if (fittings.length && !fittings.some(fit => String(fit.fitting_id) === String(state.sources[side].fittingId))) {
@@ -494,7 +505,7 @@ function populateFittingSelect(side) {
 
     hint.textContent = character.warning
         ? 'Dieser Charakter braucht einen funktionierenden Fitting-Scope.'
-        : 'Sortiert nach Schiff und Fitting-Name.';
+        : 'Erst Huelle waehlen, dann das passende Fitting.';
 }
 
 function parseImportedFit(text) {
@@ -856,6 +867,13 @@ function attachEvents(side) {
 
     document.getElementById(side + 'CharacterSelect').addEventListener('change', event => {
         state.sources[side].characterId = event.target.value;
+        state.sources[side].shipName = '';
+        state.sources[side].fittingId = '';
+        refreshSource(side);
+    });
+
+    document.getElementById(side + 'ShipSelect').addEventListener('change', event => {
+        state.sources[side].shipName = event.target.value;
         state.sources[side].fittingId = '';
         refreshSource(side);
     });
@@ -889,11 +907,13 @@ function initializeDefaults() {
     if (leftCharacter) {
         state.sources.left.characterId = String(leftCharacter.character_id);
         const leftFits = getSortedFittings(leftCharacter);
+        state.sources.left.shipName = leftFits[0]?.ship_name || '';
         state.sources.left.fittingId = leftFits[0] ? String(leftFits[0].fitting_id) : '';
     }
     if (rightCharacter) {
         state.sources.right.characterId = String(rightCharacter.character_id);
         const rightFits = getSortedFittings(rightCharacter);
+        state.sources.right.shipName = rightFits[0]?.ship_name || '';
         state.sources.right.fittingId = rightFits[0] ? String(rightFits[0].fitting_id) : '';
     }
 }
