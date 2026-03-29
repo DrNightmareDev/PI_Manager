@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from app.config import get_settings
@@ -6,8 +8,9 @@ settings = get_settings()
 
 engine_kwargs = {
     "pool_pre_ping": True,
-    "pool_size": 5,
-    "max_overflow": 10,
+    "pool_size": int(os.getenv("DB_POOL_SIZE", "5")),
+    "max_overflow": int(os.getenv("DB_POOL_OVERFLOW", "10")),
+    "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", "3600")),
 }
 
 if settings.database_url.startswith("postgresql"):

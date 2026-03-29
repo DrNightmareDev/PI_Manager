@@ -21,6 +21,7 @@ def create_impersonate_session(response: Response, target_id: int, real_owner_id
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
+        secure=not settings.debug,
     )
 
 
@@ -33,6 +34,7 @@ def create_session(response: Response, account_id: int) -> None:
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
+        secure=not settings.debug,
     )
 
 
@@ -49,4 +51,4 @@ def read_session(request: Request) -> dict | None:
 
 
 def clear_session(response: Response) -> None:
-    response.delete_cookie(key=COOKIE_NAME)
+    response.delete_cookie(key=COOKIE_NAME, samesite="lax", secure=not settings.debug)

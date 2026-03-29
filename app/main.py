@@ -52,7 +52,7 @@ def _fallback_refresh_market_prices():
         refresh_dashboard_price_cache(db)
         refresh_skyhook_value_cache(db)
     except Exception as e:
-        logger.warning(f"Marktpreis-Refresh fehlgeschlagen: {e}")
+        logger.warning("Marktpreis-Refresh fehlgeschlagen: %s", e)
     finally:
         db.close()
 
@@ -67,12 +67,19 @@ def _fallback_cleanup_sso():
             if deleted:
                 logger.info("Bereinigt: %d abgelaufene SSO-States", deleted)
     except Exception as e:
-        logger.warning(f"SSO-State-Bereinigung fehlgeschlagen: {e}")
+        logger.warning("SSO-State-Bereinigung fehlgeschlagen: %s", e)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup — fail fast on missing/default config
+    if settings.secret_key == "change-me-to-a-secure-random-key-32chars":
+        raise RuntimeError("SECRET_KEY ist nicht konfiguriert. Bitte SECRET_KEY in .env setzen.")
+    if not settings.eve_client_id:
+        raise RuntimeError("EVE_CLIENT_ID ist nicht konfiguriert.")
+    if not settings.eve_client_secret:
+        raise RuntimeError("EVE_CLIENT_SECRET ist nicht konfiguriert.")
+
     logger.info("EVE PI Manager startet...")
     from app import sde
     sde.init()
@@ -147,21 +154,13 @@ def index(request: Request):
     from app.models import Account
 
     session = read_session(request)
-    if session:
-        db = SessionLocal()
-        try:
-            account = db.query(Account).filter(
-                Account.id == session.get("account_id")
-            ).first()
-            if account:
-                return RedirectResponse(url="/dashboard", status_code=302)
-        finally:
-            db.close()
-
     error = request.query_params.get("error")
     db = SessionLocal()
     try:
-        from app.models import Account
+        if session:
+            account = db.query(Account).filter(Account.id == session.get("account_id")).first()
+            if account:
+                return RedirectResponse(url="/dashboard", status_code=302)
         has_owner = db.query(Account).filter(Account.is_owner == True).first() is not None
     finally:
         db.close()
@@ -178,7 +177,8 @@ def health_check():
             conn.execute(text("SELECT 1"))
         status["database"] = "ok"
     except Exception as e:
-        status["database"] = f"error: {e}"
+        logger.error("health: database check failed: %s", e)
+        status["database"] = "error"
 
     # RabbitMQ / Celery broker (optional)
     broker_url = os.getenv("CELERY_BROKER_URL", "")
@@ -194,7 +194,8 @@ def health_check():
             conn.close()
             status["rabbitmq"] = "ok"
         except Exception as e:
-            status["rabbitmq"] = f"error: {e}"
+            logger.error("health: rabbitmq check failed: %s", e)
+            status["rabbitmq"] = "error"
     else:
         status["rabbitmq"] = "not_configured"
 
