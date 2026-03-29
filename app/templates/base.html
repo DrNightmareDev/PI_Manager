@@ -208,6 +208,12 @@
                             <i class="bi bi-people me-2"></i>{{ t('common.manage_characters') }}
                         </a>
                     </li>
+                    <li>
+                        <button class="dropdown-item" type="button" onclick="openWebhookModal()">
+                            <i class="bi bi-bell me-2"></i>Discord Alerts
+                            <span id="webhookStatusBadge" class="badge ms-1" style="background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.65rem;vertical-align:middle;">–</span>
+                        </button>
+                    </li>
                     <li><hr class="dropdown-divider eve-divider"></li>
                     <li>
                         <a class="dropdown-item" href="/auth/add-character">
@@ -439,6 +445,146 @@ document.addEventListener('DOMContentLoaded', function() {
     border-top: 1px solid rgba(122, 138, 154, 0.16);
 }
 </style>
+<!-- Discord / Webhook Alerts Modal (global, accessible from any page) -->
+{% if account %}
+<div class="modal fade" id="webhookModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content eve-help-modal">
+            <div class="modal-header border-0 pb-2">
+                <h5 class="modal-title fw-semibold"><i class="bi bi-bell me-2" style="color:var(--eve-accent);"></i>Discord / Webhook Alerts</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="text-muted small mb-3">
+                    Erhalte eine Nachricht auf Discord wenn Extraktoren ablaufen.
+                    Erstelle einen Webhook unter <strong>Servereinstellungen → Integrationen → Webhooks</strong>
+                    und füge die URL hier ein.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label small fw-medium">Webhook URL</label>
+                    <input type="url" id="webhookUrlInput" class="form-control form-control-sm"
+                           placeholder="https://discord.com/api/webhooks/...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-medium">Alarm-Schwelle (Stunden vor Ablauf)</label>
+                    <select id="webhookHoursSelect" class="form-select form-select-sm">
+                        <option value="1">1 Stunde</option>
+                        <option value="2" selected>2 Stunden</option>
+                        <option value="4">4 Stunden</option>
+                        <option value="6">6 Stunden</option>
+                        <option value="12">12 Stunden</option>
+                        <option value="24">24 Stunden</option>
+                    </select>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="webhookEnabledCheck" checked>
+                    <label class="form-check-label small" for="webhookEnabledCheck">Alerts aktiviert</label>
+                </div>
+                <div id="webhookSaveMsg" class="small mb-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button class="btn btn-sm eve-btn-ghost" onclick="testWebhook()">
+                    <i class="bi bi-send me-1"></i>Test senden
+                </button>
+                <button class="btn btn-sm eve-btn-outline ms-auto" onclick="saveWebhookSettings()">
+                    <i class="bi bi-save me-1"></i>Speichern
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    let _webhookModal = null;
+
+    window.openWebhookModal = function() {
+        if (!_webhookModal) {
+            _webhookModal = new bootstrap.Modal(document.getElementById('webhookModal'));
+        }
+        fetch('/dashboard/webhook-settings')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('webhookUrlInput').value = d.webhook_url || '';
+                const sel = document.getElementById('webhookHoursSelect');
+                if (sel) sel.value = String(d.alert_hours || 2);
+                const chk = document.getElementById('webhookEnabledCheck');
+                if (chk) chk.checked = !!d.enabled;
+                _updateWebhookBadge(d.webhook_url, d.enabled);
+            })
+            .catch(() => {});
+        _webhookModal.show();
+    };
+
+    window._updateWebhookBadge = function(url, enabled) {
+        const badge = document.getElementById('webhookStatusBadge');
+        if (!badge) return;
+        if (url && enabled) {
+            badge.textContent = 'Aktiv';
+            badge.style.cssText = 'background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;font-size:.65rem;vertical-align:middle;';
+        } else if (url && !enabled) {
+            badge.textContent = 'Aus';
+            badge.style.cssText = 'background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;font-size:.65rem;vertical-align:middle;';
+        } else {
+            badge.textContent = '–';
+            badge.style.cssText = 'background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.65rem;vertical-align:middle;';
+        }
+    };
+
+    window.saveWebhookSettings = function() {
+        const url = document.getElementById('webhookUrlInput').value.trim();
+        const hours = parseInt(document.getElementById('webhookHoursSelect').value) || 2;
+        const enabled = document.getElementById('webhookEnabledCheck').checked;
+        const msg = document.getElementById('webhookSaveMsg');
+        fetch('/dashboard/webhook-settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({webhook_url: url, alert_hours: hours, enabled}),
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (msg) {
+                msg.style.display = '';
+                msg.style.color = d.ok ? '#2dc653' : '#e74c3c';
+                msg.textContent = d.ok ? '✓ Einstellungen gespeichert.' : '✗ Fehler: ' + (d.detail || 'Unbekannter Fehler');
+                setTimeout(() => { if (msg) msg.style.display = 'none'; }, 3000);
+            }
+            if (d.ok) _updateWebhookBadge(url, enabled);
+        })
+        .catch(() => {
+            if (msg) { msg.style.display = ''; msg.style.color = '#e74c3c'; msg.textContent = '✗ Netzwerkfehler'; }
+        });
+    };
+
+    window.testWebhook = function() {
+        const msg = document.getElementById('webhookSaveMsg');
+        const url = (document.getElementById('webhookUrlInput').value || '').trim();
+        if (msg) { msg.style.display = ''; msg.style.color = '#7ec8e3'; msg.textContent = 'Sende Test…'; }
+        fetch('/dashboard/webhook-test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({webhook_url: url}),
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (msg) {
+                msg.style.color = d.ok ? '#2dc653' : '#e74c3c';
+                msg.textContent = d.ok ? '✓ Test erfolgreich gesendet!' : '✗ ' + (d.error || 'Unbekannter Fehler');
+            }
+        })
+        .catch(() => { if (msg) { msg.style.color = '#e74c3c'; msg.textContent = '✗ Netzwerkfehler'; } });
+    };
+
+    // Load badge state on every page
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/dashboard/webhook-settings')
+            .then(r => r.json())
+            .then(d => _updateWebhookBadge(d.webhook_url, d.enabled))
+            .catch(() => {});
+    });
+})();
+</script>
+{% endif %}
+
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>
