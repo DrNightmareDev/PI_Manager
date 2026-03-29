@@ -23,31 +23,31 @@
 .fit-summary-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .fit-summary-head {
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
     align-items: center;
 }
 
 .fit-ship-image {
-    width: 88px;
-    height: 88px;
-    border-radius: 14px;
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
     object-fit: cover;
     border: 1px solid var(--eve-card-border);
     background: rgba(255,255,255,0.02);
 }
 
 .fit-ship-placeholder {
-    width: 88px;
-    height: 88px;
-    border-radius: 14px;
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
     display: grid;
     place-items: center;
-    font-size: 2rem;
+    font-size: 1.45rem;
     color: var(--eve-accent);
     border: 1px solid var(--eve-card-border);
     background: rgba(0, 180, 216, 0.06);
@@ -56,15 +56,15 @@
 .fit-compare-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
+    gap: 0.65rem;
 }
 
 .fit-slot-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 0.75rem;
+    gap: 0.5rem;
     align-items: stretch;
-    padding: 0.65rem 0;
+    padding: 0.4rem 0;
     border-top: 1px solid rgba(255,255,255,0.04);
 }
 
@@ -75,10 +75,10 @@
 
 .fit-slot-cell {
     border: 1px solid rgba(126, 200, 227, 0.12);
-    border-radius: 12px;
-    padding: 0.75rem;
-    min-height: 84px;
-    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    padding: 0.45rem 0.55rem;
+    min-height: 56px;
+    background: rgba(255,255,255,0.015);
 }
 
 .fit-slot-cell.is-different {
@@ -97,20 +97,20 @@
     align-items: center;
     justify-content: center;
     color: var(--eve-text-muted);
-    font-size: 0.85rem;
-    min-width: 38px;
+    font-size: 0.72rem;
+    min-width: 24px;
 }
 
 .fit-item {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.55rem;
     align-items: center;
 }
 
 .fit-item-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     object-fit: cover;
     border: 1px solid rgba(255,255,255,0.08);
     background: rgba(255,255,255,0.03);
@@ -118,11 +118,12 @@
 }
 
 .fit-item-icon-placeholder {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     display: grid;
     place-items: center;
+    font-size: 0.8rem;
     color: var(--eve-accent);
     background: rgba(0,180,216,0.08);
     border: 1px solid rgba(126, 200, 227, 0.15);
@@ -130,13 +131,14 @@
 }
 
 .fit-item-name {
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1.2;
+    font-size: 0.92rem;
 }
 
 .fit-item-meta {
     color: var(--eve-text-muted);
-    font-size: 0.8rem;
+    font-size: 0.72rem;
 }
 
 .fit-compare-empty {
@@ -180,6 +182,18 @@
     color: var(--eve-accent);
 }
 
+.fit-source-card .card-body,
+.fit-summary-card .card-body,
+.fit-compare-card .card-body {
+    padding: 0.75rem;
+}
+
+.fit-source-card .card-header,
+.fit-summary-card .card-header,
+.fit-compare-card .card-header {
+    padding: 0.45rem 0.75rem;
+}
+
 .fit-summary-badges {
     display: flex;
     flex-wrap: wrap;
@@ -188,6 +202,20 @@
 
 .fit-summary-badges .badge {
     font-size: 0.72rem;
+}
+
+.fit-summary-title {
+    font-size: 1rem;
+    line-height: 1.2;
+}
+
+.fit-summary-subtitle {
+    font-size: 0.78rem;
+    color: var(--eve-text-muted);
+}
+
+.fit-select-note {
+    font-size: 0.75rem;
 }
 
 @media (max-width: 991.98px) {
@@ -299,6 +327,36 @@ function findCharacter(characterId) {
     return (state.dataset?.characters || []).find(entry => String(entry.character_id) === String(characterId)) || null;
 }
 
+function getEligibleCharacters() {
+    return (state.dataset?.characters || []).filter(character => character.status === 'ok');
+}
+
+function getSortedFittings(character) {
+    return [...(character?.fittings || [])].sort((a, b) => {
+        const shipCompare = String(a.ship_name || '').localeCompare(String(b.ship_name || ''), undefined, { sensitivity: 'base' });
+        if (shipCompare !== 0) {
+            return shipCompare;
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+    });
+}
+
+function buildFittingOptions(fittings) {
+    const grouped = new Map();
+    fittings.forEach(fit => {
+        const key = fit.ship_name || 'Unknown ship';
+        if (!grouped.has(key)) {
+            grouped.set(key, []);
+        }
+        grouped.get(key).push(fit);
+    });
+    return Array.from(grouped.entries()).map(([shipName, shipFits]) => `
+        <optgroup label="${escapeHtml(shipName)}">
+            ${shipFits.map(fit => `<option value="${fit.fitting_id}">${escapeHtml(fit.name || 'Unnamed Fit')}</option>`).join('')}
+        </optgroup>
+    `).join('');
+}
+
 function setButtonState(side, mode) {
     document.querySelectorAll('.fit-mode-btn[data-side="' + side + '"]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -327,19 +385,21 @@ function renderGlobalWarnings() {
 
 function populateCharacterSelect(side) {
     const select = document.getElementById(side + 'CharacterSelect');
-    const characters = state.dataset?.characters || [];
+    const characters = getEligibleCharacters();
     const currentId = state.sources[side].characterId;
     select.innerHTML = characters.map(character => {
-        const suffix = character.fittings?.length ? ` (${character.fittings.length} Fits)` : '';
-        const warning = character.warning ? ' - Warnung' : '';
-        return `<option value="${character.character_id}">${escapeHtml(character.character_name + suffix + warning)}</option>`;
+        const suffix = character.fittings?.length ? ` (${character.fittings.length} Fits)` : ' (0 Fits)';
+        return `<option value="${character.character_id}">${escapeHtml(character.character_name + suffix)}</option>`;
     }).join('');
 
     if (!characters.length) {
         state.sources[side].characterId = '';
         state.sources[side].fittingId = '';
+        select.innerHTML = '<option value="">Keine gueltigen ESI-Charaktere</option>';
+        select.disabled = true;
         return;
     }
+    select.disabled = false;
 
     if (!characters.some(character => String(character.character_id) === String(currentId))) {
         const preferred = characters.find(character => (character.fittings || []).length > 0) || characters[0];
@@ -357,23 +417,21 @@ function populateFittingSelect(side) {
     if (!character) {
         select.innerHTML = '<option value="">Keine Charaktere</option>';
         select.disabled = true;
-        hint.textContent = 'Keine Charaktere verfuegbar.';
+        hint.textContent = 'Keine Charaktere mit gueltigem Fitting-ESI verfuegbar.';
         warning.innerHTML = '';
         return;
     }
 
-    if (character.warning) {
-        warning.innerHTML = `<span class="badge eve-badge-err">Warnung</span> <span class="text-muted">${escapeHtml(character.warning)}</span>`;
-    } else if (!character.fittings?.length) {
+    if (!character.fittings?.length) {
         warning.innerHTML = `<span class="badge eve-badge-count">Info</span> <span class="text-muted">Keine gespeicherten Fittings bei ESI gefunden.</span>`;
     } else {
         warning.innerHTML = `<span class="badge eve-badge-ok">ESI</span> <span class="text-muted">${character.fittings.length} Fittings verfuegbar.</span>`;
     }
 
-    const fittings = character.fittings || [];
+    const fittings = getSortedFittings(character);
     select.disabled = fittings.length === 0;
     select.innerHTML = fittings.length
-        ? fittings.map(fit => `<option value="${fit.fitting_id}">${escapeHtml(fit.ship_name + ' - ' + fit.name)}</option>`).join('')
+        ? buildFittingOptions(fittings)
         : '<option value="">Keine Fits verfuegbar</option>';
 
     if (fittings.length && !fittings.some(fit => String(fit.fitting_id) === String(state.sources[side].fittingId))) {
@@ -388,7 +446,7 @@ function populateFittingSelect(side) {
 
     hint.textContent = character.warning
         ? 'Dieser Charakter braucht einen funktionierenden Fitting-Scope.'
-        : 'Waehle einen gespeicherten Fit oder wechsle auf Fit-Text.';
+        : 'Sortiert nach Schiff und Fitting-Name.';
 }
 
 function parseImportedFit(text) {
@@ -481,8 +539,8 @@ function renderSummaryCard(side, fit) {
                         <div class="fit-ship-placeholder"><i class="bi bi-box"></i></div>
                         <div>
                             <div class="text-muted small">${sideLabel}</div>
-                            <div class="fw-semibold">Noch kein Fitting gewaehlt</div>
-                            <div class="small text-muted">Waehle einen gespeicherten Fit oder fuege links/rechts Fit-Text ein.</div>
+                            <div class="fit-summary-title fw-semibold">Noch kein Fitting gewaehlt</div>
+                            <div class="fit-summary-subtitle">Waehle einen gespeicherten Fit oder fuege Fit-Text ein.</div>
                         </div>
                     </div>
                 </div>
@@ -503,9 +561,9 @@ function renderSummaryCard(side, fit) {
                     ${imageHtml}
                     <div>
                         <div class="text-muted small">${sideLabel}</div>
-                        <div class="fw-semibold fs-5">${escapeHtml(fit.ship_name)}</div>
-                        <div>${escapeHtml(fit.name || 'Unnamed Fit')}</div>
-                        <div class="small text-muted">${escapeHtml(fit.description || '')}</div>
+                        <div class="fit-summary-title fw-semibold">${escapeHtml(fit.ship_name)}</div>
+                        <div class="fit-select-note">${escapeHtml(fit.name || 'Unnamed Fit')}</div>
+                        <div class="fit-summary-subtitle">${escapeHtml(fit.description || '')}</div>
                     </div>
                 </div>
                 <div class="fit-summary-badges mt-3">
@@ -619,6 +677,7 @@ function syncPane(side) {
     const mode = state.sources[side].mode;
     document.getElementById(side + 'SavedPane').hidden = mode !== 'saved';
     document.getElementById(side + 'TextPane').hidden = mode !== 'text';
+    document.getElementById(side + 'SourceWarning').style.display = mode === 'saved' ? '' : 'none';
     setButtonState(side, mode);
 }
 
@@ -657,18 +716,20 @@ function attachEvents(side) {
 }
 
 function initializeDefaults() {
-    const characters = state.dataset?.characters || [];
+    const characters = getEligibleCharacters();
     const withFits = characters.filter(character => (character.fittings || []).length > 0);
     const leftCharacter = withFits[0] || characters[0] || null;
     const rightCharacter = withFits[1] || withFits[0] || characters[1] || characters[0] || null;
 
     if (leftCharacter) {
         state.sources.left.characterId = String(leftCharacter.character_id);
-        state.sources.left.fittingId = leftCharacter.fittings?.[0] ? String(leftCharacter.fittings[0].fitting_id) : '';
+        const leftFits = getSortedFittings(leftCharacter);
+        state.sources.left.fittingId = leftFits[0] ? String(leftFits[0].fitting_id) : '';
     }
     if (rightCharacter) {
         state.sources.right.characterId = String(rightCharacter.character_id);
-        state.sources.right.fittingId = rightCharacter.fittings?.[0] ? String(rightCharacter.fittings[0].fitting_id) : '';
+        const rightFits = getSortedFittings(rightCharacter);
+        state.sources.right.fittingId = rightFits[0] ? String(rightFits[0].fitting_id) : '';
     }
 }
 
