@@ -6,13 +6,26 @@
 .fit-hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 1rem;
+    gap: 0.65rem;
 }
 
 .fit-source-card,
 .fit-summary-card,
 .fit-compare-card {
     background: linear-gradient(180deg, rgba(17,24,32,0.95) 0%, rgba(14,19,27,0.98) 100%);
+}
+
+.fit-source-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.fit-source-field .form-label,
+.fit-text-pane .form-label {
+    margin-bottom: 0.3rem;
+    font-size: 0.76rem;
+    letter-spacing: 0.02em;
 }
 
 .fit-source-card .form-label,
@@ -23,31 +36,31 @@
 .fit-summary-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
+    gap: 0.55rem;
 }
 
 .fit-summary-head {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.6rem;
     align-items: center;
 }
 
 .fit-ship-image {
-    width: 64px;
-    height: 64px;
-    border-radius: 10px;
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
     object-fit: cover;
     border: 1px solid var(--eve-card-border);
     background: rgba(255,255,255,0.02);
 }
 
 .fit-ship-placeholder {
-    width: 64px;
-    height: 64px;
-    border-radius: 10px;
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
     display: grid;
     place-items: center;
-    font-size: 1.45rem;
+    font-size: 1.15rem;
     color: var(--eve-accent);
     border: 1px solid var(--eve-card-border);
     background: rgba(0, 180, 216, 0.06);
@@ -56,15 +69,15 @@
 .fit-compare-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.65rem;
+    gap: 0.45rem;
 }
 
 .fit-slot-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 0.5rem;
+    gap: 0.4rem;
     align-items: stretch;
-    padding: 0.4rem 0;
+    padding: 0.22rem 0;
     border-top: 1px solid rgba(255,255,255,0.04);
 }
 
@@ -75,9 +88,9 @@
 
 .fit-slot-cell {
     border: 1px solid rgba(126, 200, 227, 0.12);
-    border-radius: 8px;
-    padding: 0.45rem 0.55rem;
-    min-height: 56px;
+    border-radius: 7px;
+    padding: 0.3rem 0.42rem;
+    min-height: 44px;
     background: rgba(255,255,255,0.015);
 }
 
@@ -97,20 +110,20 @@
     align-items: center;
     justify-content: center;
     color: var(--eve-text-muted);
-    font-size: 0.72rem;
-    min-width: 24px;
+    font-size: 0.68rem;
+    min-width: 20px;
 }
 
 .fit-item {
     display: flex;
-    gap: 0.55rem;
+    gap: 0.45rem;
     align-items: center;
 }
 
 .fit-item-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
     object-fit: cover;
     border: 1px solid rgba(255,255,255,0.08);
     background: rgba(255,255,255,0.03);
@@ -118,12 +131,12 @@
 }
 
 .fit-item-icon-placeholder {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
     display: grid;
     place-items: center;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     color: var(--eve-accent);
     background: rgba(0,180,216,0.08);
     border: 1px solid rgba(126, 200, 227, 0.15);
@@ -132,13 +145,14 @@
 
 .fit-item-name {
     font-weight: 500;
-    line-height: 1.2;
-    font-size: 0.92rem;
+    line-height: 1.1;
+    font-size: 0.84rem;
 }
 
 .fit-item-meta {
     color: var(--eve-text-muted);
-    font-size: 0.72rem;
+    font-size: 0.68rem;
+    line-height: 1.05;
 }
 
 .fit-compare-empty {
@@ -172,7 +186,7 @@
     background: rgba(230, 57, 70, 0.09);
     color: #ffd7dc;
     border-radius: 10px;
-    padding: 0.65rem 0.85rem;
+    padding: 0.5rem 0.7rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -190,11 +204,11 @@
 }
 
 .fit-warning-panel {
-    margin-top: 0.5rem;
+    margin-top: 0.35rem;
     border: 1px solid rgba(230, 57, 70, 0.22);
     background: rgba(230, 57, 70, 0.05);
     border-radius: 10px;
-    padding: 0.75rem;
+    padding: 0.6rem;
 }
 
 .fit-warning-card {
@@ -218,47 +232,51 @@
 .fit-source-card .card-body,
 .fit-summary-card .card-body,
 .fit-compare-card .card-body {
-    padding: 0.75rem;
+    padding: 0.55rem;
 }
 
 .fit-source-card .card-header,
 .fit-summary-card .card-header,
 .fit-compare-card .card-header {
-    padding: 0.45rem 0.75rem;
+    padding: 0.38rem 0.55rem;
+    min-height: 0;
 }
 
 .fit-summary-badges {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.3rem;
 }
 
 .fit-summary-badges .badge {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
+    padding: 0.28rem 0.48rem;
 }
 
 .fit-summary-title {
-    font-size: 1rem;
-    line-height: 1.2;
+    font-size: 0.92rem;
+    line-height: 1.1;
 }
 
 .fit-summary-subtitle {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     color: var(--eve-text-muted);
+    line-height: 1.15;
 }
 
 .fit-select-note {
-    font-size: 0.75rem;
+    font-size: 0.71rem;
+    line-height: 1.15;
 }
 
 .fit-compare-note {
-    margin-top: 0.75rem;
+    margin-top: 0.45rem;
     border: 1px solid rgba(0, 180, 216, 0.22);
     background: rgba(0, 180, 216, 0.08);
     color: var(--eve-text);
     border-radius: 10px;
-    padding: 0.65rem 0.85rem;
-    font-size: 0.82rem;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.76rem;
 }
 
 .fit-evaluate-btn-needs-action {
@@ -276,6 +294,10 @@
 
 @media (max-width: 991.98px) {
     .fit-summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fit-source-fields {
         grid-template-columns: 1fr;
     }
 
@@ -325,26 +347,28 @@
                         <button type="button" class="btn btn-sm eve-btn-outline fit-mode-btn" data-side="{{ side }}" data-mode="text">Fit-Text</button>
                     </div>
                 </div>
-                <div class="card-body d-flex flex-column gap-3">
+                <div class="card-body d-flex flex-column gap-2">
                     <div id="{{ side }}SavedPane" class="fit-source-pane">
-                        <div class="mb-3">
-                            <label class="form-label">Charakter</label>
-                            <select id="{{ side }}CharacterSelect" class="form-select eve-input"></select>
+                        <div class="fit-source-fields">
+                            <div class="fit-source-field">
+                                <label class="form-label">Charakter</label>
+                                <select id="{{ side }}CharacterSelect" class="form-select form-select-sm eve-input"></select>
+                            </div>
+                            <div class="fit-source-field">
+                                <label class="form-label">Huelle</label>
+                                <select id="{{ side }}ShipSelect" class="form-select form-select-sm eve-input"></select>
+                            </div>
+                            <div class="fit-source-field">
+                                <label class="form-label">Fitting</label>
+                                <select id="{{ side }}FittingSelect" class="form-select form-select-sm eve-input"></select>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Huelle</label>
-                            <select id="{{ side }}ShipSelect" class="form-select eve-input"></select>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Fitting</label>
-                            <select id="{{ side }}FittingSelect" class="form-select eve-input"></select>
-                        </div>
-                        <div id="{{ side }}SavedHint" class="small text-muted"></div>
+                        <div id="{{ side }}SavedHint" class="small text-muted mt-1"></div>
                     </div>
 
-                    <div id="{{ side }}TextPane" class="fit-source-pane" hidden>
+                    <div id="{{ side }}TextPane" class="fit-source-pane fit-text-pane" hidden>
                         <label class="form-label">Fitting-Text</label>
-                        <textarea id="{{ side }}FitText" class="form-control eve-input" rows="11" placeholder="[Drake, Passive Test]&#10;Shield Power Relay II&#10;Shield Power Relay II&#10;&#10;Large Shield Extender II&#10;Large Shield Extender II&#10;&#10;Heavy Missile Launcher II, Scourge Fury Heavy Missile&#10;&#10;Medium Core Defense Field Purger I"></textarea>
+                        <textarea id="{{ side }}FitText" class="form-control eve-input" rows="8" placeholder="[Drake, Passive Test]&#10;Shield Power Relay II&#10;Shield Power Relay II&#10;&#10;Large Shield Extender II&#10;Large Shield Extender II&#10;&#10;Heavy Missile Launcher II, Scourge Fury Heavy Missile&#10;&#10;Medium Core Defense Field Purger I"></textarea>
                         <div class="small text-muted mt-2">Unterstuetzt EFT-/Ingame-Exporttext. Leerzeilen werden als Bereichstrenner interpretiert.</div>
                         <div class="d-flex align-items-center gap-2 mt-3">
                             <button type="button" id="{{ side }}EvaluateFitBtn" class="btn btn-sm eve-btn-outline">
