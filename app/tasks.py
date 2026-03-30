@@ -53,7 +53,7 @@ def _refresh_character_data(char, db) -> dict | None:
     from app.routers.dashboard import (
         _compute_colony_productions, _get_colony_expiry,
         _compute_extractor_rate_summary, _compute_extractor_balance,
-        _compute_extractor_status, _compute_factories, _compute_storage,
+        _compute_factories, _compute_storage,
         _compute_missing_inputs, _get_extractor_status,
     )
 
