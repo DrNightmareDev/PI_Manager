@@ -72,6 +72,24 @@ def bridges_touching_systems(system_ids: list[int]) -> list[dict]:
     ]
 
 
+def all_bridges() -> list[dict]:
+    _ensure_loaded()
+    unique: dict[tuple[int, int], dict] = {}
+    for gate in _gates:
+        from_id = int(gate.get("from") or 0)
+        to_id = int(gate.get("to") or 0)
+        if not from_id or not to_id:
+            continue
+        key = (from_id, to_id) if from_id < to_id else (to_id, from_id)
+        if key not in unique:
+            unique[key] = {
+                "from": key[0],
+                "to": key[1],
+                "name": gate.get("name") or "",
+            }
+    return list(unique.values())
+
+
 def status(ensure_loaded: bool = False) -> dict:
     if ensure_loaded:
         _ensure_loaded()
