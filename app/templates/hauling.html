@@ -61,7 +61,7 @@
                             <tbody>
                                 {% for colony in hauling_colonies %}
                                 <tr data-route-system-id="{{ colony.solar_system_id or '' }}"
-                                    class="{% if colony.expiry_hours is not none and colony.expiry_hours < 0 %}table-danger{% elif colony.is_stalled %}table-warning{% endif %}"
+                                    class="{% if colony.is_stalled %}table-warning{% endif %}"
                                     onclick="window.open('https://evemaps.dotlan.net/system/{{ (colony.solar_system_name or '') | replace(' ', '_') }}', '_blank')"
                                     style="cursor:pointer;">
                                     <td>
@@ -118,10 +118,13 @@
                                         {% else %}{% set clr = '#2dc653' %}{% endif %}
                                         <div class="eve-hover-wrap">
                                             <span class="eve-storage-badge" style="color:{{ clr }};cursor:default;">
-                                                {{ colony.storage | length }}x {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
+                                                {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
                                             </span>
                                             <div class="eve-hover-card eve-hover-card-right">
-                                                <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Lager</div>
+                                                <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:6px;">
+                                                    <span style="color:#586e75;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;">Lager</span>
+                                                    <span style="color:{{ clr }};font-weight:600;">{{ colony.storage | length }}x {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}</span>
+                                                </div>
                                                 {% for s in colony.storage %}
                                                 {% if not loop.first %}<div style="border-top:1px solid #1a3a5a;margin:5px 0;"></div>{% endif %}
                                                 {% set pct = s.fill_pct %}
@@ -188,13 +191,13 @@
                     <div class="d-flex align-items-center gap-2">
                         <span id="ansiblexStatusBadge" class="badge {% if ansiblex_status.state == 'up' %}bg-success{% elif ansiblex_status.state == 'stale' %}bg-warning text-dark{% elif ansiblex_status.state == 'down' %}bg-danger{% else %}bg-secondary{% endif %}" title="{% if ansiblex_status.last_error %}{{ ansiblex_status.last_error }}{% else %}AnsibleX Status{% endif %}">
                             {% if ansiblex_status.state == 'up' %}
-                            <i class="bi bi-lightning-fill me-1"></i>AnsibleX OK
+                            AnsibleX OK
                             {% elif ansiblex_status.state == 'stale' %}
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i>AnsibleX Cache
+                            AnsibleX Cache
                             {% elif ansiblex_status.state == 'down' %}
-                            <i class="bi bi-x-octagon-fill me-1"></i>AnsibleX Down
+                            AnsibleX Down
                             {% else %}
-                            <i class="bi bi-question-circle-fill me-1"></i>AnsibleX Unbekannt
+                            AnsibleX Unbekannt
                             {% endif %}
                         </span>
                         <span class="badge bg-secondary">{{ route_total_jumps }} {{ t('hauling.jumps') }}</span>
@@ -352,31 +355,31 @@
         if (!enabled) {
             ansiblexStatusBadge.className = 'badge bg-secondary';
             ansiblexStatusBadge.title = 'AnsibleX deaktiviert';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>AnsibleX Aus';
+            ansiblexStatusBadge.innerHTML = 'AnsibleX Aus';
             return;
         }
         const state = status?.state || 'unknown';
         if (state === 'up') {
             ansiblexStatusBadge.className = 'badge bg-success';
             ansiblexStatusBadge.title = 'AnsibleX erreichbar';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-fill me-1"></i>AnsibleX OK';
+            ansiblexStatusBadge.innerHTML = 'AnsibleX OK';
             return;
         }
         if (state === 'stale') {
             ansiblexStatusBadge.className = 'badge bg-warning text-dark';
             ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar, Cache aktiv';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>AnsibleX Cache';
+            ansiblexStatusBadge.innerHTML = 'AnsibleX Cache';
             return;
         }
         if (state === 'down') {
             ansiblexStatusBadge.className = 'badge bg-danger';
             ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-x-octagon-fill me-1"></i>AnsibleX Down';
+            ansiblexStatusBadge.innerHTML = 'AnsibleX Down';
             return;
         }
         ansiblexStatusBadge.className = 'badge bg-secondary';
         ansiblexStatusBadge.title = 'AnsibleX Status unbekannt';
-        ansiblexStatusBadge.innerHTML = '<i class="bi bi-question-circle-fill me-1"></i>AnsibleX Unbekannt';
+        ansiblexStatusBadge.innerHTML = 'AnsibleX Unbekannt';
     }
     async function refreshRouteLocation() {
         if (!charSelect) return;
@@ -661,7 +664,7 @@
         window.addEventListener('resize', hideCard);
     }
     refreshBtn?.addEventListener('click', refreshRouteLocation);
-    useAnsiblex?.addEventListener('change', () => updateAnsiblexStatus(null, useAnsiblex.checked));
+    useAnsiblex?.addEventListener('change', refreshRouteLocation);
     bridgeModalEl?.addEventListener('show.bs.modal', loadBridgeConnections);
     bridgeForm?.addEventListener('submit', saveBridgeConnection);
     bridgeResetBtn?.addEventListener('click', resetBridgeForm);
