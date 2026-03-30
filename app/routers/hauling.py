@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections import deque
+from urllib.parse import unquote, urlparse
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -28,6 +30,7 @@ _ROUTE_CACHE_TTL = 600
 _location_cache: dict[int, tuple[dict, float]] = {}
 _route_cache: dict[tuple[int, int], tuple[list[int], float]] = {}
 _best_route_cache: dict[tuple[int, int, bool], tuple[dict, float]] = {}
+_DOTLAN_SYSTEM_LINK_RE = re.compile(r'href="/system/([^"/?#]+)"', re.IGNORECASE)
 
 
 def _storage_has_items(storage: list[dict] | None) -> bool:
@@ -221,6 +224,79 @@ def _resolve_corporation_name(corporation_id: int, db: Session) -> str:
         if int(entry["corporation_id"]) == int(corporation_id):
             return str(entry["corporation_name"] or f"Corp #{corporation_id}")
     return f"Corp #{int(corporation_id)}"
+
+
+def _upsert_bridge_connection(
+    *,
+    db: Session,
+    corporation_id: int,
+    corporation_name: str,
+    from_system_id: int,
+    from_system_name: str,
+    to_system_id: int,
+    to_system_name: str,
+    notes: str | None = None,
+    created_by_account_id: int | None = None,
+) -> tuple[CorpBridgeConnection, bool]:
+    existing = (
+        db.query(CorpBridgeConnection)
+        .filter(
+            CorpBridgeConnection.corporation_id == int(corporation_id),
+            CorpBridgeConnection.from_system_id == int(from_system_id),
+            CorpBridgeConnection.to_system_id == int(to_system_id),
+        )
+        .first()
+    )
+    created = False
+    if existing is None:
+        existing = CorpBridgeConnection(created_by_account_id=created_by_account_id)
+        db.add(existing)
+        created = True
+    existing.corporation_id = int(corporation_id)
+    existing.corporation_name = corporation_name
+    existing.from_system_id = int(from_system_id)
+    existing.from_system_name = from_system_name
+    existing.to_system_id = int(to_system_id)
+    existing.to_system_name = to_system_name
+    existing.notes = notes
+    return existing, created
+
+
+def _parse_dotlan_bridge_pairs(dotlan_url: str) -> list[tuple[str, str]]:
+    url = str(dotlan_url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Dotlan-Link muss mit http oder https beginnen")
+    if parsed.netloc != "evemaps.dotlan.net":
+        raise HTTPException(status_code=400, detail="Nur evemaps.dotlan.net Links sind erlaubt")
+    if "/bridges/" not in parsed.path:
+        raise HTTPException(status_code=400, detail="Bitte einen Dotlan-Bridge-Link verwenden")
+
+    response = requests.get(
+        url,
+        headers={"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"},
+        timeout=20,
+    )
+    response.raise_for_status()
+    systems = [unquote(match).strip() for match in _DOTLAN_SYSTEM_LINK_RE.findall(response.text or "")]
+    if len(systems) < 2:
+        raise HTTPException(status_code=400, detail="Keine Bridge-Systeme auf der Dotlan-Seite gefunden")
+
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for index in range(0, len(systems) - 1, 2):
+        left = systems[index]
+        right = systems[index + 1]
+        if not left or not right or left == right:
+            continue
+        key = tuple(sorted((left, right)))
+        if key in seen:
+            continue
+        seen.add(key)
+        pairs.append((left, right))
+    if not pairs:
+        raise HTTPException(status_code=400, detail="Keine eindeutigen Bridge-Paare in Dotlan gefunden")
+    return pairs
 
 
 def _serialize_manual_bridge(entry: CorpBridgeConnection, account, db: Session) -> dict:
@@ -614,24 +690,98 @@ def save_bridge_connection(
             raise HTTPException(status_code=403, detail="Keine Berechtigung fuer diese Verbindung")
         if existing and int(existing.id) != int(entry.id):
             raise HTTPException(status_code=409, detail="Diese Verbindung existiert bereits")
+        entry, _ = _upsert_bridge_connection(
+            db=db,
+            corporation_id=corporation_id,
+            corporation_name=corporation_name,
+            from_system_id=from_system_id,
+            from_system_name=from_info["name"],
+            to_system_id=to_system_id,
+            to_system_name=to_info["name"],
+            notes=notes,
+            created_by_account_id=entry.created_by_account_id,
+        )
     else:
         if existing:
             raise HTTPException(status_code=409, detail="Diese Verbindung existiert bereits")
-        entry = CorpBridgeConnection(created_by_account_id=account.id)
-        db.add(entry)
-
-    entry.corporation_id = corporation_id
-    entry.corporation_name = corporation_name
-    entry.from_system_id = from_system_id
-    entry.from_system_name = from_info["name"]
-    entry.to_system_id = to_system_id
-    entry.to_system_name = to_info["name"]
-    entry.notes = notes
+        entry, _ = _upsert_bridge_connection(
+            db=db,
+            corporation_id=corporation_id,
+            corporation_name=corporation_name,
+            from_system_id=from_system_id,
+            from_system_name=from_info["name"],
+            to_system_id=to_system_id,
+            to_system_name=to_info["name"],
+            notes=notes,
+            created_by_account_id=account.id,
+        )
 
     db.commit()
     db.refresh(entry)
     _invalidate_route_caches()
     return JSONResponse({"ok": True, "connection": _serialize_manual_bridge(entry, account, db)})
+
+
+@router.post("/api/bridge-connections/import-dotlan")
+def import_dotlan_bridge_connections(
+    payload: dict = Body(...),
+    account=Depends(require_manager_or_admin),
+    db: Session = Depends(get_db),
+):
+    corporation_id = int(payload.get("corporation_id") or 0)
+    if not corporation_id:
+        raise HTTPException(status_code=400, detail="Korporation fehlt")
+    if not _can_manage_bridge(account, corporation_id, db):
+        raise HTTPException(status_code=403, detail="Nur eigene Corporation erlaubt")
+
+    dotlan_url = str(payload.get("url") or "").strip()
+    if not dotlan_url:
+        raise HTTPException(status_code=400, detail="Dotlan-Link fehlt")
+
+    corporation_name = _resolve_corporation_name(corporation_id, db)
+    bridge_pairs = _parse_dotlan_bridge_pairs(dotlan_url)
+
+    created_count = 0
+    updated_count = 0
+    unresolved: list[str] = []
+    imported: list[dict] = []
+
+    for from_name, to_name in bridge_pairs:
+        from_system = sde.find_system(from_name)
+        to_system = sde.find_system(to_name)
+        if not from_system or not to_system:
+            unresolved.append(f"{from_name} -> {to_name}")
+            continue
+        from_system_id, to_system_id = _normalize_bridge_pair(int(from_system["id"]), int(to_system["id"]))
+        from_info = _system_info_or_404(from_system_id)
+        to_info = _system_info_or_404(to_system_id)
+        entry, created = _upsert_bridge_connection(
+            db=db,
+            corporation_id=corporation_id,
+            corporation_name=corporation_name,
+            from_system_id=from_system_id,
+            from_system_name=from_info["name"],
+            to_system_id=to_system_id,
+            to_system_name=to_info["name"],
+            notes=f"Imported from Dotlan: {dotlan_url}"[:255],
+            created_by_account_id=account.id,
+        )
+        db.flush()
+        imported.append(_serialize_manual_bridge(entry, account, db))
+        if created:
+            created_count += 1
+        else:
+            updated_count += 1
+
+    db.commit()
+    _invalidate_route_caches()
+    return JSONResponse({
+        "ok": True,
+        "created": created_count,
+        "updated": updated_count,
+        "unresolved": unresolved,
+        "imported": imported,
+    })
 
 
 @router.delete("/api/bridge-connections/{bridge_id}")

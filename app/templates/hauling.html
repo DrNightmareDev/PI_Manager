@@ -229,6 +229,17 @@
                 <div id="bridgeManagePanel" class="card eve-card border-0 mb-3 d-none">
                     <div class="card-header eve-card-header py-2"><span class="small text-muted">Verbindung verwalten</span></div>
                     <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-9">
+                                <label class="form-label small text-muted">Dotlan Bridge-Link</label>
+                                <input id="bridgeImportUrl" type="url" class="form-control form-control-sm eve-input" placeholder="https://evemaps.dotlan.net/bridges/...">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button id="bridgeImportBtn" type="button" class="btn btn-sm btn-outline-info w-100">
+                                    <i class="bi bi-cloud-download me-1"></i>Von Dotlan importieren
+                                </button>
+                            </div>
+                        </div>
                         <form id="bridgeConnectionForm" class="row g-3">
                             <input type="hidden" id="bridgeConnectionId">
                             <div class="col-md-4">
@@ -292,6 +303,8 @@
     const bridgeIdInput = document.getElementById('bridgeConnectionId');
     const bridgeCorpSelect = document.getElementById('bridgeCorporationSelect');
     const bridgeNotesInput = document.getElementById('bridgeNotesInput');
+    const bridgeImportUrl = document.getElementById('bridgeImportUrl');
+    const bridgeImportBtn = document.getElementById('bridgeImportBtn');
     const bridgeSaveBtn = document.getElementById('bridgeSaveBtn');
     const bridgeResetBtn = document.getElementById('bridgeResetBtn');
     const bridgeTbody = document.getElementById('bridgeConnectionsTbody');
@@ -467,6 +480,37 @@
             bridgeSaveBtn.disabled = false;
         }
     }
+    async function importDotlanBridges() {
+        if (!bridgeState.canManage) return;
+        const payload = {
+            corporation_id: Number(bridgeCorpSelect.value) || 0,
+            url: bridgeImportUrl.value.trim(),
+        };
+        if (!payload.corporation_id || !payload.url) {
+            setBridgeAlert('Bitte Korporation und Dotlan-Link angeben.');
+            return;
+        }
+        setBridgeAlert('');
+        bridgeImportBtn.disabled = true;
+        try {
+            const response = await fetch('/hauling/api/bridge-connections/import-dotlan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Import fehlgeschlagen');
+            await loadBridgeConnections();
+            const unresolved = Array.isArray(data.unresolved) && data.unresolved.length
+                ? ` Nicht aufgeloest: ${data.unresolved.slice(0, 5).join(', ')}${data.unresolved.length > 5 ? ' ...' : ''}`
+                : '';
+            setBridgeAlert(`Import abgeschlossen: ${data.created || 0} neu, ${data.updated || 0} aktualisiert.${unresolved}`, 'success');
+        } catch (error) {
+            setBridgeAlert(error.message || 'Import fehlgeschlagen');
+        } finally {
+            bridgeImportBtn.disabled = false;
+        }
+    }
     function bindBridgeActions() {
         bridgeTbody?.addEventListener('click', (event) => {
             const editBtn = event.target.closest('[data-bridge-edit]');
@@ -598,6 +642,7 @@
     useAnsiblex?.addEventListener('change', refreshRouteLocation);
     bridgeModalEl?.addEventListener('show.bs.modal', loadBridgeConnections);
     bridgeForm?.addEventListener('submit', saveBridgeConnection);
+    bridgeImportBtn?.addEventListener('click', importDotlanBridges);
     bridgeResetBtn?.addEventListener('click', resetBridgeForm);
     bindBridgeActions();
     bindSystemLookup('From');
