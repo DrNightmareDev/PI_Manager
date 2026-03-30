@@ -71,16 +71,24 @@
                                     </td>
                                     <td class="small">
                                         <div>
+                                            <a href="https://evemaps.dotlan.net/map/{{ colony.region_name | replace(' ', '_') }}/{{ colony.solar_system_name | replace(' ', '_') }}#sec"
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               class="text-decoration-none"
+                                               style="color:#7ec8e3;">
+                                                {{ colony.planet_name }}
+                                            </a>
+                                        </div>
+                                        {% if colony.region_name and colony.region_name != '—' %}
+                                        <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
+                                        {% endif %}
+                                        {% if colony.solar_system_name and colony.solar_system_name != '—' %}
+                                        <div style="color:#7a8a9a;font-size:.65rem;">
                                             {{ colony.solar_system_name }}
                                             {% if colony.solar_system_id %}
                                             <span class="kill-badge" data-sys-id="{{ colony.solar_system_id }}"></span>
                                             {% endif %}
                                         </div>
-                                        {% if colony.planet_name and colony.planet_name != '—' %}
-                                        <div style="color:#7a8a9a;font-size:.65rem;">{{ colony.planet_name }}</div>
-                                        {% endif %}
-                                        {% if colony.region_name and colony.region_name != '—' %}
-                                        <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -107,26 +115,41 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if colony.storage_breakdown %}
+                                        {% if colony.storage %}
+                                        {% set max_pct = colony.storage | map(attribute='fill_pct') | max %}
+                                        {% if max_pct > 85 %}{% set clr = '#e74c3c' %}
+                                        {% elif max_pct > 60 %}{% set clr = '#f4a300' %}
+                                        {% else %}{% set clr = '#2dc653' %}{% endif %}
                                         <div class="eve-hover-wrap">
-                                            <span class="eve-storage-badge" style="cursor:default;color:
-                                                {% if colony.storage_fill_pct > 85 %}#e74c3c
-                                                {% elif colony.storage_fill_pct > 60 %}#f4a300
-                                                {% else %}#2dc653{% endif %};">
-                                                {{ colony.storage_breakdown | length }}×
-                                                {% if colony.storage_fill_pct == 0 %}leer{% else %}{{ colony.storage_fill_pct | round(0) | int }}%{% endif %}
+                                            <span class="eve-storage-badge" style="color:{{ clr }};cursor:default;">
+                                                {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
                                             </span>
                                             <div class="eve-hover-card eve-hover-card-right">
                                                 <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Lager</div>
-                                                {% for item in colony.storage_breakdown[:8] %}
-                                                <div class="d-flex justify-content-between gap-3" style="{% if not loop.last %}margin-bottom:3px;{% endif %}">
-                                                    <span style="color:#b0c4d4;">{{ item.name }}</span>
-                                                    <span style="color:#7a9a6a;font-weight:600;">{{ "{:,}".format(item.amount) }}</span>
+                                                {% for s in colony.storage %}
+                                                {% if not loop.first %}<div style="border-top:1px solid #1a3a5a;margin:5px 0;"></div>{% endif %}
+                                                {% set pct = s.fill_pct %}
+                                                {% if pct > 85 %}{% set pct_clr = '#e74c3c' %}
+                                                {% elif pct > 60 %}{% set pct_clr = '#f4a300' %}
+                                                {% else %}{% set pct_clr = '#2dc653' %}{% endif %}
+                                                <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:3px;">
+                                                    <span style="color:#b0c4d4;font-weight:600;">{{ s.label }}</span>
+                                                    <span style="color:{{ pct_clr }};font-weight:600;">{{ pct }}%</span>
                                                 </div>
-                                                {% endfor %}
-                                                {% if colony.storage_breakdown | length > 8 %}
-                                                <div class="text-muted small mt-1">+{{ (colony.storage_breakdown | length) - 8 }} mehr</div>
+                                                {% if s['items'] %}
+                                                    {% for item in s['items'][:8] %}
+                                                    <div style="display:flex;justify-content:space-between;gap:16px;color:#7a8a9a;">
+                                                        <span>{{ item.name }}</span>
+                                                        <span>{{ "{:,}".format(item.amount) }}</span>
+                                                    </div>
+                                                    {% endfor %}
+                                                    {% if s['items'] | length > 8 %}
+                                                    <div class="text-muted small mt-1">+{{ (s['items'] | length) - 8 }} mehr</div>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <div style="color:#3a5a7a;font-style:italic;">leer</div>
                                                 {% endif %}
+                                                {% endfor %}
                                             </div>
                                         </div>
                                         {% else %}
@@ -136,6 +159,8 @@
                                     <td class="small">
                                         {% if colony.storage_value > 0 %}
                                             {{ colony.storage_value | format_isk }}
+                                        {% elif colony.storage and colony.storage | length > 0 %}
+                                            <span class="text-muted">0 ISK</span>
                                         {% else %}
                                             <span class="text-muted">—</span>
                                         {% endif %}
