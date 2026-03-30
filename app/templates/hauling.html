@@ -12,7 +12,7 @@
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <label class="small text-muted mb-0">{{ t('common.character', default='Charakter') }}</label>
                 <select id="haulingCharacterSelect" class="form-select form-select-sm eve-input" style="min-width:220px;max-width:320px;">
-                    <option value="-1"{% if selected_character_id is none %} selected{% endif %}>Alle Charaktere</option>
+                    <option value="-1"{% if selected_character_id is none %} selected{% endif %}>{{ t('hauling.all_characters') }}</option>
                     {% for char in characters %}
                     <option value="{{ char.id }}"{% if char.id == selected_character_id %} selected{% endif %}>{{ char.character_name }}</option>
                     {% endfor %}
@@ -20,12 +20,12 @@
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bridgeConnectionsModal">
-                    <i class="bi bi-diagram-3 me-1"></i>Bridge-Verbindungen
+                    <i class="bi bi-diagram-3 me-1"></i>{{ t('hauling.bridge_connections') }}
                 </button>
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="useAnsiblex" checked>
                     <label class="form-check-label small text-muted" for="useAnsiblex">
-                        <i class="bi bi-lightning-fill me-1 text-info"></i>AnsibleX Bridges
+                        <i class="bi bi-lightning-fill me-1 text-info"></i>{{ t('hauling.bridge_use_ansiblex') }}
                     </label>
                 </div>
                 <span class="small text-muted"><i class="bi bi-geo-alt me-1"></i>{{ t('common.location', default='Standort') }}: {{ t('hauling.location_unknown') if not location_name else location_name }}</span>
@@ -49,13 +49,13 @@
                         <table id="haulingStorageTable" class="table table-dark table-hover table-sm mb-0">
                             <thead>
                                 <tr>
-                                    <th class="small text-muted">Charakter</th>
-                                    <th class="small text-muted">System</th>
-                                    <th class="small text-muted">Typ</th>
-                                    <th class="small text-muted">Ablauf</th>
-                                    <th class="small text-muted">Lager</th>
-                                    <th class="small text-muted">Wert</th>
-                                    <th class="small text-muted">Dringlichkeit</th>
+                                    <th class="small text-muted">{{ t('hauling.col_character') }}</th>
+                                    <th class="small text-muted">{{ t('hauling.col_system') }}</th>
+                                    <th class="small text-muted">{{ t('hauling.col_type') }}</th>
+                                    <th class="small text-muted">{{ t('hauling.col_expiry') }}</th>
+                                    <th class="small text-muted">{{ t('hauling.col_storage') }}</th>
+                                    <th class="small text-muted">{{ t('hauling.col_value') }}</th>
+                                    <th class="small text-muted">{{ t('hauling.col_urgency') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -95,7 +95,7 @@
                                     <td class="small">
                                         {% if colony.expiry_hours is not none %}
                                             {% if colony.expiry_hours < 0 %}
-                                                <span class="eve-expiry-expired"><i class="bi bi-exclamation-circle me-1"></i>Abgelaufen</span>
+                                                <span class="eve-expiry-expired"><i class="bi bi-exclamation-circle me-1"></i>{{ t('hauling.expired') }}</span>
                                             {% elif colony.expiry_hours < 12 %}
                                                 <span class="eve-expiry-crit"><i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}</span>
                                             {% elif colony.expiry_hours < 24 %}
@@ -104,7 +104,7 @@
                                                 <span class="eve-expiry-ok"><i class="bi bi-clock me-1"></i>{{ colony.expiry_hours | format_expiry }}</span>
                                             {% endif %}
                                         {% elif colony.is_stalled %}
-                                            <span class="eve-expiry-warn"><i class="bi bi-pause-circle me-1"></i>Stalled</span>
+                                            <span class="eve-expiry-warn"><i class="bi bi-pause-circle me-1"></i>{{ t('hauling.stalled') }}</span>
                                         {% else %}
                                             <span class="text-muted">—</span>
                                         {% endif %}
@@ -116,10 +116,10 @@
                                         {% elif max_pct > 60 %}{% set clr = '#f4a300' %}
                                         {% else %}{% set clr = '#2dc653' %}{% endif %}
                                         <span class="eve-storage-badge" style="color:{{ clr }};">
-                                            {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
+                                            {% if max_pct == 0 %}{{ t('hauling.empty') }}{% else %}{{ max_pct }}%{% endif %}
                                         </span>
                                         {% else %}
-                                        <span class="text-muted small">leer</span>
+                                        <span class="text-muted small">{{ t('hauling.empty') }}</span>
                                         {% endif %}
                                     </td>
                                     <td class="small">
@@ -144,7 +144,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="small text-muted mt-3">Total: {{ hauling_colonies|length }} Planeten · {{ hauling_total_value | format_isk }}</div>
+                    <div class="small text-muted mt-3">{{ t('hauling.total_planets', count=hauling_colonies|length, value=hauling_total_value | format_isk) }}</div>
                     {% else %}
                     <div class="text-muted text-center py-4"><i class="bi bi-inbox fs-2 d-block mb-2"></i>{{ t('hauling.no_items') }}</div>
                     {% endif %}
@@ -176,14 +176,14 @@
                                     <span class="small text-muted text-truncate">{{ item.system_name }}</span>
                                     {% else %}
                                     <span class="fw-bold text-truncate">{{ item.system_name }}</span>
-                                    <span class="text-muted small">{% if loop.first %}Ausgangspunkt{% else %}&rarr; {{ item.jumps_from_prev }} Spruenge{% endif %}</span>
+                                    <span class="text-muted small">{% if loop.first %}{{ t('hauling.origin') }}{% else %}&rarr; {{ item.jumps_from_prev }} {{ t('hauling.jumps') }}{% endif %}</span>
                                     {% endif %}
                                 </div>
                                 <div class="d-flex justify-content-center" style="min-width:7.5rem;">
                                     {% if item.bridge_outgoing %}
-                                    <span class="badge bg-info text-dark" title="{{ item.bridge_label or 'Jump Bridge' }}">&rarr; Bridge</span>
+                                    <span class="badge bg-info text-dark" title="{{ item.bridge_label or t('hauling.bridge_label') }}">{{ t('hauling.bridge_forward') }}</span>
                                     {% elif item.bridge_incoming %}
-                                    <span class="badge bg-info text-dark" title="{{ item.bridge_label or 'Jump Bridge' }}">&larr; Bridge</span>
+                                    <span class="badge bg-info text-dark" title="{{ item.bridge_label or t('hauling.bridge_label') }}">{{ t('hauling.bridge_backward') }}</span>
                                     {% else %}
                                     <span class="small text-muted">&mdash;</span>
                                     {% endif %}
@@ -196,7 +196,7 @@
                                     {% endif %}
                                     {% if not item.is_intermediate %}
                                     <span class="badge {% if loop.first %}bg-secondary{% else %}bg-primary{% endif %}">
-                                        {% if loop.first %}Start{% else %}{{ item.jumps_from_prev }}J{% endif %}
+                                        {% if loop.first %}{{ t('common.start', default='Start') }}{% else %}{{ item.jumps_from_prev }}{{ t('hauling.jumps') }}{% endif %}
                                     </span>
                                     {% endif %}
                                 </div>
@@ -225,8 +225,8 @@
         <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
             <div class="modal-header" style="border-bottom:1px solid var(--eve-card-border);">
                 <div>
-                    <h5 class="modal-title fw-semibold mb-1"><i class="bi bi-diagram-3 me-2 eve-accent"></i>Bridge-Verbindungen</h5>
-                    <div class="small text-muted">Sichtbar für alle. Manager pflegen nur ihre eigene Corp, Admins alle.</div>
+                    <h5 class="modal-title fw-semibold mb-1"><i class="bi bi-diagram-3 me-2 eve-accent"></i>{{ t('hauling.bridge_connections') }}</h5>
+                    <div class="small text-muted">{{ t('hauling.bridge_visibility', default='Visible to all. Managers manage their own corp only, admins all.') }}</div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -237,58 +237,58 @@
                     <div class="card-body">
                         <div class="row g-3 align-items-end">
                             <div class="col-md-8">
-                                <label class="form-label small text-muted">Korporation</label>
+                                <label class="form-label small text-muted">{{ t('hauling.bridge_corporation') }}</label>
                                 <select id="bridgeExportCorpSelect" class="form-select form-select-sm eve-input"></select>
                             </div>
                             <div class="col-md-4">
                                 <button id="bridgeExportBtn" type="button" class="btn btn-sm btn-outline-info w-100">
-                                    <i class="bi bi-download me-1"></i>SMT Export herunterladen
+                                    <i class="bi bi-download me-1"></i>SMT Export
                                 </button>
                             </div>
                         </div>
-                        <div class="small text-muted mt-2">Exportiert alle gepflegten Bridges der gewaehlten Corp im SMT-Importformat.</div>
+                        <div class="small text-muted mt-2">{{ t('hauling.bridge_export_hint') }}</div>
                     </div>
                 </div>
                 <div id="bridgeManagePanel" class="card eve-card border-0 mb-3 d-none">
-                    <div class="card-header eve-card-header py-2"><span class="small text-muted">Verbindung verwalten</span></div>
+                    <div class="card-header eve-card-header py-2"><span class="small text-muted">{{ t('hauling.bridge_manage', default='Manage Connection') }}</span></div>
                     <div class="card-body">
                         <div class="row g-3 mb-3">
                             <div class="col-md-9">
-                                <label class="form-label small text-muted">Dotlan Bridge-Link</label>
+                                <label class="form-label small text-muted">{{ t('hauling.bridge_dotlan_link') }}</label>
                                 <input id="bridgeImportUrl" type="url" class="form-control form-control-sm eve-input" placeholder="https://evemaps.dotlan.net/bridges/...">
                             </div>
                             <div class="col-md-3 d-flex align-items-end">
                                 <button id="bridgeImportBtn" type="button" class="btn btn-sm btn-outline-info w-100">
-                                    <i class="bi bi-cloud-download me-1"></i>Von Dotlan importieren
+                                    <i class="bi bi-cloud-download me-1"></i>{{ t('hauling.bridge_import_dotlan', default='Import from Dotlan') }}
                                 </button>
                             </div>
                         </div>
                         <form id="bridgeConnectionForm" class="row g-3">
                             <input type="hidden" id="bridgeConnectionId">
                             <div class="col-md-4">
-                                <label class="form-label small text-muted">Korporation</label>
+                                <label class="form-label small text-muted">{{ t('hauling.bridge_corporation') }}</label>
                                 <select id="bridgeCorporationSelect" class="form-select form-select-sm eve-input"></select>
                             </div>
                             <div class="col-md-4 position-relative">
-                                <label class="form-label small text-muted">Von</label>
-                                <input id="bridgeFromInput" type="text" class="form-control form-control-sm eve-input" placeholder="System suchen" autocomplete="off">
+                                <label class="form-label small text-muted">{{ t('hauling.bridge_system_from') }}</label>
+                                <input id="bridgeFromInput" type="text" class="form-control form-control-sm eve-input" placeholder="{{ t('hauling.bridge_system_search') }}" autocomplete="off">
                                 <input id="bridgeFromId" type="hidden">
                                 <div id="bridgeFromResults" class="eve-search-dropdown position-absolute w-100 d-none" style="z-index:30;"></div>
                             </div>
                             <div class="col-md-4 position-relative">
-                                <label class="form-label small text-muted">Nach</label>
-                                <input id="bridgeToInput" type="text" class="form-control form-control-sm eve-input" placeholder="System suchen" autocomplete="off">
+                                <label class="form-label small text-muted">{{ t('hauling.bridge_system_to') }}</label>
+                                <input id="bridgeToInput" type="text" class="form-control form-control-sm eve-input" placeholder="{{ t('hauling.bridge_system_search') }}" autocomplete="off">
                                 <input id="bridgeToId" type="hidden">
                                 <div id="bridgeToResults" class="eve-search-dropdown position-absolute w-100 d-none" style="z-index:30;"></div>
                             </div>
                             <div class="col-12">
-                                <label class="form-label small text-muted">Notiz</label>
-                                <input id="bridgeNotesInput" type="text" maxlength="255" class="form-control form-control-sm eve-input" placeholder="Optional">
+                                <label class="form-label small text-muted">{{ t('common.note', default='Note') }}</label>
+                                <input id="bridgeNotesInput" type="text" maxlength="255" class="form-control form-control-sm eve-input" placeholder="{{ t('common.optional', default='Optional') }}">
                             </div>
                             <div class="col-12 d-flex align-items-center gap-2 flex-wrap">
-                                <button id="bridgeSaveBtn" type="submit" class="btn btn-sm eve-btn-primary"><i class="bi bi-save me-1"></i>Speichern</button>
-                                <button id="bridgeResetBtn" type="button" class="btn btn-sm eve-btn-ghost d-none">Bearbeitung abbrechen</button>
-                                <span class="small text-muted">Diese Verbindungen werden direkt in den lokalen Jump-Graphen eingebaut.</span>
+                                <button id="bridgeSaveBtn" type="submit" class="btn btn-sm eve-btn-primary"><i class="bi bi-save me-1"></i>{{ t('common.save') }}</button>
+                                <button id="bridgeResetBtn" type="button" class="btn btn-sm eve-btn-ghost d-none">{{ t('hauling.bridge_cancel_edit', default='Cancel editing') }}</button>
+                                <span class="small text-muted">{{ t('hauling.bridge_graph_hint', default='These connections are integrated directly into the local jump graph.') }}</span>
                             </div>
                         </form>
                     </div>
@@ -297,11 +297,11 @@
                     <table class="table eve-table mb-0">
                         <thead>
                             <tr>
-                                <th class="small text-muted">Korp</th>
-                                <th class="small text-muted">Von</th>
-                                <th class="small text-muted">Nach</th>
-                                <th class="small text-muted">Notiz</th>
-                                <th class="small text-muted text-end">Aktion</th>
+                                <th class="small text-muted">{{ t('hauling.bridge_corporation') }}</th>
+                                <th class="small text-muted">{{ t('hauling.bridge_system_from') }}</th>
+                                <th class="small text-muted">{{ t('hauling.bridge_system_to') }}</th>
+                                <th class="small text-muted">{{ t('common.note', default='Note') }}</th>
+                                <th class="small text-muted text-end">{{ t('common.action', default='Action') }}</th>
                             </tr>
                         </thead>
                         <tbody id="bridgeConnectionsTbody">
@@ -316,6 +316,32 @@
 
 <script>
 (function () {
+    const _i18n = {
+        refreshLocation: {{ t('hauling.refresh_location') | tojson }},
+        origin: {{ t('hauling.origin') | tojson }},
+        jumps: {{ t('hauling.jumps') | tojson }},
+        start: {{ t('common.start', default='Start') | tojson }},
+        bridgeForward: {{ t('hauling.bridge_forward') | tojson }},
+        bridgeBackward: {{ t('hauling.bridge_backward') | tojson }},
+        bridgeLabel: {{ t('hauling.bridge_label') | tojson }},
+        bridgeNoConnections: {{ t('hauling.bridge_no_connections') | tojson }},
+        bridgeSaved: {{ t('hauling.bridge_saved') | tojson }},
+        bridgeSaveError: {{ t('hauling.bridge_save_error') | tojson }},
+        bridgeImportError: {{ t('hauling.bridge_import_error') | tojson }},
+        bridgeDeleteError: {{ t('hauling.bridge_delete_error') | tojson }},
+        bridgeDeleteConfirm: {{ t('hauling.bridge_delete_confirm') | tojson }},
+        bridgeExportNoCorp: {{ t('hauling.bridge_export_no_corp') | tojson }},
+        bridgeSelectSystems: {{ t('hauling.bridge_select_systems') | tojson }},
+        bridgeDotlanRequired: {{ t('hauling.bridge_dotlan_required') | tojson }},
+        bridgeImportResult: {{ t('hauling.bridge_import_result', created='{created}', updated='{updated}') | tojson }},
+        viewOnly: {{ t('hauling.bridge_view_only', default='View only') | tojson }},
+        loading: {{ t('common.loading', default='Loading...') | tojson }},
+        loadError: {{ t('hauling.bridge_load_error', default='Could not load connections.') | tojson }},
+        save: {{ t('common.save') | tojson }},
+        update: {{ t('common.update', default='Update') | tojson }},
+        cancelEdit: {{ t('hauling.bridge_cancel_edit', default='Cancel editing') | tojson }},
+        killsLastHour: {{ t('killboard.kills_last_hour') | tojson }},
+    };
     const charSelect = document.getElementById('haulingCharacterSelect');
     const refreshBtn = document.getElementById('refreshLocationBtn');
     const useAnsiblex = document.getElementById('useAnsiblex');
@@ -352,7 +378,7 @@
     async function refreshRouteLocation() {
         if (!charSelect) return;
         refreshBtn.disabled = true;
-        refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>{{ t("hauling.refresh_location") }}';
+        refreshBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${_i18n.refreshLocation}`;
         try {
             const locationResp = await fetch(`/hauling/api/location?character_id=${encodeURIComponent(charSelect.value)}`);
             const locationData = await locationResp.json();
@@ -381,11 +407,11 @@
                 routeList.innerHTML = routeData.ordered.map((item, index) => {
                     const isIntermediate = item.is_intermediate;
                     const isFirst = index === 0;
-                    const bridgeTitle = escapeHtml(item.bridge_label || 'Jump Bridge');
+                    const bridgeTitle = escapeHtml(item.bridge_label || _i18n.bridgeLabel);
                     const bridgeBadge = item.bridge_outgoing
-                        ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">&rarr; Bridge</span>`
+                        ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">${_i18n.bridgeForward}</span>`
                         : item.bridge_incoming
-                            ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">&larr; Bridge</span>`
+                            ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">${_i18n.bridgeBackward}</span>`
                             : '<span class="small text-muted">&mdash;</span>';
                     const killBadge = item.system_id
                         ? `<span class="kill-badge" data-sys-id="${item.system_id}"></span>`
@@ -395,7 +421,7 @@
                     if (isIntermediate) {
                         return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i><span class="small text-muted text-truncate">${escapeHtml(item.system_name)}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end" style="min-width:6rem;">${killBadge}</div></div></li>`;
                     }
-                    return `<li class="list-group-item eve-list-item bg-transparent text-light border-secondary"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><span class="fw-bold text-truncate">${escapeHtml(item.system_name)}</span><span class="text-muted small">${isFirst ? 'Ausgangspunkt' : '&rarr; ' + item.jumps_from_prev + ' Spruenge'}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end align-items-center gap-2" style="min-width:6rem;">${killBadge}<span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? 'Start' : item.jumps_from_prev + 'J'}</span></div></div></li>`;
+                    return `<li class="list-group-item eve-list-item bg-transparent text-light border-secondary"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><span class="fw-bold text-truncate">${escapeHtml(item.system_name)}</span><span class="text-muted small">${isFirst ? _i18n.origin : '&rarr; ' + item.jumps_from_prev + ' ' + _i18n.jumps}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end align-items-center gap-2" style="min-width:6rem;">${killBadge}<span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? _i18n.start : item.jumps_from_prev + _i18n.jumps}</span></div></div></li>`;
                 }).join('');
             }
             loadKillBadges();
@@ -403,14 +429,14 @@
             window.location.reload();
         } finally {
             refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>{{ t("hauling.refresh_location") }}';
+            refreshBtn.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i>${_i18n.refreshLocation}`;
         }
     }
     function resetBridgeForm() {
         if (!bridgeForm) return;
         bridgeIdInput.value = '';
         bridgeNotesInput.value = '';
-        bridgeSaveBtn.innerHTML = '<i class="bi bi-save me-1"></i>Speichern';
+        bridgeSaveBtn.innerHTML = `<i class="bi bi-save me-1"></i>${_i18n.save}`;
         bridgeResetBtn.classList.add('d-none');
         ['From', 'To'].forEach(side => {
             document.getElementById(`bridge${side}Input`).value = '';
@@ -430,7 +456,7 @@
     function renderBridgeRows() {
         if (!bridgeTbody) return;
         if (!bridgeState.manual.length) {
-            bridgeTbody.innerHTML = '<tr><td colspan="5" class="small text-muted py-4 text-center">Noch keine gepflegten Bridge-Verbindungen vorhanden.</td></tr>';
+            bridgeTbody.innerHTML = `<tr><td colspan="5" class="small text-muted py-4 text-center">${_i18n.bridgeNoConnections}</td></tr>`;
             return;
         }
         bridgeTbody.innerHTML = bridgeState.manual.map(connection => `
@@ -439,13 +465,13 @@
                 <td class="small"><div>${escapeHtml(connection.from_system_name)}</div><div class="text-muted" style="font-size:.7rem;">${connection.from_system_id}</div></td>
                 <td class="small"><div>${escapeHtml(connection.to_system_name)}</div><div class="text-muted" style="font-size:.7rem;">${connection.to_system_id}</div></td>
                 <td class="small text-muted">${connection.notes ? escapeHtml(connection.notes) : '—'}</td>
-                <td class="text-end">${connection.can_edit ? `<button type="button" class="btn btn-sm eve-btn-ghost me-1" data-bridge-edit="${connection.id}"><i class="bi bi-pencil"></i></button><button type="button" class="btn btn-sm btn-outline-danger" data-bridge-delete="${connection.id}"><i class="bi bi-trash"></i></button>` : '<span class="small text-muted">Nur Anzeige</span>'}</td>
+                <td class="text-end">${connection.can_edit ? `<button type="button" class="btn btn-sm eve-btn-ghost me-1" data-bridge-edit="${connection.id}"><i class="bi bi-pencil"></i></button><button type="button" class="btn btn-sm btn-outline-danger" data-bridge-delete="${connection.id}"><i class="bi bi-trash"></i></button>` : `<span class="small text-muted">${_i18n.viewOnly}</span>`}</td>
             </tr>
         `).join('');
     }
     async function loadBridgeConnections() {
         if (!bridgeTbody) return;
-        bridgeTbody.innerHTML = '<tr><td colspan="5" class="small text-muted py-4 text-center">Verbindungen werden geladen...</td></tr>';
+        bridgeTbody.innerHTML = `<tr><td colspan="5" class="small text-muted py-4 text-center">${_i18n.loading}</td></tr>`;
         setBridgeAlert('');
         try {
             const response = await fetch('/hauling/api/bridge-connections');
@@ -461,7 +487,7 @@
             resetBridgeForm();
             renderBridgeRows();
         } catch {
-            bridgeTbody.innerHTML = '<tr><td colspan="5" class="small text-danger py-4 text-center">Verbindungen konnten nicht geladen werden.</td></tr>';
+            bridgeTbody.innerHTML = `<tr><td colspan="5" class="small text-danger py-4 text-center">${_i18n.loadError}</td></tr>`;
         }
     }
     function startBridgeEdit(connection) {
@@ -473,20 +499,20 @@
         document.getElementById('bridgeFromId').value = connection.from_system_id;
         document.getElementById('bridgeToInput').value = connection.to_system_name;
         document.getElementById('bridgeToId').value = connection.to_system_id;
-        bridgeSaveBtn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Aktualisieren';
+        bridgeSaveBtn.innerHTML = `<i class="bi bi-pencil-square me-1"></i>${_i18n.update}`;
         bridgeResetBtn.classList.remove('d-none');
         setBridgeAlert('');
     }
     async function deleteBridgeConnection(connectionId) {
-        if (!confirm('Diese Bridge-Verbindung wirklich loeschen?')) return;
+        if (!confirm(_i18n.bridgeDeleteConfirm)) return;
         setBridgeAlert('');
         try {
             const response = await fetch(`/hauling/api/bridge-connections/${connectionId}`, { method: 'DELETE' });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || 'Loeschen fehlgeschlagen');
+            if (!response.ok) throw new Error(data.detail || _i18n.bridgeDeleteError);
             await loadBridgeConnections();
         } catch (error) {
-            setBridgeAlert(error.message || 'Loeschen fehlgeschlagen');
+            setBridgeAlert(error.message || _i18n.bridgeDeleteError);
         }
     }
     async function saveBridgeConnection(event) {
@@ -500,7 +526,7 @@
             notes: bridgeNotesInput.value.trim(),
         };
         if (!payload.corporation_id || !payload.from_system_id || !payload.to_system_id) {
-            setBridgeAlert('Bitte Korporation sowie beide Systeme auswaehlen.');
+            setBridgeAlert(_i18n.bridgeSelectSystems);
             return;
         }
         setBridgeAlert('');
@@ -512,11 +538,11 @@
                 body: JSON.stringify(payload),
             });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || 'Speichern fehlgeschlagen');
+            if (!response.ok) throw new Error(data.detail || _i18n.bridgeSaveError);
             await loadBridgeConnections();
-            setBridgeAlert('Bridge-Verbindung gespeichert.', 'success');
+            setBridgeAlert(_i18n.bridgeSaved, 'success');
         } catch (error) {
-            setBridgeAlert(error.message || 'Speichern fehlgeschlagen');
+            setBridgeAlert(error.message || _i18n.bridgeSaveError);
         } finally {
             bridgeSaveBtn.disabled = false;
         }
@@ -528,7 +554,7 @@
             url: bridgeImportUrl.value.trim(),
         };
         if (!payload.corporation_id || !payload.url) {
-            setBridgeAlert('Bitte Korporation und Dotlan-Link angeben.');
+            setBridgeAlert(_i18n.bridgeDotlanRequired);
             return;
         }
         setBridgeAlert('');
@@ -540,14 +566,15 @@
                 body: JSON.stringify(payload),
             });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || 'Import fehlgeschlagen');
+            if (!response.ok) throw new Error(data.detail || _i18n.bridgeImportError);
             await loadBridgeConnections();
             const unresolved = Array.isArray(data.unresolved) && data.unresolved.length
-                ? ` Nicht aufgeloest: ${data.unresolved.slice(0, 5).join(', ')}${data.unresolved.length > 5 ? ' ...' : ''}`
+                ? ` (${data.unresolved.slice(0, 5).join(', ')}${data.unresolved.length > 5 ? ' ...' : ''})`
                 : '';
-            setBridgeAlert(`Import abgeschlossen: ${data.created || 0} neu, ${data.updated || 0} aktualisiert.${unresolved}`, 'success');
+            const msg = _i18n.bridgeImportResult.replace('{created}', data.created || 0).replace('{updated}', data.updated || 0);
+            setBridgeAlert(msg + unresolved, 'success');
         } catch (error) {
-            setBridgeAlert(error.message || 'Import fehlgeschlagen');
+            setBridgeAlert(error.message || _i18n.bridgeImportError);
         } finally {
             bridgeImportBtn.disabled = false;
         }
@@ -555,7 +582,7 @@
     function exportBridgeConnections() {
         const corporationId = Number(bridgeExportCorpSelect?.value || 0);
         if (!corporationId) {
-            setBridgeAlert('Bitte eine Korporation fuer den Export auswaehlen.');
+            setBridgeAlert(_i18n.bridgeExportNoCorp);
             return;
         }
         setBridgeAlert('');
@@ -621,9 +648,9 @@
         if (!data || data.danger_level === 'safe' || !data.kill_count) return '';
         const href = data.system_url || `https://zkillboard.com/system/${data.system_id}/`;
         if (data.danger_level === 'danger') {
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span class="badge bg-danger ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-skull-fill me-1"></i>${data.kill_count}</span></a>`;
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span class="badge bg-danger ms-1" title="${data.kill_count} ${_i18n.killsLastHour}"><i class="bi bi-skull-fill me-1"></i>${data.kill_count}</span></a>`;
         }
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span class="badge bg-warning text-dark ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.kill_count}</span></a>`;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span class="badge bg-warning text-dark ms-1" title="${data.kill_count} ${_i18n.killsLastHour}"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.kill_count}</span></a>`;
     }
     async function loadKillBadges() {
         const placeholders = Array.from(document.querySelectorAll('.kill-badge[data-sys-id]'));
