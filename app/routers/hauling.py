@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 import re
 import time
+import io
 from collections import deque
 from urllib.parse import unquote, urlparse
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import ansiblex as _ansiblex
@@ -207,6 +208,12 @@ def _manageable_corporations(account, db: Session) -> list[dict]:
     return entries
 
 
+def _exportable_corporations(account, db: Session) -> list[dict]:
+    if account.is_owner:
+        return _all_known_corporations(db)
+    return _manageable_corporations(account, db)
+
+
 def _manageable_corporation_ids(account, db: Session) -> set[int]:
     return {int(item["corporation_id"]) for item in _manageable_corporations(account, db)}
 
@@ -217,6 +224,13 @@ def _can_manage_bridge(account, corporation_id: int, db: Session) -> bool:
     if not account.is_admin:
         return False
     return int(corporation_id) in _manageable_corporation_ids(account, db)
+
+
+def _can_export_bridge(account, corporation_id: int, db: Session) -> bool:
+    if account.is_owner:
+        return True
+    exportable_ids = {int(item["corporation_id"]) for item in _exportable_corporations(account, db)}
+    return int(corporation_id) in exportable_ids
 
 
 def _resolve_corporation_name(corporation_id: int, db: Session) -> str:
@@ -662,9 +676,49 @@ def get_bridge_connections(
     return JSONResponse({
         "manual": manual,
         "manageable_corporations": _manageable_corporations(account, db),
+        "exportable_corporations": _exportable_corporations(account, db),
         "can_manage": bool(account.is_admin or account.is_owner),
         "can_manage_all": bool(account.is_owner),
     })
+
+
+@router.get("/api/bridge-connections/export-smt")
+def export_bridge_connections_smt(
+    corporation_id: int = Query(...),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    corporation_id = int(corporation_id or 0)
+    if not corporation_id:
+        raise HTTPException(status_code=400, detail="Korporation fehlt")
+    if not _can_export_bridge(account, corporation_id, db):
+        raise HTTPException(status_code=403, detail="Nur Export fuer eigene Corporation erlaubt")
+
+    corporation_name = _resolve_corporation_name(corporation_id, db)
+    entries = (
+        db.query(CorpBridgeConnection)
+        .filter(CorpBridgeConnection.corporation_id == corporation_id)
+        .order_by(CorpBridgeConnection.from_system_name.asc(), CorpBridgeConnection.to_system_name.asc())
+        .all()
+    )
+
+    lines: list[str] = []
+    for entry in entries:
+        from_name = str(entry.from_system_name or "").strip()
+        to_name = str(entry.to_system_name or "").strip()
+        if not from_name or not to_name:
+            continue
+        # SMT clipboard import accepts "0" when the structure ID is unknown.
+        lines.append(f"0 {from_name} \u2192 {to_name}")
+        lines.append(f"0 {to_name} \u2192 {from_name}")
+
+    filename_slug = re.sub(r"[^A-Za-z0-9_-]+", "_", corporation_name).strip("_") or f"corp_{corporation_id}"
+    body = "\n".join(lines) + ("\n" if lines else "")
+    return StreamingResponse(
+        io.BytesIO(body.encode("utf-8")),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename_slug}_bridges_smt.txt"'},
+    )
 
 
 @router.post("/api/bridge-connections")

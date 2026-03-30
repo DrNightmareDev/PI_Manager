@@ -232,6 +232,23 @@
             </div>
             <div class="modal-body">
                 <div id="bridgeModalAlert" class="alert alert-danger d-none py-2 px-3 small mb-3"></div>
+                <div id="bridgeExportPanel" class="card eve-card border-0 mb-3 d-none">
+                    <div class="card-header eve-card-header py-2"><span class="small text-muted">SMT Export</span></div>
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-8">
+                                <label class="form-label small text-muted">Korporation</label>
+                                <select id="bridgeExportCorpSelect" class="form-select form-select-sm eve-input"></select>
+                            </div>
+                            <div class="col-md-4">
+                                <button id="bridgeExportBtn" type="button" class="btn btn-sm btn-outline-info w-100">
+                                    <i class="bi bi-download me-1"></i>SMT Export herunterladen
+                                </button>
+                            </div>
+                        </div>
+                        <div class="small text-muted mt-2">Exportiert alle gepflegten Bridges der gewaehlten Corp im SMT-Importformat.</div>
+                    </div>
+                </div>
                 <div id="bridgeManagePanel" class="card eve-card border-0 mb-3 d-none">
                     <div class="card-header eve-card-header py-2"><span class="small text-muted">Verbindung verwalten</span></div>
                     <div class="card-body">
@@ -303,18 +320,21 @@
     const refreshBtn = document.getElementById('refreshLocationBtn');
     const useAnsiblex = document.getElementById('useAnsiblex');
     const bridgeModalEl = document.getElementById('bridgeConnectionsModal');
+    const bridgeExportPanel = document.getElementById('bridgeExportPanel');
     const bridgeManagePanel = document.getElementById('bridgeManagePanel');
     const bridgeAlert = document.getElementById('bridgeModalAlert');
     const bridgeForm = document.getElementById('bridgeConnectionForm');
     const bridgeIdInput = document.getElementById('bridgeConnectionId');
     const bridgeCorpSelect = document.getElementById('bridgeCorporationSelect');
+    const bridgeExportCorpSelect = document.getElementById('bridgeExportCorpSelect');
     const bridgeNotesInput = document.getElementById('bridgeNotesInput');
     const bridgeImportUrl = document.getElementById('bridgeImportUrl');
     const bridgeImportBtn = document.getElementById('bridgeImportBtn');
+    const bridgeExportBtn = document.getElementById('bridgeExportBtn');
     const bridgeSaveBtn = document.getElementById('bridgeSaveBtn');
     const bridgeResetBtn = document.getElementById('bridgeResetBtn');
     const bridgeTbody = document.getElementById('bridgeConnectionsTbody');
-    const bridgeState = { manual: [], manageableCorps: [], canManage: false };
+    const bridgeState = { manual: [], manageableCorps: [], exportableCorps: [], canManage: false };
     function escapeHtml(value) {
         return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
@@ -396,6 +416,10 @@
         if (!bridgeCorpSelect) return;
         bridgeCorpSelect.innerHTML = bridgeState.manageableCorps.map(corp => `<option value="${corp.corporation_id}">${escapeHtml(corp.corporation_name)}</option>`).join('');
     }
+    function populateBridgeExportCorporations() {
+        if (!bridgeExportCorpSelect) return;
+        bridgeExportCorpSelect.innerHTML = bridgeState.exportableCorps.map(corp => `<option value="${corp.corporation_id}">${escapeHtml(corp.corporation_name)}</option>`).join('');
+    }
     function renderBridgeRows() {
         if (!bridgeTbody) return;
         if (!bridgeState.manual.length) {
@@ -421,9 +445,12 @@
             const data = await response.json();
             bridgeState.manual = data.manual || [];
             bridgeState.manageableCorps = data.manageable_corporations || [];
+            bridgeState.exportableCorps = data.exportable_corporations || [];
             bridgeState.canManage = Boolean(data.can_manage);
+            bridgeExportPanel.classList.toggle('d-none', !bridgeState.exportableCorps.length);
             bridgeManagePanel.classList.toggle('d-none', !bridgeState.canManage);
             populateBridgeCorporations();
+            populateBridgeExportCorporations();
             resetBridgeForm();
             renderBridgeRows();
         } catch {
@@ -517,6 +544,15 @@
         } finally {
             bridgeImportBtn.disabled = false;
         }
+    }
+    function exportBridgeConnections() {
+        const corporationId = Number(bridgeExportCorpSelect?.value || 0);
+        if (!corporationId) {
+            setBridgeAlert('Bitte eine Korporation fuer den Export auswaehlen.');
+            return;
+        }
+        setBridgeAlert('');
+        window.location.href = `/hauling/api/bridge-connections/export-smt?corporation_id=${encodeURIComponent(corporationId)}`;
     }
     function bindBridgeActions() {
         bridgeTbody?.addEventListener('click', (event) => {
@@ -650,6 +686,7 @@
     bridgeModalEl?.addEventListener('show.bs.modal', loadBridgeConnections);
     bridgeForm?.addEventListener('submit', saveBridgeConnection);
     bridgeImportBtn?.addEventListener('click', importDotlanBridges);
+    bridgeExportBtn?.addEventListener('click', exportBridgeConnections);
     bridgeResetBtn?.addEventListener('click', resetBridgeForm);
     bindBridgeActions();
     bindSystemLookup('From');
