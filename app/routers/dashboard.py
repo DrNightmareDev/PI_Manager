@@ -310,7 +310,12 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
             if colony_count > 0:
                 _save_colony_cache(account_id, payload, newdb)
                 _dashboard_cache[account_id] = {**payload, "price_mode": pm}
-                logger.info(f"BG-Refresh account {account_id}: {colony_count} Kolonien gespeichert")
+                # Reset error counter for chars that synced successfully
+                for char in chars:
+                    if (char.esi_consecutive_errors or 0) > 0:
+                        char.esi_consecutive_errors = 0
+                newdb.commit()
+                logger.info("BG-Refresh account %d: %d Kolonien gespeichert", account_id, colony_count)
             else:
                 # ESI returned 0 – keep existing colony data, only bump timestamp to
                 # prevent the next page load from immediately triggering another refresh.
@@ -1277,10 +1282,17 @@ def dashboard(
         for name in product_names
         if name
     }
-    # Token health: count chars with no refresh_token or esi_consecutive_errors >= limit
+    # Token health: warn only when there is a genuine auth problem.
+    # High esi_consecutive_errors alone is not enough — if the last sync
+    # succeeded (colony_sync_issue=False, last_colony_sync_at set) the
+    # counter is stale and should not trigger the banner.
     token_error_chars = [
         c for c in characters
-        if not c.refresh_token or c.esi_consecutive_errors >= 3
+        if not c.refresh_token
+        or (
+            (c.esi_consecutive_errors or 0) >= 3
+            and (c.colony_sync_issue or not c.last_colony_sync_at)
+        )
     ]
     token_error_count = len(token_error_chars)
     notification_colonies = [
