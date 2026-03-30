@@ -19,6 +19,9 @@
                 </select>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bridgeConnectionsModal">
+                    <i class="bi bi-diagram-3 me-1"></i>Bridge-Verbindungen
+                </button>
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="useAnsiblex" checked>
                     <label class="form-check-label small text-muted" for="useAnsiblex">
@@ -57,25 +60,19 @@
                             </thead>
                             <tbody>
                                 {% for colony in hauling_colonies %}
-                                <tr
-                                    data-route-system-id="{{ colony.solar_system_id or '' }}"
+                                <tr data-route-system-id="{{ colony.solar_system_id or '' }}"
                                     class="{% if colony.expiry_hours is not none and colony.expiry_hours < 0 %}table-danger{% elif colony.is_stalled %}table-warning{% endif %}"
                                     onclick="window.open('https://evemaps.dotlan.net/system/{{ (colony.solar_system_name or '') | replace(' ', '_') }}', '_blank')"
                                     style="cursor:pointer;">
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
-                                            <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle"
-                                                 onerror="this.src='/static/img/default_char.svg'" width="28" height="28">
+                                            <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'" width="28" height="28">
                                             <span class="small">{{ colony.character_name }}</span>
                                         </div>
                                     </td>
                                     <td class="small">
                                         <div>
-                                            <a href="https://evemaps.dotlan.net/map/{{ colony.region_name | replace(' ', '_') }}/{{ colony.solar_system_name | replace(' ', '_') }}#sec"
-                                               target="_blank"
-                                               rel="noopener noreferrer"
-                                               class="text-decoration-none"
-                                               style="color:#7ec8e3;">
+                                            <a href="https://evemaps.dotlan.net/map/{{ colony.region_name | replace(' ', '_') }}/{{ colony.solar_system_name | replace(' ', '_') }}#sec" target="_blank" rel="noopener noreferrer" class="text-decoration-none" style="color:#7ec8e3;">
                                                 {{ colony.planet_name }}
                                             </a>
                                         </div>
@@ -92,8 +89,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="badge eve-planet-badge"
-                                              style="background-color:{{ colony.color }}20;color:{{ colony.color }};border:1px solid {{ colony.color }}40;">
+                                        <span class="badge eve-planet-badge" style="background-color:{{ colony.color }}20;color:{{ colony.color }};border:1px solid {{ colony.color }}40;">
                                             {{ t('planet_type.' ~ (colony.planet_type | lower), default=colony.planet_type) }}
                                         </span>
                                     </td>
@@ -122,7 +118,7 @@
                                         {% else %}{% set clr = '#2dc653' %}{% endif %}
                                         <div class="eve-hover-wrap">
                                             <span class="eve-storage-badge" style="color:{{ clr }};cursor:default;">
-                                                {{ colony.storage | length }}× {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
+                                                {{ colony.storage | length }}x {% if max_pct == 0 %}leer{% else %}{{ max_pct }}%{% endif %}
                                             </span>
                                             <div class="eve-hover-card eve-hover-card-right">
                                                 <div style="color:#586e75;font-size:.65rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Lager</div>
@@ -168,11 +164,7 @@
                                     <td style="min-width:90px;">
                                         <div class="d-flex align-items-center gap-2">
                                             <div class="progress flex-grow-1" style="height:5px;background:rgba(255,255,255,.08);">
-                                                <div class="progress-bar
-                                                    {% if colony.urgency_pct > 66 %}bg-danger
-                                                    {% elif colony.urgency_pct > 33 %}bg-warning
-                                                    {% else %}bg-success{% endif %}"
-                                                    style="width:{{ colony.urgency_pct }}%"></div>
+                                                <div class="progress-bar {% if colony.urgency_pct > 66 %}bg-danger{% elif colony.urgency_pct > 33 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ colony.urgency_pct }}%"></div>
                                             </div>
                                             <span class="small text-muted" style="min-width:32px;">{{ colony.urgency_pct }}%</span>
                                         </div>
@@ -194,9 +186,7 @@
                 <div class="card-header eve-card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-signpost-split me-1"></i>{{ t('hauling.route') }}</span>
                     <div class="d-flex align-items-center gap-2">
-                        <span id="ansiblexStatusBadge"
-                              class="badge {% if ansiblex_status.state == 'up' %}bg-success{% elif ansiblex_status.state == 'stale' %}bg-warning text-dark{% elif ansiblex_status.state == 'down' %}bg-danger{% else %}bg-secondary{% endif %}"
-                              title="{% if ansiblex_status.last_error %}{{ ansiblex_status.last_error }}{% else %}AnsibleX Status{% endif %}">
+                        <span id="ansiblexStatusBadge" class="badge {% if ansiblex_status.state == 'up' %}bg-success{% elif ansiblex_status.state == 'stale' %}bg-warning text-dark{% elif ansiblex_status.state == 'down' %}bg-danger{% else %}bg-secondary{% endif %}" title="{% if ansiblex_status.last_error %}{{ ansiblex_status.last_error }}{% else %}AnsibleX Status{% endif %}">
                             {% if ansiblex_status.state == 'up' %}
                             <i class="bi bi-lightning-fill me-1"></i>AnsibleX OK
                             {% elif ansiblex_status.state == 'stale' %}
@@ -219,23 +209,15 @@
                                 {% if item.is_intermediate %}
                                 <i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i>
                                 <span class="small text-muted">{{ item.system_name }}</span>
-                                {% if item.system_id %}
-                                <span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>
-                                {% endif %}
+                                {% if item.system_id %}<span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>{% endif %}
                                 {% if item.via_bridge %}
-                                <span class="badge bg-info text-dark ms-1" title="Jump Bridge (AnsibleX)">
-                                    <i class="bi bi-lightning-fill me-1"></i>Bridge
-                                </span>
+                                <span class="badge bg-info text-dark ms-1" title="{{ item.bridge_label or 'Jump Bridge' }}"><i class="bi bi-lightning-fill me-1"></i>Bridge</span>
                                 {% endif %}
                                 {% else %}
                                 <span class="fw-bold">{{ item.system_name }}</span>
-                                {% if item.system_id %}
-                                <span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>
-                                {% endif %}
+                                {% if item.system_id %}<span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>{% endif %}
                                 {% if item.via_bridge %}
-                                <span class="badge bg-info text-dark ms-1" title="Jump Bridge (AnsibleX)">
-                                    <i class="bi bi-lightning-fill me-1"></i>Bridge
-                                </span>
+                                <span class="badge bg-info text-dark ms-1" title="{{ item.bridge_label or 'Jump Bridge' }}"><i class="bi bi-lightning-fill me-1"></i>Bridge</span>
                                 {% endif %}
                                 {% if loop.first %}
                                 <span class="text-muted small">Ausgangspunkt</span>
@@ -268,19 +250,134 @@
     </div>
 </div>
 
+<div class="modal fade" id="bridgeConnectionsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content" style="background:var(--eve-bg-2);border:1px solid var(--eve-card-border);">
+            <div class="modal-header" style="border-bottom:1px solid var(--eve-card-border);">
+                <div>
+                    <h5 class="modal-title fw-semibold mb-1"><i class="bi bi-diagram-3 me-2 eve-accent"></i>Bridge-Verbindungen</h5>
+                    <div class="small text-muted">Sichtbar für alle. Manager pflegen nur ihre eigene Corp, Admins alle.</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="bridgeModalAlert" class="alert alert-danger d-none py-2 px-3 small mb-3"></div>
+                <div id="bridgeManagePanel" class="card eve-card border-0 mb-3 d-none">
+                    <div class="card-header eve-card-header py-2"><span class="small text-muted">Verbindung verwalten</span></div>
+                    <div class="card-body">
+                        <form id="bridgeConnectionForm" class="row g-3">
+                            <input type="hidden" id="bridgeConnectionId">
+                            <div class="col-md-4">
+                                <label class="form-label small text-muted">Korporation</label>
+                                <select id="bridgeCorporationSelect" class="form-select form-select-sm eve-input"></select>
+                            </div>
+                            <div class="col-md-4 position-relative">
+                                <label class="form-label small text-muted">Von</label>
+                                <input id="bridgeFromInput" type="text" class="form-control form-control-sm eve-input" placeholder="System suchen" autocomplete="off">
+                                <input id="bridgeFromId" type="hidden">
+                                <div id="bridgeFromResults" class="eve-search-dropdown position-absolute w-100 d-none" style="z-index:30;"></div>
+                            </div>
+                            <div class="col-md-4 position-relative">
+                                <label class="form-label small text-muted">Nach</label>
+                                <input id="bridgeToInput" type="text" class="form-control form-control-sm eve-input" placeholder="System suchen" autocomplete="off">
+                                <input id="bridgeToId" type="hidden">
+                                <div id="bridgeToResults" class="eve-search-dropdown position-absolute w-100 d-none" style="z-index:30;"></div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small text-muted">Notiz</label>
+                                <input id="bridgeNotesInput" type="text" maxlength="255" class="form-control form-control-sm eve-input" placeholder="Optional">
+                            </div>
+                            <div class="col-12 d-flex align-items-center gap-2 flex-wrap">
+                                <button id="bridgeSaveBtn" type="submit" class="btn btn-sm eve-btn-primary"><i class="bi bi-save me-1"></i>Speichern</button>
+                                <button id="bridgeResetBtn" type="button" class="btn btn-sm eve-btn-ghost d-none">Bearbeitung abbrechen</button>
+                                <span class="small text-muted">Diese Verbindungen werden direkt in den lokalen Jump-Graphen eingebaut.</span>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table eve-table mb-0">
+                        <thead>
+                            <tr>
+                                <th class="small text-muted">Korp</th>
+                                <th class="small text-muted">Von</th>
+                                <th class="small text-muted">Nach</th>
+                                <th class="small text-muted">Notiz</th>
+                                <th class="small text-muted text-end">Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bridgeConnectionsTbody">
+                            <tr><td colspan="5" class="small text-muted py-4 text-center">Verbindungen werden geladen...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     const charSelect = document.getElementById('haulingCharacterSelect');
     const refreshBtn = document.getElementById('refreshLocationBtn');
     const useAnsiblex = document.getElementById('useAnsiblex');
     const ansiblexStatusBadge = document.getElementById('ansiblexStatusBadge');
-
-    if (charSelect) {
-        charSelect.addEventListener('change', () => {
-            window.location.href = '/hauling?character_id=' + charSelect.value;
-        });
+    const bridgeModalEl = document.getElementById('bridgeConnectionsModal');
+    const bridgeManagePanel = document.getElementById('bridgeManagePanel');
+    const bridgeAlert = document.getElementById('bridgeModalAlert');
+    const bridgeForm = document.getElementById('bridgeConnectionForm');
+    const bridgeIdInput = document.getElementById('bridgeConnectionId');
+    const bridgeCorpSelect = document.getElementById('bridgeCorporationSelect');
+    const bridgeNotesInput = document.getElementById('bridgeNotesInput');
+    const bridgeSaveBtn = document.getElementById('bridgeSaveBtn');
+    const bridgeResetBtn = document.getElementById('bridgeResetBtn');
+    const bridgeTbody = document.getElementById('bridgeConnectionsTbody');
+    const bridgeState = { manual: [], manageableCorps: [], canManage: false };
+    function escapeHtml(value) {
+        return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
-
+    if (charSelect) charSelect.addEventListener('change', () => { window.location.href = '/hauling?character_id=' + charSelect.value; });
+    function setBridgeAlert(message, variant = 'danger') {
+        if (!bridgeAlert) return;
+        if (!message) {
+            bridgeAlert.className = 'alert alert-danger d-none py-2 px-3 small mb-3';
+            bridgeAlert.textContent = '';
+            return;
+        }
+        bridgeAlert.className = `alert alert-${variant} py-2 px-3 small mb-3`;
+        bridgeAlert.textContent = message;
+    }
+    function updateAnsiblexStatus(status, enabled) {
+        if (!ansiblexStatusBadge) return;
+        if (!enabled) {
+            ansiblexStatusBadge.className = 'badge bg-secondary';
+            ansiblexStatusBadge.title = 'AnsibleX deaktiviert';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>AnsibleX Aus';
+            return;
+        }
+        const state = status?.state || 'unknown';
+        if (state === 'up') {
+            ansiblexStatusBadge.className = 'badge bg-success';
+            ansiblexStatusBadge.title = 'AnsibleX erreichbar';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-fill me-1"></i>AnsibleX OK';
+            return;
+        }
+        if (state === 'stale') {
+            ansiblexStatusBadge.className = 'badge bg-warning text-dark';
+            ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar, Cache aktiv';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>AnsibleX Cache';
+            return;
+        }
+        if (state === 'down') {
+            ansiblexStatusBadge.className = 'badge bg-danger';
+            ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-x-octagon-fill me-1"></i>AnsibleX Down';
+            return;
+        }
+        ansiblexStatusBadge.className = 'badge bg-secondary';
+        ansiblexStatusBadge.title = 'AnsibleX Status unbekannt';
+        ansiblexStatusBadge.innerHTML = '<i class="bi bi-question-circle-fill me-1"></i>AnsibleX Unbekannt';
+    }
     async function refreshRouteLocation() {
         if (!charSelect) return;
         refreshBtn.disabled = true;
@@ -313,25 +410,11 @@
                 routeList.innerHTML = routeData.ordered.map((item, index) => {
                     const isIntermediate = item.is_intermediate;
                     const isFirst = index === 0;
+                    const bridgeBadge = item.via_bridge ? `<span class="badge bg-info text-dark ms-1" title="${escapeHtml(item.bridge_label || 'Jump Bridge')}"><i class="bi bi-lightning-fill me-1"></i>Bridge</span>` : '';
                     if (isIntermediate) {
-                        return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i>
-                                <span class="small text-muted">${item.system_name}</span>
-                                <span class="kill-badge" data-sys-id="${item.system_id}"></span>
-                                ${item.via_bridge ? '<span class="badge bg-info text-dark ms-1"><i class="bi bi-lightning-fill me-1"></i>Bridge</span>' : ''}
-                            </div>
-                        </li>`;
+                        return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light"><div class="d-flex align-items-center gap-2"><i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i><span class="small text-muted">${escapeHtml(item.system_name)}</span><span class="kill-badge" data-sys-id="${item.system_id}"></span>${bridgeBadge}</div></li>`;
                     }
-                    return `<li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="fw-bold">${item.system_name}</span>
-                            <span class="kill-badge" data-sys-id="${item.system_id}"></span>
-                            ${item.via_bridge ? '<span class="badge bg-info text-dark ms-1"><i class="bi bi-lightning-fill me-1"></i>Bridge</span>' : ''}
-                            <span class="text-muted small">${isFirst ? 'Ausgangspunkt' : '→ ' + item.jumps_from_prev + ' Sprünge'}</span>
-                        </div>
-                        <span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? 'Start' : item.jumps_from_prev + 'J'}</span>
-                    </li>`;
+                    return `<li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary"><div class="d-flex align-items-center gap-2"><span class="fw-bold">${escapeHtml(item.system_name)}</span><span class="kill-badge" data-sys-id="${item.system_id}"></span>${bridgeBadge}<span class="text-muted small">${isFirst ? 'Ausgangspunkt' : '&rarr; ' + item.jumps_from_prev + ' Spruenge'}</span></div><span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? 'Start' : item.jumps_from_prev + 'J'}</span></li>`;
                 }).join('');
             }
             loadKillBadges();
@@ -342,39 +425,170 @@
             refreshBtn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>{{ t("hauling.refresh_location") }}';
         }
     }
-
-    function updateAnsiblexStatus(status, enabled) {
-        if (!ansiblexStatusBadge) return;
-        if (!enabled) {
-            ansiblexStatusBadge.className = 'badge bg-secondary';
-            ansiblexStatusBadge.title = 'AnsibleX deaktiviert';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>AnsibleX Aus';
-            return;
-        }
-        const state = status?.state || 'unknown';
-        if (state === 'up') {
-            ansiblexStatusBadge.className = 'badge bg-success';
-            ansiblexStatusBadge.title = 'AnsibleX erreichbar';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-fill me-1"></i>AnsibleX OK';
-            return;
-        }
-        if (state === 'stale') {
-            ansiblexStatusBadge.className = 'badge bg-warning text-dark';
-            ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar, Cache aktiv';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>AnsibleX Cache';
-            return;
-        }
-        if (state === 'down') {
-            ansiblexStatusBadge.className = 'badge bg-danger';
-            ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar';
-            ansiblexStatusBadge.innerHTML = '<i class="bi bi-x-octagon-fill me-1"></i>AnsibleX Down';
-            return;
-        }
-        ansiblexStatusBadge.className = 'badge bg-secondary';
-        ansiblexStatusBadge.title = 'AnsibleX Status unbekannt';
-        ansiblexStatusBadge.innerHTML = '<i class="bi bi-question-circle-fill me-1"></i>AnsibleX Unbekannt';
+    function resetBridgeForm() {
+        if (!bridgeForm) return;
+        bridgeIdInput.value = '';
+        bridgeNotesInput.value = '';
+        bridgeSaveBtn.innerHTML = '<i class="bi bi-save me-1"></i>Speichern';
+        bridgeResetBtn.classList.add('d-none');
+        ['From', 'To'].forEach(side => {
+            document.getElementById(`bridge${side}Input`).value = '';
+            document.getElementById(`bridge${side}Id`).value = '';
+            document.getElementById(`bridge${side}Results`).innerHTML = '';
+            document.getElementById(`bridge${side}Results`).classList.add('d-none');
+        });
     }
-
+    function populateBridgeCorporations() {
+        if (!bridgeCorpSelect) return;
+        bridgeCorpSelect.innerHTML = bridgeState.manageableCorps.map(corp => `<option value="${corp.corporation_id}">${escapeHtml(corp.corporation_name)}</option>`).join('');
+    }
+    function renderBridgeRows() {
+        if (!bridgeTbody) return;
+        if (!bridgeState.manual.length) {
+            bridgeTbody.innerHTML = '<tr><td colspan="5" class="small text-muted py-4 text-center">Noch keine gepflegten Bridge-Verbindungen vorhanden.</td></tr>';
+            return;
+        }
+        bridgeTbody.innerHTML = bridgeState.manual.map(connection => `
+            <tr>
+                <td class="small">${escapeHtml(connection.corporation_name)}</td>
+                <td class="small"><div>${escapeHtml(connection.from_system_name)}</div><div class="text-muted" style="font-size:.7rem;">${connection.from_system_id}</div></td>
+                <td class="small"><div>${escapeHtml(connection.to_system_name)}</div><div class="text-muted" style="font-size:.7rem;">${connection.to_system_id}</div></td>
+                <td class="small text-muted">${connection.notes ? escapeHtml(connection.notes) : '—'}</td>
+                <td class="text-end">${connection.can_edit ? `<button type="button" class="btn btn-sm eve-btn-ghost me-1" data-bridge-edit="${connection.id}"><i class="bi bi-pencil"></i></button><button type="button" class="btn btn-sm btn-outline-danger" data-bridge-delete="${connection.id}"><i class="bi bi-trash"></i></button>` : '<span class="small text-muted">Nur Anzeige</span>'}</td>
+            </tr>
+        `).join('');
+    }
+    async function loadBridgeConnections() {
+        if (!bridgeTbody) return;
+        bridgeTbody.innerHTML = '<tr><td colspan="5" class="small text-muted py-4 text-center">Verbindungen werden geladen...</td></tr>';
+        setBridgeAlert('');
+        try {
+            const response = await fetch('/hauling/api/bridge-connections');
+            const data = await response.json();
+            bridgeState.manual = data.manual || [];
+            bridgeState.manageableCorps = data.manageable_corporations || [];
+            bridgeState.canManage = Boolean(data.can_manage);
+            bridgeManagePanel.classList.toggle('d-none', !bridgeState.canManage);
+            populateBridgeCorporations();
+            resetBridgeForm();
+            renderBridgeRows();
+        } catch {
+            bridgeTbody.innerHTML = '<tr><td colspan="5" class="small text-danger py-4 text-center">Verbindungen konnten nicht geladen werden.</td></tr>';
+        }
+    }
+    function startBridgeEdit(connection) {
+        if (!bridgeState.canManage) return;
+        bridgeIdInput.value = connection.id;
+        bridgeCorpSelect.value = String(connection.corporation_id);
+        bridgeNotesInput.value = connection.notes || '';
+        document.getElementById('bridgeFromInput').value = connection.from_system_name;
+        document.getElementById('bridgeFromId').value = connection.from_system_id;
+        document.getElementById('bridgeToInput').value = connection.to_system_name;
+        document.getElementById('bridgeToId').value = connection.to_system_id;
+        bridgeSaveBtn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>Aktualisieren';
+        bridgeResetBtn.classList.remove('d-none');
+        setBridgeAlert('');
+    }
+    async function deleteBridgeConnection(connectionId) {
+        if (!confirm('Diese Bridge-Verbindung wirklich loeschen?')) return;
+        setBridgeAlert('');
+        try {
+            const response = await fetch(`/hauling/api/bridge-connections/${connectionId}`, { method: 'DELETE' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Loeschen fehlgeschlagen');
+            await loadBridgeConnections();
+        } catch (error) {
+            setBridgeAlert(error.message || 'Loeschen fehlgeschlagen');
+        }
+    }
+    async function saveBridgeConnection(event) {
+        event.preventDefault();
+        if (!bridgeState.canManage) return;
+        const payload = {
+            id: Number(bridgeIdInput.value) || null,
+            corporation_id: Number(bridgeCorpSelect.value) || 0,
+            from_system_id: Number(document.getElementById('bridgeFromId').value) || 0,
+            to_system_id: Number(document.getElementById('bridgeToId').value) || 0,
+            notes: bridgeNotesInput.value.trim(),
+        };
+        if (!payload.corporation_id || !payload.from_system_id || !payload.to_system_id) {
+            setBridgeAlert('Bitte Korporation sowie beide Systeme auswaehlen.');
+            return;
+        }
+        setBridgeAlert('');
+        bridgeSaveBtn.disabled = true;
+        try {
+            const response = await fetch('/hauling/api/bridge-connections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Speichern fehlgeschlagen');
+            await loadBridgeConnections();
+            setBridgeAlert('Bridge-Verbindung gespeichert.', 'success');
+        } catch (error) {
+            setBridgeAlert(error.message || 'Speichern fehlgeschlagen');
+        } finally {
+            bridgeSaveBtn.disabled = false;
+        }
+    }
+    function bindBridgeActions() {
+        bridgeTbody?.addEventListener('click', (event) => {
+            const editBtn = event.target.closest('[data-bridge-edit]');
+            if (editBtn) {
+                const connectionId = Number(editBtn.dataset.bridgeEdit);
+                const connection = bridgeState.manual.find(item => Number(item.id) === connectionId);
+                if (connection) startBridgeEdit(connection);
+                return;
+            }
+            const deleteBtn = event.target.closest('[data-bridge-delete]');
+            if (deleteBtn) deleteBridgeConnection(Number(deleteBtn.dataset.bridgeDelete));
+        });
+    }
+    function bindSystemLookup(side) {
+        const input = document.getElementById(`bridge${side}Input`);
+        const hiddenId = document.getElementById(`bridge${side}Id`);
+        const results = document.getElementById(`bridge${side}Results`);
+        if (!input || !hiddenId || !results) return;
+        let activeRequest = 0;
+        input.addEventListener('input', async () => {
+            hiddenId.value = '';
+            const query = input.value.trim();
+            if (query.length < 3) {
+                results.classList.add('d-none');
+                results.innerHTML = '';
+                return;
+            }
+            const requestId = ++activeRequest;
+            try {
+                const response = await fetch('/system/search?q=' + encodeURIComponent(query));
+                const data = await response.json();
+                if (requestId !== activeRequest) return;
+                const systems = data.systems || [];
+                if (!systems.length) {
+                    results.classList.remove('d-none');
+                    results.innerHTML = '<div class="small text-muted px-3 py-2">Keine Treffer</div>';
+                    return;
+                }
+                results.innerHTML = systems.map(system => `<button type="button" class="dropdown-item d-flex justify-content-between align-items-center px-3 py-2" data-system-id="${system.id}" data-system-name="${escapeHtml(system.name)}"><span>${escapeHtml(system.name)}</span><span class="small text-muted">${escapeHtml(system.region || '')}</span></button>`).join('');
+                results.classList.remove('d-none');
+            } catch {
+                results.classList.add('d-none');
+                results.innerHTML = '';
+            }
+        });
+        results.addEventListener('click', (event) => {
+            const option = event.target.closest('[data-system-id]');
+            if (!option) return;
+            hiddenId.value = option.dataset.systemId;
+            input.value = option.dataset.systemName;
+            results.innerHTML = '';
+            results.classList.add('d-none');
+        });
+        input.addEventListener('blur', () => { setTimeout(() => results.classList.add('d-none'), 150); });
+        input.addEventListener('focus', () => { if (results.innerHTML.trim()) results.classList.remove('d-none'); });
+    }
     function renderKillBadge(data) {
         if (!data || data.danger_level === 'safe' || !data.kill_count) return '';
         const href = data.system_url || `https://zkillboard.com/system/${data.system_id}/`;
@@ -383,7 +597,6 @@
         }
         return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"><span class="badge bg-warning text-dark ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.kill_count}</span></a>`;
     }
-
     async function loadKillBadges() {
         const placeholders = Array.from(document.querySelectorAll('.kill-badge[data-sys-id]'));
         const unique = [...new Set(placeholders.map(el => el.dataset.sysId).filter(Boolean))];
@@ -401,17 +614,13 @@
             responses.forEach((data, index) => {
                 const systemId = chunk[index];
                 const html = renderKillBadge(data);
-                document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => {
-                    el.innerHTML = html;
-                });
+                document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => { el.innerHTML = html; });
             });
         }
     }
-
     function initHaulingHoverCards() {
         const wraps = Array.from(document.querySelectorAll('#haulingStorageTable .eve-hover-wrap'));
         if (!wraps.length) return;
-
         let globalCard = document.getElementById('eveGlobalHoverCard');
         if (!globalCard) {
             globalCard = document.createElement('div');
@@ -419,50 +628,46 @@
             globalCard.className = 'eve-global-hover-card';
             document.body.appendChild(globalCard);
         }
-
         const hideCard = () => {
             globalCard.style.display = 'none';
             globalCard.innerHTML = '';
         };
-
         const showCard = (wrap) => {
             const source = wrap.querySelector('.eve-hover-card');
             if (!source) return;
-
             globalCard.innerHTML = source.innerHTML;
             globalCard.style.display = 'block';
             globalCard.style.visibility = 'hidden';
-
             const wrapRect = wrap.getBoundingClientRect();
             const cardWidth = globalCard.offsetWidth;
             const cardHeight = globalCard.offsetHeight;
             const alignRight = source.classList.contains('eve-hover-card-right');
-
             let left = alignRight ? wrapRect.right - cardWidth : wrapRect.left;
             left = Math.max(8, Math.min(left, window.innerWidth - cardWidth - 8));
-
             let top = wrapRect.bottom + 6;
             if (top + cardHeight > window.innerHeight - 8) top = wrapRect.top - cardHeight - 6;
             if (top < 8) top = Math.min(window.innerHeight - cardHeight - 8, wrapRect.bottom + 6);
-
             globalCard.style.left = `${left}px`;
             globalCard.style.top = `${top}px`;
             globalCard.style.visibility = 'visible';
         };
-
         wraps.forEach(wrap => {
             if (wrap.dataset.hoverBound === '1') return;
             wrap.dataset.hoverBound = '1';
             wrap.addEventListener('mouseenter', () => showCard(wrap));
             wrap.addEventListener('mouseleave', hideCard);
         });
-
         window.addEventListener('scroll', hideCard, true);
         window.addEventListener('resize', hideCard);
     }
-
     refreshBtn?.addEventListener('click', refreshRouteLocation);
     useAnsiblex?.addEventListener('change', () => updateAnsiblexStatus(null, useAnsiblex.checked));
+    bridgeModalEl?.addEventListener('show.bs.modal', loadBridgeConnections);
+    bridgeForm?.addEventListener('submit', saveBridgeConnection);
+    bridgeResetBtn?.addEventListener('click', resetBridgeForm);
+    bindBridgeActions();
+    bindSystemLookup('From');
+    bindSystemLookup('To');
     updateAnsiblexStatus({state: {{ ansiblex_status.state | tojson }}, last_error: {{ ansiblex_status.last_error | tojson }}}, useAnsiblex ? useAnsiblex.checked : true);
     loadKillBadges();
     initHaulingHoverCards();

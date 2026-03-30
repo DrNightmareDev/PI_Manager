@@ -25,6 +25,7 @@ SDE_URL = "https://data.everef.net/reference-data/reference-data-latest.tar.xz"
 UPDATE_INTERVAL_DAYS = 7
 
 FUZZWORK_SYSTEMS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapSolarSystems.sql.bz2"
+FUZZWORK_JUMPS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapSolarSystemJumps.sql.bz2"
 FUZZWORK_REGIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapRegions.sql.bz2"
 FUZZWORK_CONSTELLATIONS_URL = "https://www.fuzzwork.co.uk/dump/latest/mapConstellations.sql.bz2"
 FUZZWORK_DENORMALIZE_URL = "https://www.fuzzwork.co.uk/dump/latest/mapDenormalize.sql.bz2"
@@ -37,6 +38,7 @@ _type_ids_by_name_en: dict[str, int] = {}      # english_name_lower -> type_id
 _build_time: str | None = None
 _systems: dict[str, tuple[int, str, float]] = {}    # name_lower -> (system_id, name, security)
 _systems_by_id: dict[int, dict] = {}                # system_id -> {name, security, region_id, constellation_id}
+_jumps_by_system: dict[int, set[int]] = {}          # system_id -> connected system_ids
 _regions: dict[int, str] = {}                       # region_id -> region_name
 _constellations: dict[int, dict] = {}               # constellation_id -> {name, region_id}
 _constellations_by_name: dict[str, dict] = {}       # name_lower -> {id, name, region_id}
@@ -239,6 +241,55 @@ def _load_systems() -> None:
         logger.error(f"Fehler beim Laden von mapSolarSystems: {e}")
 
 
+def _jumps_path() -> Path:
+    return DATA_DIR / "mapSolarSystemJumps.sql.bz2"
+
+
+def _is_jumps_update_needed() -> bool:
+    path = _jumps_path()
+    if not path.exists():
+        return True
+    return time.time() - path.stat().st_mtime > SYSTEMS_UPDATE_DAYS * 86400
+
+
+def _download_jumps() -> bool:
+    logger.info(f"Lade Fuzzwork mapSolarSystemJumps von {FUZZWORK_JUMPS_URL} ...")
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        resp = requests.get(FUZZWORK_JUMPS_URL, timeout=60, stream=True)
+        resp.raise_for_status()
+        tmp = DATA_DIR / "mapSolarSystemJumps.sql.bz2.tmp"
+        tmp.write_bytes(resp.content)
+        tmp.replace(_jumps_path())
+        logger.info("mapSolarSystemJumps.sql.bz2 erfolgreich heruntergeladen.")
+        return True
+    except Exception as e:
+        logger.error(f"Fuzzwork Jumps Download fehlgeschlagen: {e}")
+        return False
+
+
+def _load_jumps() -> None:
+    global _jumps_by_system
+    path = _jumps_path()
+    if not path.exists():
+        logger.warning("mapSolarSystemJumps.sql.bz2 nicht gefunden - Jump-Graph unbekannt.")
+        return
+    try:
+        pattern = re.compile(r"\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)")
+        by_system: dict[int, set[int]] = {}
+        with bz2.open(str(path), "rt", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                for m in pattern.finditer(line):
+                    from_system_id = int(m.group(3))
+                    to_system_id = int(m.group(4))
+                    by_system.setdefault(from_system_id, set()).add(to_system_id)
+                    by_system.setdefault(to_system_id, set()).add(from_system_id)
+        _jumps_by_system = by_system
+        logger.info(f"SDE: Jump-Graph fuer {len(_jumps_by_system)} Systeme geladen.")
+    except Exception as e:
+        logger.error(f"Fehler beim Laden von mapSolarSystemJumps: {e}")
+
+
 # ─── Regionen (Fuzzwork) ──────────────────────────────────────────────────────
 
 def _regions_path() -> Path:
@@ -421,6 +472,10 @@ def init():
         _download_systems()
     _load_systems()
 
+    if _is_jumps_update_needed():
+        _download_jumps()
+    _load_jumps()
+
     if _is_regions_update_needed():
         _download_regions()
     _load_regions()
@@ -511,6 +566,14 @@ def get_system_local(system_id: int) -> dict | None:
         "constellation_id": data.get("constellation_id", 0),
         "constellation_name": _constellations.get(data.get("constellation_id", 0), {}).get("name"),
     }
+
+
+def has_jump_graph() -> bool:
+    return bool(_jumps_by_system)
+
+
+def get_system_neighbors(system_id: int) -> list[int]:
+    return sorted(_jumps_by_system.get(int(system_id), set()))
 
 
 def search_systems_local(query: str, limit: int = 10) -> list[dict]:

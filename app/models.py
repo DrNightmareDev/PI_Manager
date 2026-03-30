@@ -77,6 +77,26 @@ class Character(Base):
         return False
 
 
+class CorpBridgeConnection(Base):
+    __tablename__ = "corp_bridge_connections"
+    __table_args__ = (
+        UniqueConstraint("corporation_id", "from_system_id", "to_system_id", name="uq_corp_bridge_connections_pair"),
+        Index("ix_corp_bridge_connections_corp_pair", "corporation_id", "from_system_id", "to_system_id"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    corporation_id = Column(BigInteger, nullable=False, index=True)
+    corporation_name = Column(String(255), nullable=False)
+    from_system_id = Column(BigInteger, nullable=False, index=True)
+    from_system_name = Column(String(255), nullable=False)
+    to_system_id = Column(BigInteger, nullable=False, index=True)
+    to_system_name = Column(String(255), nullable=False)
+    notes = Column(String(255), nullable=True)
+    created_by_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class SSOState(Base):
     __tablename__ = "sso_states"
 
