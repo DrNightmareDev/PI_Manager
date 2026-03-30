@@ -68,15 +68,8 @@
                         <i class="bi bi-box-seam me-1"></i>{{ t('nav.skyhooks') }}
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if request.url.path.startswith('/hauling') %}active{% endif %}"
-                       href="/hauling">
-                        <i class="bi bi-truck me-1"></i>{{ t('nav.hauling') }}
-                    </a>
-                </li>
-
                 <!-- Planer Dropdown -->
-                {% set planer_active = request.url.path.startswith('/planner') or request.url.path.startswith('/colony-plan') or request.url.path.startswith('/templates') %}
+                {% set planer_active = request.url.path.startswith('/planner') or request.url.path.startswith('/colony-plan') or request.url.path.startswith('/templates') or request.url.path.startswith('/hauling') %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if planer_active %}active{% endif %}"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -96,6 +89,11 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/templates') %}active{% endif %}" href="/templates">
                                 <i class="bi bi-geo-alt me-2 text-muted"></i>PI Templates
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/hauling') %}active{% endif %}" href="/hauling">
+                                <i class="bi bi-truck me-2 text-muted"></i>{{ t('nav.hauling') }}
                             </a>
                         </li>
                     </ul>
