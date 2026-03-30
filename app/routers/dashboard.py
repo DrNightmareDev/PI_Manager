@@ -16,7 +16,7 @@ from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_planets, get_planet_detail, get_planet_info, get_schematic, invalidate_planet_detail_cache, get_character_roles, get_character_skills, get_corporation_info
 from app.i18n import get_language_from_request, translate_type_name
 from app.market import get_prices_by_mode, get_market_last_updated, PI_TYPE_IDS
-from app.models import Account, Character, DashboardCache, IskSnapshot, SkyhookEntry, SkyhookItem
+from app.models import Account, Character, DashboardCache, IskSnapshot, MarketCache, SkyhookEntry, SkyhookItem
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import joinedload as _joinedload
 from app.pi_data import PLANET_TYPE_COLORS, ALL_P1, ALL_P2, ALL_P3, ALL_P4
@@ -301,6 +301,7 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
         try:
             account = newdb.query(Account).filter(Account.id == account_id).first()
             chars = newdb.query(Character).filter(Character.id.in_(char_ids)).all()
+            active_chars = [char for char in chars if not getattr(char, "vacation_mode", False)]
             if not account or not chars:
                 finished = True
                 return
@@ -311,7 +312,7 @@ def _start_bg_refresh(account_id: int, char_ids: list[int], price_mode: str) -> 
                 _save_colony_cache(account_id, payload, newdb)
                 _dashboard_cache[account_id] = {**payload, "price_mode": pm}
                 # Reset error counter for chars that synced successfully
-                for char in chars:
+                for char in active_chars:
                     if (char.esi_consecutive_errors or 0) > 0:
                         char.esi_consecutive_errors = 0
                 newdb.commit()
@@ -483,6 +484,38 @@ def _compute_storage(pins: list) -> list[dict]:
     type_totals = type_counters
     for entry in result:
         entry["label"] = entry["struct"] + (f" {entry['struct_num']}" if type_totals.get(entry["type_id"], 1) > 1 else "")
+    return result
+
+
+def _compute_storage_value(storage: list[dict], price_mode: str, db: Session) -> float:
+    total = 0.0
+    for entry in storage or []:
+        for item in entry.get("items") or []:
+            product_name = item.get("name")
+            if not product_name:
+                continue
+            type_id = PI_TYPE_IDS.get(product_name)
+            if not type_id:
+                continue
+            row = db.get(MarketCache, int(type_id))
+            if not row:
+                continue
+            price = float(getattr(row, "best_sell" if price_mode == "sell" else "best_buy") or 0.0)
+            total += price * float(item.get("amount") or 0.0)
+    return total
+
+
+def _cached_vacation_colonies(account_id: int, characters: list[Character], db: Session) -> list[dict]:
+    vacation_names = {char.character_name for char in characters if getattr(char, "vacation_mode", False)}
+    if not vacation_names:
+        return []
+    cached = _load_colony_cache(account_id, db) or {}
+    result = []
+    for colony in cached.get("colonies") or []:
+        if colony.get("character_name") in vacation_names:
+            item = dict(colony)
+            item["vacation_mode"] = True
+            result.append(item)
     return result
 
 
@@ -828,7 +861,7 @@ def _update_character_colony_sync_status(
     dirty = False
     now_utc = datetime.now(timezone.utc)
 
-    for char in characters:
+    for char in active_characters:
         result = fetch_results.get(char.id) or {"status": "not_processed", "count": 0}
         status = result.get("status")
         count = int(result.get("count") or 0)
@@ -911,6 +944,9 @@ def _backfill_character_colony_sync_status_from_cache(
 def _build_dashboard_payload(account, characters: list, db: Session, price_mode: str = "sell") -> dict:
     """Holt alle ESI/Markt-Daten frisch und gibt den vollständigen Payload zurück."""
 
+    active_characters = [char for char in characters if not getattr(char, "vacation_mode", False)]
+    vacation_colonies = _cached_vacation_colonies(account.id, characters, db)
+
     # Schritt 1a: Tokens sequentiell erneuern (DB-safe, schreibt ggf. neuen Token in DB)
     char_token_map: dict[int, str | None] = {}
     for char in characters:
@@ -932,11 +968,11 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
             logger.warning(f"Kolonien konnten für Char {char.character_name} ({char.eve_character_id}) nicht geladen werden: {e}")
             return char, [], None
 
-    _n_chars = len(characters)
+    _n_chars = len(active_characters)
     with ThreadPoolExecutor(max_workers=min(_n_chars, 8) if _n_chars else 1) as ex:
         _colony_results = list(ex.map(
             _fetch_char_colonies,
-            [(c, char_token_map[c.id]) for c in characters],
+            [(c, char_token_map[c.id]) for c in active_characters],
         ))
 
     char_colony_token: list[tuple] = []
@@ -951,7 +987,7 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
             for colony in raw_colonies:
                 char_colony_token.append((char, colony, token))
 
-    _update_character_colony_sync_status(characters, char_fetch_results, db)
+    _update_character_colony_sync_status(active_characters, char_fetch_results, db)
 
     # Schritt 2: planet_info + planet_detail parallel abrufen
     # Extract plain values before threading — ORM objects must not be accessed from
@@ -1051,9 +1087,11 @@ def _build_dashboard_payload(account, characters: list, db: Session, price_mode:
             "extractor_balance": _compute_extractor_balance(pins),
             "extractor_rate_summary": _compute_extractor_rate_summary(pins),
             "missing_inputs": _compute_missing_inputs(pins),
+            "vacation_mode": False,
         })
 
-    colony_count = len(colonies)
+    colonies.extend(vacation_colonies)
+    colony_count = len([colony for colony in colonies if not colony.get("vacation_mode")])
     payload = {
         "colonies": colonies,
         "total_isk_day": total_isk_day,
@@ -1157,6 +1195,7 @@ def dashboard(
         cache_age_sec = 0
 
     all_colonies = colonies
+    visible_stat_colonies = [colony for colony in all_colonies if not colony.get("vacation_mode")]
     all_colony_characters = sorted({c.get("character_name") for c in all_colonies if c.get("character_name")})
     filtered_colonies = [
         colony for colony in all_colonies
@@ -1249,13 +1288,13 @@ def dashboard(
             ]
     expired_colony_count = sum(
         1
-        for colony in all_colonies
+        for colony in visible_stat_colonies
         if colony.get("expiry_hours") is not None and colony.get("expiry_hours") < 0
     )
-    active_colony_count = sum(1 for colony in all_colonies if colony.get("is_active") is True)
+    active_colony_count = sum(1 for colony in visible_stat_colonies if colony.get("is_active") is True)
     stalled_colony_count = sum(
         1
-        for colony in all_colonies
+        for colony in visible_stat_colonies
         if colony.get("expiry_hours") is None and colony.get("is_stalled") is True
     )
     lang = get_language_from_request(request)
@@ -1288,15 +1327,18 @@ def dashboard(
     # counter is stale and should not trigger the banner.
     token_error_chars = [
         c for c in characters
-        if not c.refresh_token
+        if not c.vacation_mode and (
+            not c.refresh_token
         or (
             (c.esi_consecutive_errors or 0) >= 3
             and (c.colony_sync_issue or not c.last_colony_sync_at)
         )
+        )
     ]
     token_error_count = len(token_error_chars)
+    vacation_count = sum(1 for c in characters if c.vacation_mode)
     notification_colonies = [
-        colony for colony in all_colonies
+        colony for colony in visible_stat_colonies
         if colony.get("expiry_hours") is not None and colony.get("expiry_hours") > 0
     ]
 
@@ -1331,6 +1373,7 @@ def dashboard(
         "market_last_updated_iso": market_last_updated_iso,
         "token_error_count": token_error_count,
         "token_error_chars": [c.character_name for c in token_error_chars],
+        "vacation_count": vacation_count,
         "now_ts_ms": int(now * 1000),
     })
 
@@ -2341,3 +2384,22 @@ def characters_page(
         "account": account,
         "characters": characters,
     })
+
+
+@router.post("/characters/{character_id}/vacation")
+def toggle_character_vacation(
+    character_id: int,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    char = (
+        db.query(Character)
+        .filter(Character.id == character_id, Character.account_id == account.id)
+        .first()
+    )
+    if not char:
+        raise HTTPException(status_code=404, detail="Character not found")
+    char.vacation_mode = not bool(char.vacation_mode)
+    db.commit()
+    invalidate_dashboard_cache(account.id)
+    return JSONResponse({"ok": True, "vacation_mode": bool(char.vacation_mode)})

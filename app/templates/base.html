@@ -68,6 +68,12 @@
                         <i class="bi bi-box-seam me-1"></i>{{ t('nav.skyhooks') }}
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/hauling') %}active{% endif %}"
+                       href="/hauling">
+                        <i class="bi bi-truck me-1"></i>{{ t('nav.hauling') }}
+                    </a>
+                </li>
 
                 <!-- Planer Dropdown -->
                 {% set planer_active = request.url.path.startswith('/planner') or request.url.path.startswith('/colony-plan') or request.url.path.startswith('/templates') %}

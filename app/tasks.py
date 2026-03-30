@@ -203,11 +203,13 @@ def refresh_account_task(self, account_id: int) -> dict:
             .filter_by(account_id=account_id)
             .all()
         )
+        active_characters = [char for char in characters if not getattr(char, "vacation_mode", False)]
+        vacation_char_names = {char.character_name for char in characters if getattr(char, "vacation_mode", False)}
 
         all_colonies: list[dict] = []
         char_errors = 0
 
-        for char in characters:
+        for char in active_characters:
             if not char.refresh_token:
                 continue
             if char.esi_consecutive_errors >= ESI_ERROR_BACKOFF_LIMIT:
@@ -254,16 +256,29 @@ def refresh_account_task(self, account_id: int) -> dict:
                 qty * prices.get(name, 0.0)
                 for name, qty in col.get("productions", {}).items()
             )
+            col["vacation_mode"] = False
 
-        total_isk_day = sum(col.get("isk_day", 0.0) for col in all_colonies)
+        if vacation_char_names:
+            existing = db.query(DashboardCache).filter_by(account_id=account_id).first()
+            if existing:
+                try:
+                    cached_colonies = json.loads(existing.colonies_json or "[]")
+                except Exception:
+                    cached_colonies = []
+                for colony in cached_colonies:
+                    if colony.get("character_name") in vacation_char_names:
+                        item = dict(colony)
+                        item["vacation_mode"] = True
+                        all_colonies.append(item)
+
+        total_isk_day = sum(col.get("isk_day", 0.0) for col in all_colonies if not col.get("vacation_mode"))
 
         payload_colonies = json.dumps(all_colonies)
         payload_meta = json.dumps({
             "total_isk_day": total_isk_day,
-            "colony_count": len(all_colonies),
+            "colony_count": len([col for col in all_colonies if not col.get("vacation_mode")]),
             "char_count": len(characters),
         })
-
         existing = db.query(DashboardCache).filter_by(account_id=account_id).first()
 
         if len(all_colonies) == 0 and existing:
@@ -318,7 +333,7 @@ def auto_refresh_stale_accounts() -> dict:
         active_account_ids = {
             row.account_id
             for row in db.query(Character.account_id)
-            .filter(Character.refresh_token.isnot(None))
+            .filter(Character.refresh_token.isnot(None), Character.vacation_mode == False)
             .distinct()
             .all()
         }
@@ -409,7 +424,7 @@ def send_webhook_alerts_task() -> dict:
     """
     import requests as _requests
     from app.database import SessionLocal
-    from app.models import Account, DashboardCache, WebhookAlert
+    from app.models import Account, Character, DashboardCache, WebhookAlert
 
     now = datetime.now(timezone.utc)
     sent = 0
@@ -456,8 +471,16 @@ def send_webhook_alerts_task() -> dict:
             except Exception:
                 continue
 
+            vacation_names = {
+                row.character_name
+                for row in db.query(Character.character_name)
+                .filter(Character.account_id == alert.account_id, Character.vacation_mode == True)
+                .all()
+            }
+
             expiring = [
                 c for c in colonies
+                if c.get("character_name") not in vacation_names
                 if c.get("expiry_hours") is not None
                 and 0 < c["expiry_hours"] <= threshold_hours
             ]

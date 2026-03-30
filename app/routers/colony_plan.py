@@ -5,7 +5,7 @@ from math import ceil
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app import sde
@@ -13,7 +13,7 @@ from app.database import get_db
 from app.dependencies import require_account
 from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import PI_TYPE_IDS
-from app.models import Character
+from app.models import Character, MarketCache
 from app.pi_data import (
     ALL_P1,
     ALL_P2,
@@ -28,13 +28,14 @@ from app.pi_data import (
 )
 from app.routers.dashboard import _attach_pi_skills, _build_dashboard_payload, _load_colony_cache, _save_colony_cache
 from app.routers.system import _load_system_planets
-from app.templates_env import templates
+from app.templates_env import format_isk, templates
 
 router = APIRouter(prefix="/colony-plan", tags=["colony-plan"])
 
 P1_TO_P0 = {v: k for k, v in P0_TO_P1.items()}
 TIER_ORDER = {"P1": 1, "P2": 2, "P3": 3, "P4": 4}
 FACTORY_ANY_TYPE = "Factory"
+_OPTIMIZER_UNITS_PER_DAY = {"P2": 690, "P3": 155, "P4": 12}
 
 
 def _resolve_type_id(name: str) -> int | None:
@@ -167,6 +168,78 @@ def _load_cached_colonies(account, characters: list[Character], db: Session) -> 
         _save_colony_cache(account.id, payload, db)
         cached = {"colonies": payload["colonies"]}
     return list(cached.get("colonies", []))
+
+
+def _resolve_required_p0(product_name: str) -> set[str]:
+    tier = _product_tier(product_name)
+    if tier == "P1":
+        base = P1_TO_P0.get(product_name)
+        return {base} if base else set()
+    if tier == "P2":
+        required: set[str] = set()
+        for item in P1_TO_P2.get(product_name, []):
+            required.update(_resolve_required_p0(item))
+        return required
+    if tier == "P3":
+        required: set[str] = set()
+        for item in P2_TO_P3.get(product_name, []):
+            required.update(_resolve_required_p0(item))
+        return required
+    if tier == "P4":
+        required: set[str] = set()
+        for item in P3_TO_P4.get(product_name, []):
+            required.update(_resolve_required_p0(item))
+        return required
+    return set()
+
+
+def _optimizer_market_price(product_name: str, db: Session) -> float:
+    type_id = PI_TYPE_IDS.get(product_name)
+    if not type_id:
+        return 0.0
+    row = db.get(MarketCache, int(type_id))
+    return float(getattr(row, "best_sell", 0.0) or 0.0) if row else 0.0
+
+
+def _build_optimizer_rows(account, characters: list[Character], db: Session) -> list[dict[str, Any]]:
+    colonies = _load_cached_colonies(account, characters, db) if characters else []
+    active_colonies = [colony for colony in colonies if not colony.get("vacation_mode")]
+    planet_types = sorted({str(colony.get("planet_type") or "") for colony in active_colonies if colony.get("planet_type")})
+    available_p0 = {
+        resource
+        for planet_type in planet_types
+        for resource in PLANET_RESOURCES.get(planet_type, [])
+    }
+
+    rows: list[dict[str, Any]] = []
+    for tier, products in (("P2", ALL_P2), ("P3", ALL_P3), ("P4", ALL_P4)):
+        for product in products:
+            required_p0 = sorted(_resolve_required_p0(product))
+            if not required_p0:
+                continue
+            missing_p0 = sorted(resource for resource in required_p0 if resource not in available_p0)
+            coverage = (len(required_p0) - len(missing_p0)) / len(required_p0) if required_p0 else 0.0
+            price = _optimizer_market_price(product, db)
+            units_per_day = _OPTIMIZER_UNITS_PER_DAY[tier]
+            planet_types_needed = sorted({
+                planet_type
+                for planet_type, resources in PLANET_RESOURCES.items()
+                if any(resource in required_p0 for resource in resources)
+            })
+            rows.append({
+                "product": product,
+                "tier": tier,
+                "est_isk_day": price * units_per_day * coverage,
+                "est_isk_day_fmt": format_isk(price * units_per_day * coverage),
+                "coverage": coverage,
+                "self_sufficient": coverage == 1.0,
+                "missing_p0": missing_p0,
+                "market_price": price,
+                "market_price_fmt": format_isk(price),
+                "planet_types_needed": planet_types_needed,
+            })
+    rows.sort(key=lambda item: item["est_isk_day"], reverse=True)
+    return rows
 
 
 def _character_capacity(char: Character, used_colonies: int) -> dict[str, Any]:
@@ -875,6 +948,16 @@ def _build_assignment_plan(
         "additional_characters_needed": additional_characters_needed,
         "feasibility": feasibility,
     }
+
+
+@router.get("/optimizer")
+def colony_plan_optimizer(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    characters = db.query(Character).filter(Character.account_id == account.id).all()
+    rows = _build_optimizer_rows(account, characters, db)
+    return JSONResponse(rows)
 
 
 @router.get("", response_class=HTMLResponse)

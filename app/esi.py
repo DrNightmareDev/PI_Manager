@@ -218,6 +218,17 @@ def get_character_fittings(character_id: int, access_token: str) -> list:
     return response.json()
 
 
+def get_character_location(character_id: int, token: str) -> dict:
+    response = requests.get(
+        f"{ESI_BASE}/characters/{character_id}/location/",
+        params={"datasource": "tranquility"},
+        headers={**HEADERS, "Authorization": f"Bearer {token}"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def search_entities(character_id: int, access_token: str, query: str) -> dict:
     """Sucht Corporations und Allianzen via ESI character search."""
     try:

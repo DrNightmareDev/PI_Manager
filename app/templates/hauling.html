@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}{{ t('hauling.title') }} - {{ t('app.name') }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column gap-4">
+    <div>
+        <h2 class="eve-page-title mb-1"><i class="bi bi-truck me-2 eve-accent"></i>{{ t('hauling.title') }}</h2>
+    </div>
+
+    <div class="card eve-card border-0">
+        <div class="card-body d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <label class="small text-muted mb-0">{{ t('common.character', default='Charakter') }}</label>
+                <select id="haulingCharacterSelect" class="form-select form-select-sm eve-input" style="min-width:220px;max-width:320px;">
+                    {% for char in characters %}
+                    <option value="{{ char.id }}"{% if char.id == selected_character_id %} selected{% endif %}>{{ char.character_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="small text-muted"><i class="bi bi-geo-alt me-1"></i>{{ t('common.location', default='Standort') }}: {{ t('hauling.location_unknown') if not location_name else location_name }}</span>
+                <button type="button" id="refreshLocationBtn" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-repeat me-1"></i>{{ t('hauling.refresh_location') }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card eve-card border-0 h-100">
+                <div class="card-header eve-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-box-seam me-1"></i>{{ t('hauling.list') }}</span>
+                    <span class="badge bg-secondary">{{ hauling_colonies|length }}</span>
+                </div>
+                <div class="card-body">
+                    {% if hauling_colonies %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>{{ t('common.character', default='Charakter') }}</th>
+                                    <th>{{ t('common.system', default='System') }}</th>
+                                    <th>{{ t('common.planet', default='Planet') }}</th>
+                                    <th>{{ t('common.type', default='Typ') }}</th>
+                                    <th>{{ t('common.expires', default='Ablauf') }}</th>
+                                    <th>{{ t('hauling.storage_contents', default='Lager-Inhalt') }}</th>
+                                    <th>{{ t('hauling.storage_value') }}</th>
+                                    <th>{{ t('hauling.urgency') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for colony in hauling_colonies %}
+                                <tr data-route-system-id="{{ colony.solar_system_id or '' }}"{% if colony.expiry_hours is not none and colony.expiry_hours < 0 %} class="table-danger"{% elif colony.is_stalled %} class="table-warning"{% endif %} onclick="window.open('https://evemaps.dotlan.net/system/{{ (colony.solar_system_name or '') | replace(' ', '_') }}', '_blank')" style="cursor:pointer;">
+                                    <td>{{ colony.character_name }}</td>
+                                    <td>
+                                        {{ colony.solar_system_name }}
+                                        {% if colony.solar_system_id %}
+                                        <span class="kill-badge" data-sys-id="{{ colony.solar_system_id }}"></span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ colony.planet_name }}</td>
+                                    <td>{{ t('planet_type.' ~ (colony.planet_type | lower), default=colony.planet_type) }}</td>
+                                    <td>{% if colony.expiry_hours is not none %}{{ colony.expiry_hours | format_expiry }}{% else %}—{% endif %}</td>
+                                    <td>
+                                        {% if colony.storage_summary_items %}
+                                            {{ colony.storage_summary_items | join(', ') }}
+                                            {% if colony.storage_extra_count > 0 %}<span class="text-muted">+{{ colony.storage_extra_count }} mehr</span>{% endif %}
+                                        {% else %}
+                                            <span class="text-muted">{{ t('hauling.no_items') }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ colony.storage_value | format_isk }}</td>
+                                    <td style="min-width:110px;">
+                                        <div class="progress" style="height:6px;background:rgba(255,255,255,.08);">
+                                            <div class="progress-bar {% if colony.urgency_pct > 66 %}bg-danger{% elif colony.urgency_pct > 33 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ colony.urgency_pct }}%"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="small text-muted mt-3">Total: {{ hauling_colonies|length }} Planeten · {{ hauling_total_value | format_isk }}</div>
+                    {% else %}
+                    <div class="text-muted text-center py-4"><i class="bi bi-inbox fs-2 d-block mb-2"></i>{{ t('hauling.no_items') }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card eve-card border-0 h-100">
+                <div class="card-header eve-card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-signpost-split me-1"></i>{{ t('hauling.route') }}</span>
+                    <span class="badge bg-secondary">{{ route_total_jumps }} {{ t('hauling.jumps') }}</span>
+                </div>
+                <div class="card-body">
+                    {% if route_ordered %}
+                    <ol class="list-group list-group-numbered" id="routeList">
+                        {% for item in route_ordered %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary">
+                            <div>
+                                <span class="fw-bold">{{ item.system_name }}</span>
+                                {% if item.system_id %}
+                                <span class="kill-badge" data-sys-id="{{ item.system_id }}"></span>
+                                {% endif %}
+                                {% if loop.first %}
+                                <span class="text-muted small ms-2">{{ t('hauling.start_point', default='Ausgangspunkt') }}</span>
+                                {% else %}
+                                <span class="text-muted small ms-2">{{ item.jumps_from_prev }} {{ t('hauling.jumps') }}</span>
+                                {% endif %}
+                            </div>
+                            <span class="badge bg-secondary">{% if loop.first %}{{ t('common.start', default='Start') }}{% else %}{{ item.jumps_from_prev }}{% endif %}</span>
+                        </li>
+                        {% endfor %}
+                    </ol>
+                    {% if dotlan_route_link %}
+                    <div class="mt-3">
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ dotlan_route_link }}" target="_blank" rel="noopener noreferrer">
+                            <i class="bi bi-map me-1"></i>Dotlan
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-muted text-center py-4"><i class="bi bi-inbox fs-2 d-block mb-2"></i>{{ t('hauling.location_unknown') }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const charSelect = document.getElementById('haulingCharacterSelect');
+    const refreshBtn = document.getElementById('refreshLocationBtn');
+
+    if (charSelect) {
+        charSelect.addEventListener('change', () => {
+            const value = charSelect.value;
+            window.location.href = `/hauling?character_id=${encodeURIComponent(value)}`;
+        });
+    }
+
+    async function refreshRouteLocation() {
+        if (!charSelect) return;
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>{{ t("hauling.refresh_location") }}';
+        try {
+            const locationResp = await fetch(`/hauling/api/location?character_id=${encodeURIComponent(charSelect.value)}`);
+            const locationData = await locationResp.json();
+            if (!locationData.ok || !locationData.solar_system_id) {
+                window.location.reload();
+                return;
+            }
+            const systemIds = [...new Set(Array.from(document.querySelectorAll('[data-route-system-id]')).map(el => Number(el.dataset.routeSystemId)).filter(Boolean))];
+            const routeResp = await fetch('/hauling/api/route', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({origin_system_id: locationData.solar_system_id, system_ids: systemIds}),
+            });
+            const routeData = await routeResp.json();
+            if (!routeData.ordered || !routeData.ordered.length) {
+                window.location.reload();
+                return;
+            }
+            const routeList = document.getElementById('routeList');
+            if (routeList) {
+                routeList.innerHTML = routeData.ordered.map((item, index) => `
+                    <li class="list-group-item d-flex justify-content-between align-items-center eve-list-item bg-transparent text-light border-secondary">
+                        <div>
+                            <span class="fw-bold">${item.system_name}</span>
+                            <span class="kill-badge" data-sys-id="${item.system_id}"></span>
+                            <span class="text-muted small ms-2">${index === 0 ? {{ t("hauling.start_point", default="Ausgangspunkt") | tojson }} : `${item.jumps_from_prev} {{ t("hauling.jumps") }}`}</span>
+                        </div>
+                        <span class="badge bg-secondary">${index === 0 ? {{ t("common.start", default="Start") | tojson }} : item.jumps_from_prev}</span>
+                    </li>
+                `).join('');
+            }
+            loadKillBadges();
+        } catch {
+            window.location.reload();
+        } finally {
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>{{ t("hauling.refresh_location") }}';
+        }
+    }
+
+    function renderKillBadge(data) {
+        if (!data || data.danger_level === 'safe' || !data.kill_count) return '';
+        if (data.danger_level === 'danger') {
+            return `<span class="badge bg-danger ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-skull-fill me-1"></i>${data.kill_count}</span>`;
+        }
+        return `<span class="badge bg-warning text-dark ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.kill_count}</span>`;
+    }
+
+    async function loadKillBadges() {
+        const placeholders = Array.from(document.querySelectorAll('.kill-badge[data-sys-id]'));
+        const unique = [...new Set(placeholders.map(el => el.dataset.sysId).filter(Boolean))];
+        for (let i = 0; i < unique.length; i += 10) {
+            const chunk = unique.slice(i, i + 10);
+            const responses = await Promise.all(chunk.map(async (systemId) => {
+                try {
+                    const response = await fetch(`/killboard/system/${systemId}`);
+                    if (!response.ok) return null;
+                    return await response.json();
+                } catch {
+                    return null;
+                }
+            }));
+            responses.forEach((data, index) => {
+                const systemId = chunk[index];
+                const html = renderKillBadge(data);
+                document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => {
+                    el.innerHTML = html;
+                });
+            });
+        }
+    }
+
+    refreshBtn?.addEventListener('click', refreshRouteLocation);
+    loadKillBadges();
+})();
+</script>
+{% endblock %}

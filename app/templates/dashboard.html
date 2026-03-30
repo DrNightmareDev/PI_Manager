@@ -184,6 +184,11 @@
                     <div style="font-size:.82rem;color:#e5b7af;">
                         {% for name in token_error_chars[:5] %}{{ name }}{% if not loop.last %}, {% endif %}{% endfor %}{% if token_error_chars|length > 5 %} und {{ token_error_chars|length - 5 }} weitere{% endif %}
                     </div>
+                    {% if vacation_count > 0 %}
+                    <div style="font-size:.78rem;color:#d6a89e;" class="mt-1">
+                        {{ t('vacation.hidden_note', count=vacation_count, default='{count} Charaktere im Urlaubs-Modus ausgeblendet') }}
+                    </div>
+                    {% endif %}
                 </div>
                 <a href="/dashboard/characters" class="btn btn-sm" style="background:#7c3f35;color:#fff;border:none;white-space:nowrap;">
                     <i class="bi bi-key me-1"></i>Tokens prüfen
@@ -452,6 +457,7 @@
                         <tbody>
                             {% for colony in colonies %}
                             <tr data-char="{{ colony.character_name }}"
+                                {% if colony.vacation_mode %}class="opacity-75"{% endif %}
                                 data-sort-char="{{ colony.character_name }}"
                                 data-sort-planet="{{ colony.planet_name }}"
                                 data-sort-type="{{ colony.planet_type }}"
@@ -473,6 +479,9 @@
                                     <div class="d-flex align-items-center gap-2">
                                         <img src="{{ colony.character_portrait }}" class="eve-portrait-xs rounded-circle" onerror="this.src='/static/img/default_char.svg'">
                                         <span class="small">{{ colony.character_name }}</span>
+                                        {% if colony.vacation_mode %}
+                                        <span class="badge bg-secondary">{{ t('vacation.badge', default='Urlaub') }}</span>
+                                        {% endif %}
                                     </div>
                                 </td>
                                 <td class="small">
@@ -487,6 +496,14 @@
                                     </div>
                                     {% if colony.region_name and colony.region_name != '—' %}
                                     <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
+                                    {% endif %}
+                                    {% if colony.solar_system_name and colony.solar_system_name != 'â€”' %}
+                                    <div style="color:#7a8a9a;font-size:.65rem;">
+                                        {{ colony.solar_system_name }}
+                                        {% if colony.solar_system_id %}
+                                        <span class="kill-badge" data-sys-id="{{ colony.solar_system_id }}"></span>
+                                        {% endif %}
+                                    </div>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -1926,6 +1943,45 @@ function _renderPiCheckBalance(p0, needed) {
     html += '</tbody></table>';
     el.innerHTML = html;
 }
+
+(function loadKillActivityBadges() {
+    const placeholders = Array.from(document.querySelectorAll('.kill-badge[data-sys-id]'));
+    const uniqueIds = [...new Set(placeholders.map(el => el.dataset.sysId).filter(Boolean))];
+    if (!uniqueIds.length) return;
+
+    function renderBadge(data) {
+        if (!data || data.danger_level === 'safe' || !data.kill_count) return '';
+        if (data.danger_level === 'danger') {
+            return `<span class="badge bg-danger ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-skull-fill me-1"></i>${data.kill_count}</span>`;
+        }
+        return `<span class="badge bg-warning text-dark ms-1" title="${data.kill_count} {{ t('killboard.kills_last_hour') }}"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.kill_count}</span>`;
+    }
+
+    async function fetchChunk(chunk) {
+        const results = await Promise.all(chunk.map(async (systemId) => {
+            try {
+                const response = await fetch(`/killboard/system/${systemId}`);
+                if (!response.ok) return null;
+                return await response.json();
+            } catch {
+                return null;
+            }
+        }));
+        results.forEach((data, index) => {
+            const systemId = chunk[index];
+            const html = renderBadge(data);
+            document.querySelectorAll(`.kill-badge[data-sys-id="${systemId}"]`).forEach(el => {
+                el.innerHTML = html;
+            });
+        });
+    }
+
+    (async () => {
+        for (let i = 0; i < uniqueIds.length; i += 10) {
+            await fetchChunk(uniqueIds.slice(i, i + 10));
+        }
+    })();
+})();
 </script>
 {% endblock %}
 
