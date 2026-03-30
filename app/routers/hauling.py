@@ -251,6 +251,7 @@ def hauling_page(
     location = _get_cached_location(selected_character, db) if selected_character else None
     route_ordered: list[dict] = []
     route_total_jumps = 0
+    ansiblex_status = _ansiblex.status(ensure_loaded=True)
     if location and hauling_colonies:
         try:
             route_ordered, route_total_jumps = _build_route(
@@ -258,10 +259,12 @@ def hauling_page(
                 [int(colony.get("solar_system_id") or 0) for colony in hauling_colonies if colony.get("solar_system_id")],
                 use_ansiblex=True,
             )
+            ansiblex_status = _ansiblex.status()
         except Exception:
             logger.exception("hauling: failed to build initial route")
             route_ordered = []
             route_total_jumps = 0
+            ansiblex_status = _ansiblex.status()
 
     location_name = _system_name(int(location.get("solar_system_id"))) if location and location.get("solar_system_id") else None
     dotlan_route_link = ""
@@ -280,6 +283,7 @@ def hauling_page(
         "hauling_colonies": hauling_colonies,
         "route_ordered": route_ordered,
         "route_total_jumps": route_total_jumps,
+        "ansiblex_status": ansiblex_status,
         "dotlan_route_link": dotlan_route_link,
         "hauling_total_value": sum(float(colony.get("storage_value") or 0.0) for colony in hauling_colonies),
     })
@@ -326,5 +330,5 @@ def get_route(
         ordered, total_jumps = _build_route(origin_system_id, system_ids, use_ansiblex=use_ansiblex)
     except Exception:
         logger.exception("hauling: route rebuild failed")
-        return JSONResponse({"ordered": [], "total_jumps": 0})
-    return JSONResponse({"ordered": ordered, "total_jumps": total_jumps})
+        return JSONResponse({"ordered": [], "total_jumps": 0, "ansiblex_status": _ansiblex.status()})
+    return JSONResponse({"ordered": ordered, "total_jumps": total_jumps, "ansiblex_status": _ansiblex.status()})

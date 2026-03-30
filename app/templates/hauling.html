@@ -168,7 +168,22 @@
             <div class="card eve-card border-0 h-100">
                 <div class="card-header eve-card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-signpost-split me-1"></i>{{ t('hauling.route') }}</span>
-                    <span class="badge bg-secondary">{{ route_total_jumps }} {{ t('hauling.jumps') }}</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="ansiblexStatusBadge"
+                              class="badge {% if ansiblex_status.state == 'up' %}bg-success{% elif ansiblex_status.state == 'stale' %}bg-warning text-dark{% elif ansiblex_status.state == 'down' %}bg-danger{% else %}bg-secondary{% endif %}"
+                              title="{% if ansiblex_status.last_error %}{{ ansiblex_status.last_error }}{% else %}AnsibleX Status{% endif %}">
+                            {% if ansiblex_status.state == 'up' %}
+                            <i class="bi bi-lightning-fill me-1"></i>AnsibleX OK
+                            {% elif ansiblex_status.state == 'stale' %}
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>AnsibleX Cache
+                            {% elif ansiblex_status.state == 'down' %}
+                            <i class="bi bi-x-octagon-fill me-1"></i>AnsibleX Down
+                            {% else %}
+                            <i class="bi bi-question-circle-fill me-1"></i>AnsibleX Unbekannt
+                            {% endif %}
+                        </span>
+                        <span class="badge bg-secondary">{{ route_total_jumps }} {{ t('hauling.jumps') }}</span>
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if route_ordered %}
@@ -228,6 +243,7 @@
     const charSelect = document.getElementById('haulingCharacterSelect');
     const refreshBtn = document.getElementById('refreshLocationBtn');
     const useAnsiblex = document.getElementById('useAnsiblex');
+    const ansiblexStatusBadge = document.getElementById('ansiblexStatusBadge');
 
     if (charSelect) {
         charSelect.addEventListener('change', () => {
@@ -257,6 +273,7 @@
                 }),
             });
             const routeData = await routeResp.json();
+            updateAnsiblexStatus(routeData.ansiblex_status, useAnsiblex ? useAnsiblex.checked : true);
             if (!routeData.ordered || !routeData.ordered.length) {
                 window.location.reload();
                 return;
@@ -295,6 +312,38 @@
         }
     }
 
+    function updateAnsiblexStatus(status, enabled) {
+        if (!ansiblexStatusBadge) return;
+        if (!enabled) {
+            ansiblexStatusBadge.className = 'badge bg-secondary';
+            ansiblexStatusBadge.title = 'AnsibleX deaktiviert';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>AnsibleX Aus';
+            return;
+        }
+        const state = status?.state || 'unknown';
+        if (state === 'up') {
+            ansiblexStatusBadge.className = 'badge bg-success';
+            ansiblexStatusBadge.title = 'AnsibleX erreichbar';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-lightning-fill me-1"></i>AnsibleX OK';
+            return;
+        }
+        if (state === 'stale') {
+            ansiblexStatusBadge.className = 'badge bg-warning text-dark';
+            ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar, Cache aktiv';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>AnsibleX Cache';
+            return;
+        }
+        if (state === 'down') {
+            ansiblexStatusBadge.className = 'badge bg-danger';
+            ansiblexStatusBadge.title = status?.last_error || 'AnsibleX nicht erreichbar';
+            ansiblexStatusBadge.innerHTML = '<i class="bi bi-x-octagon-fill me-1"></i>AnsibleX Down';
+            return;
+        }
+        ansiblexStatusBadge.className = 'badge bg-secondary';
+        ansiblexStatusBadge.title = 'AnsibleX Status unbekannt';
+        ansiblexStatusBadge.innerHTML = '<i class="bi bi-question-circle-fill me-1"></i>AnsibleX Unbekannt';
+    }
+
     function renderKillBadge(data) {
         if (!data || data.danger_level === 'safe' || !data.kill_count) return '';
         const href = data.system_url || `https://zkillboard.com/system/${data.system_id}/`;
@@ -329,6 +378,8 @@
     }
 
     refreshBtn?.addEventListener('click', refreshRouteLocation);
+    useAnsiblex?.addEventListener('change', () => updateAnsiblexStatus(null, useAnsiblex.checked));
+    updateAnsiblexStatus({state: {{ ansiblex_status.state | tojson }}, last_error: {{ ansiblex_status.last_error | tojson }}}, useAnsiblex ? useAnsiblex.checked : true);
     loadKillBadges();
 })();
 </script>

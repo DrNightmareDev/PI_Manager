@@ -10,12 +10,16 @@ _HEADERS = {"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manag
 _CACHE_TTL = 3600
 _cache: dict[tuple[int, int], bool] = {}
 _cache_loaded_at: float = 0.0
+_last_attempt_at: float = 0.0
+_last_success_at: float = 0.0
+_last_error: str | None = None
 
 
 def _ensure_loaded() -> None:
-    global _cache_loaded_at, _cache
+    global _cache_loaded_at, _cache, _last_attempt_at, _last_success_at, _last_error
     if time.time() - _cache_loaded_at < _CACHE_TTL:
         return
+    _last_attempt_at = time.time()
     try:
         resp = requests.get(_ANSIBLEX_URL, headers=_HEADERS, timeout=15)
         resp.raise_for_status()
@@ -30,8 +34,11 @@ def _ensure_loaded() -> None:
                     new_cache[(int(to_id), int(from_id))] = True
         _cache = new_cache
         _cache_loaded_at = time.time()
+        _last_success_at = _cache_loaded_at
+        _last_error = None
         logger.info("ansiblex: loaded %d gate connections", len(_cache))
-    except Exception:
+    except Exception as exc:
+        _last_error = str(exc)
         logger.warning("ansiblex: failed to load gates, skipping")
 
 
@@ -42,3 +49,25 @@ def has_bridge(from_system: int, to_system: int) -> bool:
 
 def bridge_jumps(from_system: int, to_system: int) -> int | None:
     return 1 if has_bridge(from_system, to_system) else None
+
+
+def status(ensure_loaded: bool = False) -> dict:
+    if ensure_loaded:
+        _ensure_loaded()
+    has_cache = bool(_cache)
+    if _last_error and has_cache:
+        state = "stale"
+    elif _last_error:
+        state = "down"
+    elif _last_success_at:
+        state = "up"
+    else:
+        state = "unknown"
+    return {
+        "state": state,
+        "has_cache": has_cache,
+        "last_attempt_at": _last_attempt_at,
+        "last_success_at": _last_success_at,
+        "last_error": _last_error,
+        "gate_count": len(_cache),
+    }
