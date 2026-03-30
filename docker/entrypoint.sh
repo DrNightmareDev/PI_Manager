@@ -3,19 +3,22 @@ set -e
 
 echo "Warte auf Datenbank..."
 until python -c "
-import psycopg2, os, time
+import os, re, sys, time
+import psycopg2
 url = os.environ.get('DATABASE_URL', '')
-# parse postgresql://user:pass@host/db
-import re
 m = re.match(r'postgresql://([^:]+):([^@]+)@([^/]+)/(.+)', url)
+ok = False
 if m:
     user, pw, host, db = m.groups()
     for i in range(30):
         try:
-            psycopg2.connect(host=host, user=user, password=pw, dbname=db)
+            conn = psycopg2.connect(host=host, user=user, password=pw, dbname=db)
+            conn.close()
+            ok = True
             break
         except Exception:
             time.sleep(1)
+sys.exit(0 if ok else 1)
 " 2>/dev/null; do
     sleep 1
 done
