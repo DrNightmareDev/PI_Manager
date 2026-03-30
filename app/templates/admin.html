@@ -342,63 +342,63 @@
     <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-shield-lock eve-accent me-1"></i>
-            <span class="fw-medium">Zugangspolitik</span>
+            <span class="fw-medium">{{ t('admin.access_policy.title', default='Access policy') }}</span>
             {% if policy.mode == 'open' %}
-            <span class="badge" style="background:#00b4d818;color:#00b4d8;border:1px solid #00b4d830;">Offen</span>
+            <span class="badge" style="background:#00b4d818;color:#00b4d8;border:1px solid #00b4d830;">{{ t('admin.access_policy.badge_open', default='Open') }}</span>
             {% elif policy.mode == 'allowlist' %}
-            <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;">Allowlist</span>
+            <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;">{{ t('admin.access_policy.badge_allowlist', default='Allowlist') }}</span>
             {% else %}
-            <span class="badge" style="background:#e6394622;color:#e63946;border:1px solid #e6394640;">Blocklist</span>
+            <span class="badge" style="background:#e6394622;color:#e63946;border:1px solid #e6394640;">{{ t('admin.access_policy.badge_blocklist', default='Blocklist') }}</span>
             {% endif %}
         </div>
         <span class="badge" style="background:#f4a30018;color:#f4a300;border:1px solid #f4a30030;font-size:0.7rem;">
-            <i class="bi bi-star-fill me-1"></i>Nur Administrator
+            <i class="bi bi-star-fill me-1"></i>{{ t('admin.access_policy.admin_only', default='Administrators only') }}
         </span>
     </div>
     <div class="card-body p-3">
 
         <!-- Modus wählen -->
         <div class="mb-4">
-            <div class="small fw-medium text-muted mb-2">Registrierungs-Modus</div>
+            <div class="small fw-medium text-muted mb-2">{{ t('admin.access_policy.registration_mode', default='Registration mode') }}</div>
             <div class="d-flex gap-2 flex-wrap mb-2">
                 <form method="post" action="/manager/access-policy/mode" class="d-inline">
                     <button type="submit" name="mode" value="open"
                             class="btn btn-sm {% if policy.mode == 'open' %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}">
-                        <i class="bi bi-globe2 me-1"></i>Offen
+                        <i class="bi bi-globe2 me-1"></i>{{ t('admin.access_policy.mode_open', default='Open') }}
                     </button>
                 </form>
                 <form method="post" action="/manager/access-policy/mode" class="d-inline">
                     <button type="submit" name="mode" value="allowlist"
                             class="btn btn-sm {% if policy.mode == 'allowlist' %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}"
                             style="{% if policy.mode == 'allowlist' %}background:#2dc65322;color:#2dc653;border-color:#2dc65360;{% endif %}">
-                        <i class="bi bi-check-circle me-1"></i>Nur erlaubte Corps/Allianzen
+                        <i class="bi bi-check-circle me-1"></i>{{ t('admin.access_policy.mode_allowlist', default='Allowed corps/alliances only') }}
                     </button>
                 </form>
                 <form method="post" action="/manager/access-policy/mode" class="d-inline">
                     <button type="submit" name="mode" value="blocklist"
                             class="btn btn-sm {% if policy.mode == 'blocklist' %}eve-btn-danger{% else %}eve-btn-ghost{% endif %}">
-                        <i class="bi bi-x-circle me-1"></i>Gesperrte Corps/Allianzen
+                        <i class="bi bi-x-circle me-1"></i>{{ t('admin.access_policy.mode_blocklist', default='Blocked corps/alliances') }}
                     </button>
                 </form>
             </div>
             <div class="small text-muted">
                 {% if policy.mode == 'open' %}
-                    <i class="bi bi-info-circle me-1"></i>Alle EVE-Charaktere können sich registrieren.
+                    <i class="bi bi-info-circle me-1"></i>{{ t('admin.access_policy.info_open', default='All EVE characters can register.') }}
                 {% elif policy.mode == 'allowlist' %}
-                    <i class="bi bi-info-circle me-1"></i>Nur Charaktere aus eingetragenen Korps/Allianzen dürfen sich <strong>neu</strong> registrieren.
+                    <i class="bi bi-info-circle me-1"></i>{{ t('admin.access_policy.info_allowlist', default='Only characters from listed corps/alliances can register as new accounts.') }}
                 {% else %}
-                    <i class="bi bi-info-circle me-1"></i>Charaktere aus eingetragenen Korps/Allianzen werden bei der <strong>Neuregistrierung</strong> gesperrt.
+                    <i class="bi bi-info-circle me-1"></i>{{ t('admin.access_policy.info_blocklist', default='Characters from listed corps/alliances are blocked during new registration.') }}
                 {% endif %}
-                Bestehende Accounts sind davon nicht betroffen.
+                {{ t('admin.access_policy.info_existing_accounts', default='Existing accounts are not affected.') }}
             </div>
         </div>
 
         <!-- Eintrags-Liste -->
         <div class="mb-4">
             <div class="small fw-medium text-muted mb-2">
-                {% if policy.mode == 'allowlist' %}Erlaubte Einträge
-                {% elif policy.mode == 'blocklist' %}Gesperrte Einträge
-                {% else %}Einträge (aktiv wenn Modus geändert wird)
+                {% if policy.mode == 'allowlist' %}{{ t('admin.access_policy.allowed_entries', default='Allowed entries') }}
+                {% elif policy.mode == 'blocklist' %}{{ t('admin.access_policy.blocked_entries', default='Blocked entries') }}
+                {% else %}{{ t('admin.access_policy.entries_inactive', default='Entries (active when mode changes)') }}
                 {% endif %}
             </div>
             {% if policy_entries %}
@@ -406,10 +406,10 @@
                 <table class="table eve-table-sm mb-0">
                     <thead>
                         <tr>
-                            <th>Typ</th>
-                            <th>Name</th>
+                            <th>{{ t('common.type') }}</th>
+                            <th>{{ t('common.name', default='Name') }}</th>
                             <th>EVE ID</th>
-                            <th>Hinzugefügt</th>
+                            <th>{{ t('admin.access_policy.added', default='Added') }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -418,9 +418,9 @@
                         <tr>
                             <td>
                                 {% if e.entity_type == 'corporation' %}
-                                <span class="badge" style="background:#00b4d818;color:#00b4d8;border:1px solid #00b4d830;">Korporation</span>
+                                <span class="badge" style="background:#00b4d818;color:#00b4d8;border:1px solid #00b4d830;">{{ t('admin.access_policy.corporation', default='Corporation') }}</span>
                                 {% else %}
-                                <span class="badge" style="background:#f4a30018;color:#f4a300;border:1px solid #f4a30030;">Allianz</span>
+                                <span class="badge" style="background:#f4a30018;color:#f4a300;border:1px solid #f4a30030;">{{ t('admin.access_policy.alliance', default='Alliance') }}</span>
                                 {% endif %}
                             </td>
                             <td class="small fw-medium">{{ e.entity_name or '—' }}</td>
@@ -430,8 +430,8 @@
                                 <a href="/manager/access-policy/remove/{{ e.id }}"
                                    class="btn btn-sm eve-btn-ghost py-0 px-1"
                                    style="color:#e63946;"
-                                   title="Eintrag entfernen"
-                                   onclick="return confirm('Eintrag \'{{ e.entity_name or e.entity_id }}\' wirklich entfernen?')">
+                                   title="{{ t('admin.access_policy.remove_entry', default='Remove entry') }}"
+                                   onclick="return confirm('{{ t('admin.access_policy.confirm_remove', name=(e.entity_name or e.entity_id), default='Really remove entry {name}?') }}')">
                                     <i class="bi bi-trash3"></i>
                                 </a>
                             </td>
@@ -442,9 +442,9 @@
             </div>
             {% else %}
             <div class="text-muted small py-2">
-                <i class="bi bi-list-ul me-1"></i>Keine Einträge vorhanden.
+                <i class="bi bi-list-ul me-1"></i>{{ t('admin.access_policy.no_entries', default='No entries available.') }}
                 {% if policy.mode != 'open' %}
-                Füge unten Corps oder Allianzen hinzu.
+                {{ t('admin.access_policy.add_hint', default='Add corps or alliances below.') }}
                 {% endif %}
             </div>
             {% endif %}
@@ -452,13 +452,13 @@
 
         <!-- Suche & Hinzufügen -->
         <div>
-            <div class="small fw-medium text-muted mb-2">Eintrag hinzufügen</div>
+            <div class="small fw-medium text-muted mb-2">{{ t('admin.access_policy.add_entry', default='Add entry') }}</div>
             <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
                 <input type="text" id="apSearchInput" class="form-control form-control-sm eve-input"
-                       style="max-width:260px;" placeholder="Corp- oder Allianz-Name suchen…"
+                       style="max-width:260px;" placeholder="{{ t('admin.access_policy.search_placeholder', default='Search corp or alliance name...') }}"
                        oninput="apSearchDebounce()">
                 <button class="btn btn-sm eve-btn-outline" onclick="apSearch()">
-                    <i class="bi bi-search me-1"></i>Suchen
+                    <i class="bi bi-search me-1"></i>{{ t('common.search', default='Search') }}
                 </button>
             </div>
             <div id="apSearchResults" class="mb-3"></div>
@@ -468,10 +468,10 @@
                   class="d-flex gap-2 align-items-end flex-wrap mt-3 pt-3"
                   style="border-top:1px solid #1e3448;">
                 <div>
-                    <label class="form-label small mb-1">Typ</label>
+                    <label class="form-label small mb-1">{{ t('common.type') }}</label>
                     <select name="entity_type" class="form-select form-select-sm eve-input" style="width:140px;">
-                        <option value="corporation">Korporation</option>
-                        <option value="alliance">Allianz</option>
+                        <option value="corporation">{{ t('admin.access_policy.corporation', default='Corporation') }}</option>
+                        <option value="alliance">{{ t('admin.access_policy.alliance', default='Alliance') }}</option>
                     </select>
                 </div>
                 <div>
@@ -480,19 +480,19 @@
                            id="apManualId" style="width:150px;" placeholder="z.B. 98000001" required>
                 </div>
                 <div>
-                    <label class="form-label small mb-1">Name (optional)</label>
+                    <label class="form-label small mb-1">{{ t('admin.access_policy.name_optional', default='Name (optional)') }}</label>
                     <input type="text" name="entity_name" class="form-control form-control-sm eve-input"
-                           id="apManualName" style="width:200px;" placeholder="Anzeigename">
+                           id="apManualName" style="width:200px;" placeholder="{{ t('admin.access_policy.display_name', default='Display name') }}">
                 </div>
                 <button type="submit" class="btn btn-sm eve-btn-gold">
-                    <i class="bi bi-plus-lg me-1"></i>Hinzufügen
+                    <i class="bi bi-plus-lg me-1"></i>{{ t('common.add', default='Add') }}
                 </button>
             </form>
             <p class="text-muted mt-2 mb-0" style="font-size:0.72rem;">
                 <i class="bi bi-info-circle me-1"></i>
-                Die EVE Korporations- oder Allianz-ID findest du auf
+                {{ t('admin.access_policy.id_hint', default='You can find the EVE corporation or alliance ID on') }}
                 <a href="https://zkillboard.com" target="_blank" rel="noopener" class="eve-link">zkillboard.com</a>
-                oder <a href="https://evewho.com" target="_blank" rel="noopener" class="eve-link">evewho.com</a>.
+                {{ t('common.or', default='or') }} <a href="https://evewho.com" target="_blank" rel="noopener" class="eve-link">evewho.com</a>.
             </p>
         </div>
     </div>
@@ -712,7 +712,7 @@ async function apSearch() {
     const el = document.getElementById('apSearchResults');
     if (!el) return;
     if (!q) { el.innerHTML = ''; return; }
-    el.innerHTML = '<span class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Suche…</span>';
+    el.innerHTML = `<span class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>${window.eveTranslateKey ? window.eveTranslateKey('admin.access_policy.searching', { default: 'Searching...' }) : 'Searching...'}</span>`;
     try {
         const res = await fetch(`/manager/access-policy/search?q=${encodeURIComponent(q)}`);
         const data = await res.json();
@@ -727,7 +727,7 @@ async function apSearch() {
             ? `<div class="d-flex flex-wrap gap-2 mt-1">${rows.join('')}</div>`
             : '<span class="text-muted small">Keine Ergebnisse.</span>';
     } catch(e) {
-        el.innerHTML = '<span class="text-muted small text-danger">Fehler bei der Suche.</span>';
+        el.innerHTML = `<span class="text-muted small text-danger">${window.eveTranslateKey ? window.eveTranslateKey('admin.access_policy.search_error', { default: 'Search failed.' }) : 'Search failed.'}</span>`;
     }
 }
 
@@ -751,7 +751,7 @@ function apFill(type, id, name) {
     document.getElementById('apManualId').value = id;
     document.getElementById('apManualName').value = name;
     document.getElementById('apSearchResults').innerHTML =
-        `<span class="small" style="color:#2dc653;"><i class="bi bi-check-circle me-1"></i>${name} übernommen – bitte mit "Hinzufügen" bestätigen.</span>`;
+        `<span class="small" style="color:#2dc653;"><i class="bi bi-check-circle me-1"></i>${name} ${window.eveTranslateKey ? window.eveTranslateKey('admin.access_policy.copied_confirm', { default: 'copied - please confirm with "Add".' }) : 'copied - please confirm with "Add".'}</span>`;
 }
 function escapeHtml(value) {
     return String(value ?? '')
