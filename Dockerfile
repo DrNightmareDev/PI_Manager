@@ -17,7 +17,7 @@ COPY . .
 
 # Entrypoint: run migrations then start server
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh /app/scripts/add_administrator.py /app/scripts/remove_administrator.py
+RUN chmod +x /entrypoint.sh /app/docker/celery_entrypoint.sh /app/scripts/add_administrator.py /app/scripts/remove_administrator.py
 
 RUN useradd -m -u 1000 -s /sbin/nologin appuser \
     && chown -R appuser:appuser /app
