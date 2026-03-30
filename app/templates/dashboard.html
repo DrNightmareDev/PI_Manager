@@ -1155,7 +1155,7 @@ showColoniesOverlay();
 (function pollBgRefresh() {
     // Pass page-load timestamp so the server can detect completion via DB
     // without relying on in-process state (which differs across gunicorn workers).
-    const since = Math.floor(Date.now() / 1000);
+    const since = Date.now() / 1000;
     let polls = 0;
     const MAX_POLLS = 40; // max 120s (3s * 40)
     function poll() {

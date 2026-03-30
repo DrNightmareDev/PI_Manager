@@ -574,7 +574,7 @@ function renderMixResults(data) {
                         </div>
                     </div>
                 `).join('')
-                : '<div class="text-muted small mt-2">Keine passenden Planeten in der Auswahl gefunden.</div>';
+                : `<div class="text-muted small mt-2">${window.eveTranslateKey ? window.eveTranslateKey('system_mix.no_matching_planets') : 'No matching planets found in the selection.'}</div>`;
             const productLink = `/planner?product=${encodeURIComponent(item.name)}`;
             row.innerHTML = `
                 <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
@@ -584,7 +584,7 @@ function renderMixResults(data) {
                                 ${escapeHtml(item.name)}
                             </a>
                         </div>
-                        <div class="small text-muted mt-1">Benoetigte Planetentypen: ${(item.planets_needed || []).join(', ') || '-'}</div>
+                        <div class="small text-muted mt-1">${window.eveTranslateKey ? window.eveTranslateKey('system_mix.required_planet_types_label') : 'Required planet types'}: ${(item.planets_needed || []).join(', ') || '-'}</div>
                     </div>
                     <div class="text-end">
                         <div class="small"><span class="text-muted">Jita Sell:</span> <span style="color:var(--eve-gold);">${formatIsk(item.jita_sell)}</span></div>

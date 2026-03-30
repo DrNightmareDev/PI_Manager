@@ -17,6 +17,7 @@ from app import sde
 from app.database import get_db
 from app.dependencies import require_account, require_manager_or_admin
 from app.esi import ensure_valid_token, get_character_location
+from app.i18n import translate
 from app.market import PI_TYPE_IDS
 from app.models import Character, CorpBridgeConnection, MarketCache
 from app.routers.dashboard import _apply_price_mode, _load_colony_cache, _recompute_expiry
@@ -128,7 +129,7 @@ def _system_name(system_id: int) -> str:
 def _system_info_or_404(system_id: int) -> dict:
     info = sde.get_system_local(int(system_id))
     if not info:
-        raise HTTPException(status_code=400, detail=f"Unbekanntes System: {system_id}")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_unknown_system", system_id=system_id, default="Unknown system: {system_id}"))
     return info
 
 
@@ -136,7 +137,7 @@ def _normalize_bridge_pair(from_system_id: int, to_system_id: int) -> tuple[int,
     from_id = int(from_system_id)
     to_id = int(to_system_id)
     if from_id == to_id:
-        raise HTTPException(status_code=400, detail="Bridge-Endpunkte muessen unterschiedlich sein")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_bridge_same_endpoints", default="Bridge endpoints must be different"))
     return (from_id, to_id) if from_id < to_id else (to_id, from_id)
 
 
@@ -280,11 +281,11 @@ def _parse_dotlan_bridge_pairs(dotlan_url: str) -> list[tuple[str, str]]:
     url = str(dotlan_url or "").strip()
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise HTTPException(status_code=400, detail="Dotlan-Link muss mit http oder https beginnen")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_scheme", default="Dotlan link must start with http or https"))
     if parsed.netloc != "evemaps.dotlan.net":
-        raise HTTPException(status_code=400, detail="Nur evemaps.dotlan.net Links sind erlaubt")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_host", default="Only evemaps.dotlan.net links are allowed"))
     if "/bridges/" not in parsed.path:
-        raise HTTPException(status_code=400, detail="Bitte einen Dotlan-Bridge-Link verwenden")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_bridge_link", default="Please use a Dotlan bridge link"))
 
     response = requests.get(
         url,
@@ -294,7 +295,7 @@ def _parse_dotlan_bridge_pairs(dotlan_url: str) -> list[tuple[str, str]]:
     response.raise_for_status()
     systems = [unquote(match).strip() for match in _DOTLAN_SYSTEM_LINK_RE.findall(response.text or "")]
     if len(systems) < 2:
-        raise HTTPException(status_code=400, detail="Keine Bridge-Systeme auf der Dotlan-Seite gefunden")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_no_systems", default="No bridge systems found on the Dotlan page"))
 
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -309,7 +310,7 @@ def _parse_dotlan_bridge_pairs(dotlan_url: str) -> list[tuple[str, str]]:
         seen.add(key)
         pairs.append((left, right))
     if not pairs:
-        raise HTTPException(status_code=400, detail="Keine eindeutigen Bridge-Paare in Dotlan gefunden")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_dotlan_no_pairs", default="No unique bridge pairs found on Dotlan"))
     return pairs
 
 
@@ -690,9 +691,9 @@ def export_bridge_connections_smt(
 ):
     corporation_id = int(corporation_id or 0)
     if not corporation_id:
-        raise HTTPException(status_code=400, detail="Korporation fehlt")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_missing_corporation", default="Corporation is required"))
     if not _can_export_bridge(account, corporation_id, db):
-        raise HTTPException(status_code=403, detail="Nur Export fuer eigene Corporation erlaubt")
+        raise HTTPException(status_code=403, detail=translate("hauling.error_export_corporation_scope", default="Export is only allowed for your own corporation"))
 
     corporation_name = _resolve_corporation_name(corporation_id, db)
     entries = (
@@ -729,9 +730,9 @@ def save_bridge_connection(
 ):
     corporation_id = int(payload.get("corporation_id") or 0)
     if not corporation_id:
-        raise HTTPException(status_code=400, detail="Korporation fehlt")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_missing_corporation", default="Corporation is required"))
     if not _can_manage_bridge(account, corporation_id, db):
-        raise HTTPException(status_code=403, detail="Nur eigene Corporation erlaubt")
+        raise HTTPException(status_code=403, detail=translate("hauling.error_manage_corporation_scope", default="Only your own corporation is allowed"))
 
     from_system_id, to_system_id = _normalize_bridge_pair(
         int(payload.get("from_system_id") or 0),
@@ -756,11 +757,11 @@ def save_bridge_connection(
     if bridge_id:
         entry = db.query(CorpBridgeConnection).filter(CorpBridgeConnection.id == bridge_id).first()
         if not entry:
-            raise HTTPException(status_code=404, detail="Bridge-Verbindung nicht gefunden")
+            raise HTTPException(status_code=404, detail=translate("hauling.error_bridge_not_found", default="Bridge connection not found"))
         if not _can_manage_bridge(account, int(entry.corporation_id), db):
-            raise HTTPException(status_code=403, detail="Keine Berechtigung fuer diese Verbindung")
+            raise HTTPException(status_code=403, detail=translate("hauling.error_bridge_permission", default="No permission for this connection"))
         if existing and int(existing.id) != int(entry.id):
-            raise HTTPException(status_code=409, detail="Diese Verbindung existiert bereits")
+            raise HTTPException(status_code=409, detail=translate("hauling.error_bridge_exists", default="This connection already exists"))
         entry, _ = _upsert_bridge_connection(
             db=db,
             corporation_id=corporation_id,
@@ -774,7 +775,7 @@ def save_bridge_connection(
         )
     else:
         if existing:
-            raise HTTPException(status_code=409, detail="Diese Verbindung existiert bereits")
+            raise HTTPException(status_code=409, detail=translate("hauling.error_bridge_exists", default="This connection already exists"))
         entry, _ = _upsert_bridge_connection(
             db=db,
             corporation_id=corporation_id,
@@ -801,13 +802,13 @@ def import_dotlan_bridge_connections(
 ):
     corporation_id = int(payload.get("corporation_id") or 0)
     if not corporation_id:
-        raise HTTPException(status_code=400, detail="Korporation fehlt")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_missing_corporation", default="Corporation is required"))
     if not _can_manage_bridge(account, corporation_id, db):
-        raise HTTPException(status_code=403, detail="Nur eigene Corporation erlaubt")
+        raise HTTPException(status_code=403, detail=translate("hauling.error_manage_corporation_scope", default="Only your own corporation is allowed"))
 
     dotlan_url = str(payload.get("url") or "").strip()
     if not dotlan_url:
-        raise HTTPException(status_code=400, detail="Dotlan-Link fehlt")
+        raise HTTPException(status_code=400, detail=translate("hauling.error_missing_dotlan_link", default="Dotlan link is required"))
 
     corporation_name = _resolve_corporation_name(corporation_id, db)
     bridge_pairs = _parse_dotlan_bridge_pairs(dotlan_url)
@@ -863,9 +864,9 @@ def delete_bridge_connection(
 ):
     entry = db.query(CorpBridgeConnection).filter(CorpBridgeConnection.id == bridge_id).first()
     if not entry:
-        raise HTTPException(status_code=404, detail="Bridge-Verbindung nicht gefunden")
+        raise HTTPException(status_code=404, detail=translate("hauling.error_bridge_not_found", default="Bridge connection not found"))
     if not _can_manage_bridge(account, int(entry.corporation_id), db):
-        raise HTTPException(status_code=403, detail="Keine Berechtigung fuer diese Verbindung")
+        raise HTTPException(status_code=403, detail=translate("hauling.error_bridge_permission", default="No permission for this connection"))
     db.delete(entry)
     db.commit()
     _invalidate_route_caches()

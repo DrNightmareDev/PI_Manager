@@ -88,7 +88,7 @@
                         </li>
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/templates') %}active{% endif %}" href="/templates">
-                                <i class="bi bi-geo-alt me-2 text-muted"></i>PI Templates
+                                <i class="bi bi-geo-alt me-2 text-muted"></i>{{ t('nav.templates', default='PI Templates') }}
                             </a>
                         </li>
                         <li>
@@ -124,7 +124,7 @@
                         </li>
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/system/fittings') %}active{% endif %}" href="/system/fittings">
-                                <i class="bi bi-cpu me-2 text-muted"></i>Fittings
+                                <i class="bi bi-cpu me-2 text-muted"></i>{{ t('nav.fittings', default='Fittings') }}
                             </a>
                         </li>
                     </ul>
@@ -219,7 +219,7 @@
                     </li>
                     <li>
                         <button class="dropdown-item" type="button" onclick="openWebhookModal()">
-                            <i class="bi bi-bell me-2"></i>Discord Alerts
+                            <i class="bi bi-bell me-2"></i>{{ t('common.discord_alerts', default='Discord alerts') }}
                             <span id="webhookStatusBadge" class="badge ms-1" style="background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.65rem;vertical-align:middle;">–</span>
                         </button>
                     </li>
@@ -277,7 +277,7 @@
                         <li><strong>{{ t('nav.system') }}:</strong> {{ t('help.page.system') }}</li>
                         <li><strong>{{ t('nav.system_mix') }}:</strong> {{ t('help.page.system_mix') }}</li>
                         <li><strong>{{ t('nav.compare') }}:</strong> {{ t('help.page.compare') }}</li>
-                        <li><strong>Fittings:</strong> Gespeicherte Fittings aus ESI laden oder eingefuegte Fits nebeneinander vergleichen.</li>
+                        <li><strong>Fittings:</strong> {{ t('help.page.fittings', default='Load saved fittings from ESI or compare pasted fits side by side.') }}</li>
                     </ul>
                 </div>
 
@@ -319,7 +319,7 @@
                       aria-label="{{ t('common.price_update') }}">
                     <i class="bi bi-box-seam"></i>
                 </span>
-                <span class="eve-esi-dot" id="esiStatusDot" title="ESI Status"></span>
+                <span class="eve-esi-dot" id="esiStatusDot" title="{{ t('footer.esi_status', default='ESI status') }}"></span>
                 <span class="text-muted small" id="esiStatusText">{{ t('footer.esi_checking') }}</span>
             </div>
     </div>
@@ -461,43 +461,43 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="modal-dialog">
         <div class="modal-content eve-help-modal">
             <div class="modal-header border-0 pb-2">
-                <h5 class="modal-title fw-semibold"><i class="bi bi-bell me-2" style="color:var(--eve-accent);"></i>Discord / Webhook Alerts</h5>
+                <h5 class="modal-title fw-semibold"><i class="bi bi-bell me-2" style="color:var(--eve-accent);"></i>{{ t('webhook.title', default='Discord / Webhook alerts') }}</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body pt-2">
                 <p class="text-muted small mb-3">
-                    Erhalte eine Nachricht auf Discord wenn Extraktoren ablaufen.
-                    Erstelle einen Webhook unter <strong>Servereinstellungen → Integrationen → Webhooks</strong>
-                    und füge die URL hier ein.
+                    {{ t('webhook.description', default='Receive a Discord message when extractors are about to expire.') }}
+                    {{ t('webhook.setup_prefix', default='Create a webhook under') }} <strong>{{ t('webhook.setup_path', default='Server Settings -> Integrations -> Webhooks') }}</strong>
+                    {{ t('webhook.setup_suffix', default='and paste the URL here.') }}
                 </p>
                 <div class="mb-3">
-                    <label class="form-label small fw-medium">Webhook URL</label>
+                    <label class="form-label small fw-medium">{{ t('webhook.url', default='Webhook URL') }}</label>
                     <input type="url" id="webhookUrlInput" class="form-control form-control-sm"
                            placeholder="https://discord.com/api/webhooks/...">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-medium">Alarm-Schwelle (Stunden vor Ablauf)</label>
+                    <label class="form-label small fw-medium">{{ t('webhook.threshold', default='Alert threshold (hours before expiry)') }}</label>
                     <select id="webhookHoursSelect" class="form-select form-select-sm">
-                        <option value="1">1 Stunde</option>
-                        <option value="2" selected>2 Stunden</option>
-                        <option value="4">4 Stunden</option>
-                        <option value="6">6 Stunden</option>
-                        <option value="12">12 Stunden</option>
-                        <option value="24">24 Stunden</option>
+                        <option value="1">{{ t('webhook.hour_1', default='1 hour') }}</option>
+                        <option value="2" selected>{{ t('webhook.hours_n', count=2, default='2 hours') }}</option>
+                        <option value="4">{{ t('webhook.hours_n', count=4, default='4 hours') }}</option>
+                        <option value="6">{{ t('webhook.hours_n', count=6, default='6 hours') }}</option>
+                        <option value="12">{{ t('webhook.hours_n', count=12, default='12 hours') }}</option>
+                        <option value="24">{{ t('webhook.hours_n', count=24, default='24 hours') }}</option>
                     </select>
                 </div>
                 <div class="form-check mb-3">
                     <input class="form-check-input" type="checkbox" id="webhookEnabledCheck" checked>
-                    <label class="form-check-label small" for="webhookEnabledCheck">Alerts aktiviert</label>
+                    <label class="form-check-label small" for="webhookEnabledCheck">{{ t('webhook.enabled', default='Alerts enabled') }}</label>
                 </div>
                 <div id="webhookSaveMsg" class="small mb-2" style="display:none;"></div>
             </div>
             <div class="modal-footer border-0 pt-0">
                 <button class="btn btn-sm eve-btn-ghost" onclick="testWebhook()">
-                    <i class="bi bi-send me-1"></i>Test senden
+                    <i class="bi bi-send me-1"></i>{{ t('webhook.test_send', default='Send test') }}
                 </button>
                 <button class="btn btn-sm eve-btn-outline ms-auto" onclick="saveWebhookSettings()">
-                    <i class="bi bi-save me-1"></i>Speichern
+                    <i class="bi bi-save me-1"></i>{{ t('common.save') }}
                 </button>
             </div>
         </div>
@@ -506,6 +506,17 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 (function() {
     let _webhookModal = null;
+    const webhookI18n = {
+        active: {{ t('common.active') | tojson }},
+        off: {{ t('common.off', default='Off') | tojson }},
+        unset: {{ t('common.none', default='-') | tojson }},
+        saveSuccess: {{ t('webhook.save_success', default='Settings saved.') | tojson }},
+        errorPrefix: {{ t('common.error', default='Error') | tojson }},
+        unknownError: {{ t('common.unknown_error', default='Unknown error') | tojson }},
+        networkError: {{ t('common.network_error', default='Network error') | tojson }},
+        testSending: {{ t('webhook.test_sending', default='Sending test...') | tojson }},
+        testSuccess: {{ t('webhook.test_success', default='Test sent successfully!') | tojson }},
+    };
 
     window.openWebhookModal = function() {
         if (!_webhookModal) {
@@ -529,13 +540,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const badge = document.getElementById('webhookStatusBadge');
         if (!badge) return;
         if (url && enabled) {
-            badge.textContent = 'Aktiv';
+            badge.textContent = webhookI18n.active;
             badge.style.cssText = 'background:#2dc65320;color:#2dc653;border:1px solid #2dc65340;font-size:.65rem;vertical-align:middle;';
         } else if (url && !enabled) {
-            badge.textContent = 'Aus';
+            badge.textContent = webhookI18n.off;
             badge.style.cssText = 'background:#f4a30020;color:#f4a300;border:1px solid #f4a30040;font-size:.65rem;vertical-align:middle;';
         } else {
-            badge.textContent = '–';
+            badge.textContent = webhookI18n.unset;
             badge.style.cssText = 'background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;font-size:.65rem;vertical-align:middle;';
         }
     };
@@ -555,20 +566,20 @@ document.addEventListener('DOMContentLoaded', function() {
             if (msg) {
                 msg.style.display = '';
                 msg.style.color = d.ok ? '#2dc653' : '#e74c3c';
-                msg.textContent = d.ok ? '✓ Einstellungen gespeichert.' : '✗ Fehler: ' + (d.detail || 'Unbekannter Fehler');
+                msg.textContent = d.ok ? `✓ ${webhookI18n.saveSuccess}` : `✗ ${webhookI18n.errorPrefix}: ` + (d.detail || webhookI18n.unknownError);
                 setTimeout(() => { if (msg) msg.style.display = 'none'; }, 3000);
             }
             if (d.ok) _updateWebhookBadge(url, enabled);
         })
         .catch(() => {
-            if (msg) { msg.style.display = ''; msg.style.color = '#e74c3c'; msg.textContent = '✗ Netzwerkfehler'; }
+            if (msg) { msg.style.display = ''; msg.style.color = '#e74c3c'; msg.textContent = `✗ ${webhookI18n.networkError}`; }
         });
     };
 
     window.testWebhook = function() {
         const msg = document.getElementById('webhookSaveMsg');
         const url = (document.getElementById('webhookUrlInput').value || '').trim();
-        if (msg) { msg.style.display = ''; msg.style.color = '#7ec8e3'; msg.textContent = 'Sende Test…'; }
+        if (msg) { msg.style.display = ''; msg.style.color = '#7ec8e3'; msg.textContent = webhookI18n.testSending; }
         fetch('/dashboard/webhook-test', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -578,10 +589,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(d => {
             if (msg) {
                 msg.style.color = d.ok ? '#2dc653' : '#e74c3c';
-                msg.textContent = d.ok ? '✓ Test erfolgreich gesendet!' : '✗ ' + (d.error || 'Unbekannter Fehler');
+                msg.textContent = d.ok ? `✓ ${webhookI18n.testSuccess}` : '✗ ' + (d.error || webhookI18n.unknownError);
             }
         })
-        .catch(() => { if (msg) { msg.style.color = '#e74c3c'; msg.textContent = '✗ Netzwerkfehler'; } });
+        .catch(() => { if (msg) { msg.style.color = '#e74c3c'; msg.textContent = `✗ ${webhookI18n.networkError}`; } });
     };
 
     // Load badge state on every page
@@ -598,3 +609,4 @@ document.addEventListener('DOMContentLoaded', function() {
 {% block extra_scripts %}{% endblock %}
 </body>
 </html>
+

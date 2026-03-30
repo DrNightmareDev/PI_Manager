@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Charaktere - EVE PI Manager{% endblock %}
+{% block title %}{{ t('characters.title', default='Characters') }} - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <h2 class="eve-page-title mb-0">
-        <i class="bi bi-people me-2 eve-accent"></i>Charaktere
+        <i class="bi bi-people me-2 eve-accent"></i>{{ t('characters.title', default='Characters') }}
         <span class="badge ms-2" style="font-size:0.6em;background:#1a2d3d;color:#7ec8e3;border:1px solid #2a4a6b;vertical-align:middle;">
             {{ characters | length }}
         </span>
     </h2>
     <div class="d-flex gap-2 align-items-center flex-wrap">
         <div class="btn-group btn-group-sm" role="group" id="viewToggle">
-            <button type="button" class="btn eve-btn-ghost active" id="btnGrid" onclick="setView('grid')" title="Kachelansicht">
+            <button type="button" class="btn eve-btn-ghost active" id="btnGrid" onclick="setView('grid')" title="{{ t('common.grid_view', default='Grid view') }}">
                 <i class="bi bi-grid-3x3-gap"></i>
             </button>
-            <button type="button" class="btn eve-btn-ghost" id="btnList" onclick="setView('list')" title="Listenansicht">
+            <button type="button" class="btn eve-btn-ghost" id="btnList" onclick="setView('list')" title="{{ t('common.list_view', default='List view') }}">
                 <i class="bi bi-list-ul"></i>
             </button>
         </div>
         <a href="/auth/refresh-scopes" class="btn eve-btn-outline">
-            <i class="bi bi-key me-1"></i>Scopes aktualisieren
+            <i class="bi bi-key me-1"></i>{{ t('characters.refresh_scopes', default='Refresh scopes') }}
         </a>
         <a href="/auth/add-character" class="btn eve-btn-primary">
-            <i class="bi bi-person-plus me-1"></i>Alt hinzufuegen
+            <i class="bi bi-person-plus me-1"></i>{{ t('common.add_alt') }}
         </a>
     </div>
 </div>
@@ -34,7 +34,7 @@
             <div class="eve-char-card card border-0 h-100 position-relative">
                 {% if char.id == account.main_character_id %}
                 <div class="eve-main-ribbon">
-                    <span><i class="bi bi-star-fill me-1"></i>Main</span>
+                    <span><i class="bi bi-star-fill me-1"></i>{{ t('common.main', default='Main') }}</span>
                 </div>
                 {% endif %}
 
@@ -51,7 +51,7 @@
                         <div class="flex-grow-1 min-w-0">
                             <div class="fw-semibold eve-char-name-lg text-truncate">{{ char.character_name }}</div>
                             <div class="text-muted small text-truncate">
-                                <i class="bi bi-building me-1"></i>{{ char.corporation_name or 'Keine Korporation' }}
+                                <i class="bi bi-building me-1"></i>{{ char.corporation_name or t('common.no_corporation') }}
                             </div>
                             {% if char.alliance_name %}
                             <div class="text-muted small text-truncate">
@@ -68,18 +68,18 @@
 
                     <div class="eve-token-info mb-3 p-2 rounded">
                         <div class="d-flex justify-content-between align-items-center">
-                            <span class="text-muted small">Token</span>
+                            <span class="text-muted small">{{ t('characters.token', default='Token') }}</span>
                             {% if char.token_expires_at %}
                             <span class="badge {% if char.access_token %}eve-badge-ok{% else %}eve-badge-err{% endif %} small">
-                                {{ 'Aktiv' if char.access_token else 'Abgelaufen' }}
+                                {{ t('common.active') if char.access_token else t('common.expired') }}
                             </span>
                             {% else %}
-                            <span class="badge eve-badge-err small">Kein Token</span>
+                            <span class="badge eve-badge-err small">{{ t('characters.no_token', default='No token') }}</span>
                             {% endif %}
                         </div>
                         {% if char.token_expires_at %}
                         <div class="text-muted" style="font-size:0.7rem;">
-                            Laeuft ab: {{ char.token_expires_at.strftime('%d.%m.%Y %H:%M') if char.token_expires_at else '-' }}
+                            {{ t('characters.expires_at', default='Expires at') }}: {{ char.token_expires_at.strftime('%d.%m.%Y %H:%M') if char.token_expires_at else '-' }}
                         </div>
                         {% endif %}
                     </div>
@@ -87,43 +87,43 @@
                     {% if not char.refresh_token %}
                     <div class="mb-3 p-2 rounded" style="background:#3b221e;border:1px solid #7c3f35;color:#f3c0b8;">
                         <div class="small fw-semibold mb-1">
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Kein Refresh-Token — ESI-Zugriff nicht möglich
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('characters.no_refresh_token', default='No refresh token - ESI access unavailable') }}
                         </div>
                         <div style="font-size:0.78rem;color:#e5b7af;">
-                            <a href="/auth/refresh-scopes" class="text-warning">Jetzt neu autorisieren</a>
+                            <a href="/auth/refresh-scopes" class="text-warning">{{ t('characters.reauthorize_now', default='Re-authorize now') }}</a>
                         </div>
                     </div>
                     {% elif char.esi_consecutive_errors >= 3 %}
                     <div class="mb-3 p-2 rounded" style="background:#3b221e;border:1px solid #7c3f35;color:#f3c0b8;">
                         <div class="small fw-semibold mb-1">
-                            <i class="bi bi-x-circle-fill me-1"></i>ESI-Fehler — {{ char.esi_consecutive_errors }}× in Folge
+                            <i class="bi bi-x-circle-fill me-1"></i>{{ t('characters.esi_error', count=char.esi_consecutive_errors, default='ESI error - {count} times in a row') }}
                         </div>
                         <div style="font-size:0.78rem;color:#e5b7af;">
-                            Charakter wird automatisch nach 24h erneut versucht.
+                            {{ t('characters.retry_24h', default='The character will automatically be retried after 24h.') }}
                             {% if char.last_esi_refresh_at %}
-                            Letzter Versuch: {{ char.last_esi_refresh_at.strftime('%d.%m.%Y %H:%M') }}.
+                            {{ t('characters.last_attempt', default='Last attempt') }}: {{ char.last_esi_refresh_at.strftime('%d.%m.%Y %H:%M') }}.
                             {% endif %}
-                            <a href="/auth/refresh-scopes" class="text-warning ms-1">Manuell neu autorisieren</a>
+                            <a href="/auth/refresh-scopes" class="text-warning ms-1">{{ t('characters.reauthorize_manual', default='Re-authorize manually') }}</a>
                         </div>
                     </div>
                     {% elif char.last_colony_sync_at %}
                     {% if char.colony_sync_issue and char.last_known_colony_count > 0 %}
                     <div class="mb-3 p-2 rounded" style="background:#3b221e;border:1px solid #7c3f35;color:#f3c0b8;">
                         <div class="small fw-semibold mb-1">
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Kolonien zuletzt nicht vollständig geladen
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ t('characters.colonies_incomplete', default='Colonies were last loaded incompletely') }}
                         </div>
                         <div style="font-size:0.78rem;color:#e5b7af;">
-                            Zuletzt bekannter Stand: {{ char.last_known_colony_count }} Kolonien.
-                            Bitte Daten neu laden.
+                            {{ t('characters.last_known_state', count=char.last_known_colony_count, default='Last known state: {count} colonies.') }}
+                            {{ t('characters.reload_data', default='Please reload the data.') }}
                         </div>
                     </div>
                     {% else %}
                     <div class="mb-3 p-2 rounded" style="background:#183224;border:1px solid #2f6b47;color:#b7f2cb;">
                         <div class="small fw-semibold mb-1">
-                            <i class="bi bi-check-circle-fill me-1"></i>Kolonien zuletzt erfolgreich geladen
+                            <i class="bi bi-check-circle-fill me-1"></i>{{ t('characters.colonies_ok', default='Colonies were last loaded successfully') }}
                         </div>
                         <div style="font-size:0.78rem;color:#9fe0b8;">
-                            Aktueller Stand: {{ char.last_known_colony_count }} Kolonien.
+                            {{ t('characters.current_state', count=char.last_known_colony_count, default='Current state: {count} colonies.') }}
                             {% if char.last_esi_refresh_at %}
                             ESI: {{ char.last_esi_refresh_at.strftime('%d.%m.%Y %H:%M') }}.
                             {% endif %}
@@ -135,7 +135,7 @@
                     <div class="eve-token-info mb-3 p-2 rounded">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="text-muted small">
-                                <i class="bi bi-diagram-3 me-1"></i>PI Skills
+                                <i class="bi bi-diagram-3 me-1"></i>{{ t('characters.pi_skills', default='PI skills') }}
                             </span>
                             <span class="badge eve-badge-id-sm">{{ char.pi_skill_total }}/25</span>
                         </div>
@@ -175,8 +175,8 @@
                         {% else %}
                         <div class="small" style="color:#d8b36a;">
                             <i class="bi bi-exclamation-circle me-1"></i>
-                            Scope <code>esi-skills.read_skills.v1</code> fehlt.
-                            <a href="/auth/refresh-scopes" class="ms-1">Jetzt aktualisieren</a>
+                            {{ t('characters.skill_scope_prefix', default='Scope') }} <code>esi-skills.read_skills.v1</code> {{ t('characters.skill_scope_suffix', default='is missing.') }}
+                            <a href="/auth/refresh-scopes" class="ms-1">{{ t('characters.update_now', default='Update now') }}</a>
                         </div>
                         {% endif %}
                     </div>
@@ -189,7 +189,7 @@
                                 data-bs-target="#scopes-{{ char.id }}">
                             <span class="small">
                                 <i class="bi bi-key me-1"></i>
-                                {{ char.scopes.split(' ')|length }} Scopes
+                                {{ t('characters.scope_count', count=char.scopes.split(' ')|length, default='{count} scopes') }}
                             </span>
                             <i class="bi bi-chevron-down small"></i>
                         </button>
@@ -215,16 +215,16 @@
                         </button>
                         {% if char.id == account.main_character_id %}
                         <button class="btn btn-sm eve-btn-primary flex-grow-1 disabled" disabled>
-                            <i class="bi bi-star-fill me-1"></i>Aktiver Main
+                            <i class="bi bi-star-fill me-1"></i>{{ t('characters.current_main', default='Current main') }}
                         </button>
                         {% else %}
                         <a href="/auth/set-main/{{ char.id }}"
                            class="btn btn-sm eve-btn-outline flex-grow-1">
-                            <i class="bi bi-star me-1"></i>Als Main setzen
+                            <i class="bi bi-star me-1"></i>{{ t('characters.set_main', default='Set as main') }}
                         </a>
                         <a href="/auth/remove-character/{{ char.id }}"
                            class="btn btn-sm eve-btn-danger"
-                           onclick="return confirm('Charakter {{ char.character_name }} wirklich entfernen?')">
+                           onclick="return confirm('{{ t('characters.confirm_remove', name=char.character_name, default='Really remove character {name}?') }}')">
                             <i class="bi bi-trash3"></i>
                         </a>
                         {% endif %}
@@ -238,8 +238,8 @@
             <a href="/auth/add-character" class="eve-add-char-card card border-0 h-100 text-decoration-none">
                 <div class="card-body d-flex flex-column align-items-center justify-content-center text-center p-4">
                     <i class="bi bi-person-plus-fill fs-1 mb-3 eve-accent"></i>
-                    <h6 class="fw-semibold mb-1">Alt hinzufuegen</h6>
-                    <p class="text-muted small mb-0">Verknuepfe weitere EVE-Charaktere mit deinem Account</p>
+                    <h6 class="fw-semibold mb-1">{{ t('common.add_alt') }}</h6>
+                    <p class="text-muted small mb-0">{{ t('characters.add_alt_subtitle', default='Link additional EVE characters to your account') }}</p>
                 </div>
             </a>
         </div>
@@ -253,11 +253,11 @@
                 <thead>
                     <tr style="border-bottom:1px solid #1a2d3d;">
                         <th class="text-muted small fw-normal ps-3" style="width:40px;"></th>
-                        <th class="text-muted small fw-normal eve-sortable-list" data-list-col="name" data-list-type="text">Charakter <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
-                        <th class="text-muted small fw-normal d-none d-md-table-cell eve-sortable-list" data-list-col="corp" data-list-type="text">Korporation / Allianz <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
-                        <th class="text-muted small fw-normal d-none d-lg-table-cell eve-sortable-list" data-list-col="id" data-list-type="number">Char-ID <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
-                        <th class="text-muted small fw-normal eve-sortable-list" data-list-col="token" data-list-type="text">Token <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
-                        <th class="text-muted small fw-normal d-none d-xl-table-cell eve-sortable-list" data-list-col="skills" data-list-type="number">PI Skills <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal eve-sortable-list" data-list-col="name" data-list-type="text">{{ t('common.character', default='Character') }} <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal d-none d-md-table-cell eve-sortable-list" data-list-col="corp" data-list-type="text">{{ t('characters.corp_alliance', default='Corporation / Alliance') }} <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal d-none d-lg-table-cell eve-sortable-list" data-list-col="id" data-list-type="number">{{ t('characters.char_id', default='Char ID') }} <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal eve-sortable-list" data-list-col="token" data-list-type="text">{{ t('characters.token', default='Token') }} <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
+                        <th class="text-muted small fw-normal d-none d-xl-table-cell eve-sortable-list" data-list-col="skills" data-list-type="number">{{ t('characters.pi_skills', default='PI skills') }} <i class="bi bi-chevron-expand eve-sort-icon ms-1"></i></th>
                         <th class="text-muted small fw-normal pe-3"></th>
                     </tr>
                 </thead>
@@ -267,7 +267,7 @@
                         data-sort-name="{{ char.character_name | lower }}"
                         data-sort-corp="{{ ((char.corporation_name or '') ~ ' ' ~ (char.alliance_name or '')) | lower }}"
                         data-sort-id="{{ char.eve_character_id }}"
-                        data-sort-token="{% if char.token_expires_at and char.access_token %}Aktiv{% elif char.token_expires_at %}Abgelaufen{% else %}Kein Token{% endif %}"
+                        data-sort-token="{% if char.token_expires_at and char.access_token %}{{ t('common.active') }}{% elif char.token_expires_at %}{{ t('common.expired') }}{% else %}{{ t('characters.no_token', default='No token') }}{% endif %}"
                         data-sort-skills="{{ char.pi_skill_total }}">
                         <td class="ps-3 align-middle">
                             <img src="{{ char.portrait_url }}"
@@ -280,7 +280,7 @@
                             <div class="fw-semibold" style="color:#c9d8e8;">{{ char.character_name }}</div>
                             {% if char.id == account.main_character_id %}
                             <span class="badge" style="font-size:0.65em;background:#f0c04020;color:#f0c040;border:1px solid #f0c04040;">
-                                <i class="bi bi-star-fill me-1"></i>Main
+                                <i class="bi bi-star-fill me-1"></i>{{ t('common.main', default='Main') }}
                             </span>
                             {% endif %}
                             <span class="badge bg-secondary ms-1{% if not char.vacation_mode %} d-none{% endif %}"
@@ -288,17 +288,17 @@
                             {% if char.last_colony_sync_at and char.colony_sync_issue and char.last_known_colony_count > 0 %}
                             <div class="small mt-1" style="color:#f1b6ad;">
                                 <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                Zuletzt {{ char.last_known_colony_count }} Kolonien, aktuell nicht vollstaendig gelesen
+                                {{ t('characters.last_incomplete', count=char.last_known_colony_count, default='Last time {count} colonies, currently not read completely') }}
                             </div>
                             {% elif char.last_colony_sync_at %}
                             <div class="small mt-1" style="color:#9fe0b8;">
                                 <i class="bi bi-check-circle-fill me-1"></i>
-                                Zuletzt erfolgreich: {{ char.last_known_colony_count }} Kolonien
+                                {{ t('characters.last_successful', count=char.last_known_colony_count, default='Last successful: {count} colonies') }}
                             </div>
                             {% endif %}
                         </td>
                         <td class="align-middle text-muted small d-none d-md-table-cell">
-                            <div><i class="bi bi-building me-1"></i>{{ char.corporation_name or '-' }}</div>
+                            <div><i class="bi bi-building me-1"></i>{{ char.corporation_name or t('common.none', default='-') }}</div>
                             {% if char.alliance_name %}
                             <div><i class="bi bi-diagram-2 me-1"></i>{{ char.alliance_name }}</div>
                             {% endif %}
@@ -309,10 +309,10 @@
                         <td class="align-middle">
                             {% if char.token_expires_at %}
                             <span class="badge {% if char.access_token %}eve-badge-ok{% else %}eve-badge-err{% endif %} small">
-                                {{ 'Aktiv' if char.access_token else 'Abgelaufen' }}
+                                {{ t('common.active') if char.access_token else t('common.expired') }}
                             </span>
                             {% else %}
-                            <span class="badge eve-badge-err small">Kein Token</span>
+                            <span class="badge eve-badge-err small">{{ t('characters.no_token', default='No token') }}</span>
                             {% endif %}
                         </td>
                         <td class="align-middle d-none d-xl-table-cell">
@@ -340,8 +340,8 @@
                             </div>
                             {% else %}
                             <span class="small" style="color:#d8b36a;">
-                                Scope fehlt
-                                <a href="/auth/refresh-scopes" class="ms-1">aktualisieren</a>
+                                {{ t('characters.scope_missing_short', default='Scope missing') }}
+                                <a href="/auth/refresh-scopes" class="ms-1">{{ t('characters.update_now', default='Update now') }}</a>
                             </span>
                             {% endif %}
                         </td>
@@ -355,15 +355,15 @@
                                 </button>
                                 {% if char.id == account.main_character_id %}
                                 <button class="btn btn-sm eve-btn-primary disabled" disabled>
-                                    <i class="bi bi-star-fill me-1"></i>Main
+                                    <i class="bi bi-star-fill me-1"></i>{{ t('common.main', default='Main') }}
                                 </button>
                                 {% else %}
                                 <a href="/auth/set-main/{{ char.id }}" class="btn btn-sm eve-btn-outline">
-                                    <i class="bi bi-star me-1"></i>Main
+                                    <i class="bi bi-star me-1"></i>{{ t('characters.set_main_short', default='Main') }}
                                 </a>
                                 <a href="/auth/remove-character/{{ char.id }}"
                                    class="btn btn-sm eve-btn-danger"
-                                   onclick="return confirm('Charakter {{ char.character_name }} wirklich entfernen?')">
+                                   onclick="return confirm('{{ t('characters.confirm_remove', name=char.character_name, default='Really remove character {name}?') }}')">
                                     <i class="bi bi-trash3"></i>
                                 </a>
                                 {% endif %}
@@ -376,7 +376,7 @@
         </div>
         <div class="p-3" style="border-top:1px solid #1a2d3d;">
             <a href="/auth/add-character" class="btn btn-sm eve-btn-primary">
-                <i class="bi bi-person-plus me-1"></i>Alt hinzufuegen
+                <i class="bi bi-person-plus me-1"></i>{{ t('common.add_alt') }}
             </a>
         </div>
     </div>

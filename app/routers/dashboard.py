@@ -117,7 +117,16 @@ def _touch_colony_cache(account_id: int, db: Session) -> None:
         row = db.query(DashboardCache).filter(DashboardCache.account_id == account_id).first()
         if row:
             row.fetched_at = datetime.now(timezone.utc)
-            db.commit()
+        else:
+            # Create an explicit empty cache row so the dashboard can leave the
+            # initial loading state even when ESI temporarily returns 0 colonies.
+            db.add(DashboardCache(
+                account_id=account_id,
+                colonies_json="[]",
+                meta_json="{}",
+                fetched_at=datetime.now(timezone.utc),
+            ))
+        db.commit()
     except Exception as e:
         logger.warning(f"Colony-Cache touch error: {e}")
         db.rollback()
@@ -1555,13 +1564,13 @@ def refresh_status(
         return JSONResponse({"done": True})
 
     # Primary path: check DB cache timestamp (works across all workers + Celery)
-    ref_ts = since or _bg_refresh_kicked_at.get(account.id, _time.time() - 5)
+    ref_ts = since if since is not None else _bg_refresh_kicked_at.get(account.id, _time.time() - 5)
     row = db.query(DashboardCache).filter_by(account_id=account.id).first()
     if row and row.fetched_at:
         fetched = row.fetched_at
         if fetched.tzinfo is None:
             fetched = fetched.replace(tzinfo=timezone.utc)
-        if fetched.timestamp() > ref_ts:
+        if fetched.timestamp() >= ref_ts:
             _bg_refresh_running.pop(account.id, None)
             _bg_refresh_kicked_at.pop(account.id, None)
             return JSONResponse({"done": True})

@@ -75,10 +75,10 @@
                                                 {{ colony.planet_name }}
                                             </a>
                                         </div>
-                                        {% if colony.region_name and colony.region_name != '—' %}
+                                        {% if colony.region_name and colony.region_name != t('common.none', default='-') %}
                                         <div style="color:#3a5a7a;font-size:.65rem;">{{ colony.region_name }}</div>
                                         {% endif %}
-                                        {% if colony.solar_system_name and colony.solar_system_name != '—' %}
+                                        {% if colony.solar_system_name and colony.solar_system_name != t('common.none', default='-') %}
                                         <div style="color:#7a8a9a;font-size:.65rem;">
                                             {{ colony.solar_system_name }}
                                             {% if colony.solar_system_id %}
@@ -126,7 +126,7 @@
                                         {% if colony.storage_value > 0 %}
                                             {{ colony.storage_value | format_isk }}
                                         {% elif colony.storage and colony.storage | length > 0 %}
-                                            <span class="text-muted">0 ISK</span>
+                                            <span class="text-muted">{{ t('hauling.zero_isk', default='0 ISK') }}</span>
                                         {% else %}
                                             <span class="text-muted">—</span>
                                         {% endif %}
@@ -207,7 +207,7 @@
                     {% if dotlan_route_link %}
                     <div class="mt-3">
                         <a class="btn btn-sm btn-outline-secondary" href="{{ dotlan_route_link }}" target="_blank" rel="noopener noreferrer">
-                            <i class="bi bi-map me-1"></i>Dotlan
+                            <i class="bi bi-map me-1"></i>{{ t('common.dotlan', default='Dotlan') }}
                         </a>
                     </div>
                     {% endif %}
@@ -233,7 +233,7 @@
             <div class="modal-body">
                 <div id="bridgeModalAlert" class="alert alert-danger d-none py-2 px-3 small mb-3"></div>
                 <div id="bridgeExportPanel" class="card eve-card border-0 mb-3 d-none">
-                    <div class="card-header eve-card-header py-2"><span class="small text-muted">SMT Export</span></div>
+                    <div class="card-header eve-card-header py-2"><span class="small text-muted">{{ t('hauling.bridge_smt_export', default='SMT export') }}</span></div>
                     <div class="card-body">
                         <div class="row g-3 align-items-end">
                             <div class="col-md-8">
@@ -242,7 +242,7 @@
                             </div>
                             <div class="col-md-4">
                                 <button id="bridgeExportBtn" type="button" class="btn btn-sm btn-outline-info w-100">
-                                    <i class="bi bi-download me-1"></i>SMT Export
+                                    <i class="bi bi-download me-1"></i>{{ t('hauling.bridge_smt_export', default='SMT export') }}
                                 </button>
                             </div>
                         </div>
@@ -305,7 +305,7 @@
                             </tr>
                         </thead>
                         <tbody id="bridgeConnectionsTbody">
-                            <tr><td colspan="5" class="small text-muted py-4 text-center">Verbindungen werden geladen...</td></tr>
+                            <tr><td colspan="5" class="small text-muted py-4 text-center">{{ t('hauling.bridge_connections_loading', default='Loading connections...') }}</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -341,6 +341,7 @@
         update: {{ t('common.update', default='Update') | tojson }},
         cancelEdit: {{ t('hauling.bridge_cancel_edit', default='Cancel editing') | tojson }},
         killsLastHour: {{ t('killboard.kills_last_hour') | tojson }},
+        noResults: {{ t('common.search_no_results', default='No results') | tojson }},
     };
     const charSelect = document.getElementById('haulingCharacterSelect');
     const refreshBtn = document.getElementById('refreshLocationBtn');
@@ -623,7 +624,7 @@
                 const systems = data.systems || [];
                 if (!systems.length) {
                     results.classList.remove('d-none');
-                    results.innerHTML = '<div class="small text-muted px-3 py-2">Keine Treffer</div>';
+                    results.innerHTML = `<div class="small text-muted px-3 py-2">${_i18n.noResults}</div>`;
                     return;
                 }
                 results.innerHTML = systems.map(system => `<button type="button" class="dropdown-item d-flex justify-content-between align-items-center px-3 py-2" data-system-id="${system.id}" data-system-name="${escapeHtml(system.name)}"><span>${escapeHtml(system.name)}</span><span class="small text-muted">${escapeHtml(system.region || '')}</span></button>`).join('');
