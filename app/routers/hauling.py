@@ -34,6 +34,15 @@ def _storage_has_items(storage: list[dict] | None) -> bool:
     return any(float(item.get("amount") or 0) > 0 for entry in (storage or []) for item in (entry.get("items") or []))
 
 
+def _colony_needs_hauling_attention(colony: dict) -> bool:
+    if _storage_has_items(colony.get("storage")):
+        return True
+    expiry_hours = colony.get("expiry_hours")
+    if expiry_hours is not None and float(expiry_hours) < 0:
+        return True
+    return colony.get("is_stalled") is True
+
+
 def _storage_summary(storage: list[dict] | None) -> tuple[list[str], int]:
     items = []
     for entry in storage or []:
@@ -227,7 +236,7 @@ def hauling_page(
     for colony in colonies:
         if selected_character is not None and colony.get("character_name") != selected_character.character_name:
             continue
-        if not _storage_has_items(colony.get("storage")):
+        if not _colony_needs_hauling_attention(colony):
             continue
         storage_value, storage_breakdown = _storage_value_details(colony.get("storage") or [], getattr(account, "price_mode", "sell"), db)
         summary_items, extra_count = _storage_summary(colony.get("storage"))
