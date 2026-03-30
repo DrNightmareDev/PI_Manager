@@ -61,7 +61,6 @@
                             <tbody>
                                 {% for colony in hauling_colonies %}
                                 <tr data-route-system-id="{{ colony.solar_system_id or '' }}"
-                                    class="{% if colony.is_stalled %}table-warning{% endif %}"
                                     onclick="window.open('https://evemaps.dotlan.net/system/{{ (colony.solar_system_name or '') | replace(' ', '_') }}', '_blank')"
                                     style="cursor:pointer;">
                                     <td>
