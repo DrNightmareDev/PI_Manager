@@ -7,7 +7,7 @@
         <div>
             <div class="intel-kicker">Admin only</div>
             <h1>Combat Intel Map</h1>
-            <p>Every region is selectable. Each region is shown as a full-region layout with live system heat and a compact kill stream linked straight to zKillboard.</p>
+            <p>Default layout follows the fixed region overview. Alternate layout stays available, while zoom and pan keep the visible-kill feed scoped to the area you are actually looking at.</p>
         </div>
         <div class="intel-controls">
             <div class="intel-control-group">
@@ -16,6 +16,13 @@
                     {% for region in regions %}
                     <option value="{{ region.id }}" {% if (region.id | string) == selected_region %}selected{% endif %}>{{ region.name }}</option>
                     {% endfor %}
+                </select>
+            </div>
+            <div class="intel-control-group">
+                <label for="intelLayoutSelect">Layout</label>
+                <select id="intelLayoutSelect" class="form-select form-select-sm eve-input">
+                    <option value="geo" selected>Region overview</option>
+                    <option value="alt">Compact overview</option>
                 </select>
             </div>
             <div class="intel-control-group">
@@ -43,12 +50,19 @@
             <div class="intel-map-header">
                 <div>
                     <h2 id="intelRegionTitle">{{ region_data.name }}</h2>
-                    <div class="intel-subtle">Whole-region map with connected systems, regional exits and dynamic kill intensity.</div>
+                    <div class="intel-subtle">Row click highlights a kill locally. System links open zKillboard system pages, while pilot/image links open the exact kill.</div>
                 </div>
                 <div class="intel-neighbors" id="intelNeighbors"></div>
             </div>
 
-            <div class="intel-map-stage">
+            <div class="intel-map-tools">
+                <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomIn">+</button>
+                <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomOut">-</button>
+                <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomReset">Reset</button>
+                <span class="intel-visible-note" id="intelVisibleNote"></span>
+            </div>
+
+            <div class="intel-map-stage" id="intelMapStage">
                 <svg id="intelMapSvg" viewBox="{{ region_data.view_box }}" class="intel-map-svg" aria-label="Combat region map"></svg>
             </div>
         </div>
@@ -60,7 +74,7 @@
             </div>
 
             <div class="intel-panel">
-                <div class="intel-panel-title">Latest Kills</div>
+                <div class="intel-panel-title">Visible Kills</div>
                 <div id="intelFeed" class="intel-feed"></div>
             </div>
         </aside>
@@ -83,9 +97,26 @@ const intelState = {
     activity: INTEL_BOOTSTRAP.activity,
     feed: INTEL_BOOTSTRAP.feed,
     selectedSystemId: null,
+    selectedKillmailId: null,
     window: '60m',
     killType: 'all',
+    layout: 'geo',
+    viewBox: null,
+    dragging: false,
+    dragOrigin: null,
 };
+
+function parseViewBox() {
+    const parts = (intelState.region.view_box || '0 0 1280 920').split(/\s+/).map(Number);
+    return { x: parts[0], y: parts[1], width: parts[2], height: parts[3] };
+}
+
+function currentPosition(system) {
+    if (intelState.layout === 'alt') {
+        return { x: system.alt_x, y: system.alt_y };
+    }
+    return { x: system.geo_x, y: system.geo_y };
+}
 
 function formatIsk(value) {
     if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} B`;
@@ -106,6 +137,30 @@ function systemById(systemId) {
     return intelState.region.systems.find(item => item.id === systemId);
 }
 
+function visibleSystemIds() {
+    const box = intelState.viewBox || parseViewBox();
+    const ids = new Set();
+    intelState.region.systems.forEach(system => {
+        const pos = currentPosition(system);
+        if (pos.x >= box.x && pos.x <= box.x + box.width && pos.y >= box.y && pos.y <= box.y + box.height) {
+            ids.add(system.id);
+        }
+    });
+    return ids;
+}
+
+function visibleFeed() {
+    const ids = visibleSystemIds();
+    return intelState.feed.filter(item => ids.has(item.system_id));
+}
+
+function updateVisibleNote() {
+    const ids = visibleSystemIds();
+    const feed = visibleFeed();
+    const note = document.getElementById('intelVisibleNote');
+    note.textContent = `${ids.size} systems · ${feed.length} visible kills`;
+}
+
 function renderNeighbors() {
     const node = document.getElementById('intelNeighbors');
     node.innerHTML = '';
@@ -121,7 +176,8 @@ function renderNeighbors() {
 
 function renderMap() {
     const svg = document.getElementById('intelMapSvg');
-    svg.setAttribute('viewBox', intelState.region.view_box || '0 0 1180 820');
+    const box = intelState.viewBox || parseViewBox();
+    svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.width} ${box.height}`);
     svg.innerHTML = '';
     const ns = 'http://www.w3.org/2000/svg';
 
@@ -129,20 +185,23 @@ function renderMap() {
         const from = systemById(fromId);
         const to = systemById(toId);
         if (!from || !to) return;
+        const fromPos = currentPosition(from);
+        const toPos = currentPosition(to);
         const line = document.createElementNS(ns, 'line');
-        line.setAttribute('x1', from.x);
-        line.setAttribute('y1', from.y);
-        line.setAttribute('x2', to.x);
-        line.setAttribute('y2', to.y);
+        line.setAttribute('x1', fromPos.x);
+        line.setAttribute('y1', fromPos.y);
+        line.setAttribute('x2', toPos.x);
+        line.setAttribute('y2', toPos.y);
         line.setAttribute('class', 'intel-link');
         svg.appendChild(line);
     });
 
     intelState.region.systems.forEach(system => {
         const activity = activityFor(system.id);
+        const pos = currentPosition(system);
         const group = document.createElementNS(ns, 'g');
         group.setAttribute('class', `intel-node danger-${activity.danger}${intelState.selectedSystemId === system.id ? ' is-selected' : ''}`);
-        group.setAttribute('transform', `translate(${system.x}, ${system.y})`);
+        group.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
         group.addEventListener('click', () => {
             intelState.selectedSystemId = system.id;
             renderMap();
@@ -179,6 +238,7 @@ function renderMap() {
 
         svg.appendChild(group);
     });
+    updateVisibleNote();
 }
 
 function renderSystemDetails() {
@@ -193,18 +253,23 @@ function renderSystemDetails() {
     const activity = activityFor(system.id);
     const relatedKills = intelState.feed.filter(item => item.system_id === system.id).slice(0, 5);
     container.innerHTML = `
-        <div class="intel-system-name">${system.name}</div>
+        <div class="intel-system-name">
+            <a href="https://zkillboard.com/system/${system.id}/" target="_blank" rel="noopener">${system.name}</a>
+        </div>
         <div class="intel-system-meta">Security ${system.security} · ${(system.constellation_name || 'Unknown constellation')} · ${activity.kill_count} kills</div>
         <div class="intel-heatbar"><span style="width:${Math.max(6, activity.heat * 100)}%"></span></div>
         <div class="intel-mini-list">
             ${relatedKills.map(item => `
-                <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-mini-row">
-                    <img src="${item.ship_image_url}" alt="${item.ship_type}">
+                <div class="intel-mini-row${intelState.selectedKillmailId === item.killmail_id ? ' is-active' : ''}">
+                    <a href="${item.kill_url}" target="_blank" rel="noopener"><img src="${item.ship_image_url}" alt="${item.ship_type}"></a>
                     <div>
-                        <strong>${item.victim_name}</strong>
-                        <div class="text-muted">${item.ship_type} · ${minutesAgo(item.timestamp)}</div>
+                        <div class="intel-mini-top">
+                            <a href="${item.kill_url}" target="_blank" rel="noopener">${item.victim_name}</a>
+                            <span>${minutesAgo(item.timestamp)}</span>
+                        </div>
+                        <div class="text-muted">${item.ship_type}</div>
                     </div>
-                </a>
+                </div>
             `).join('') || '<div class="intel-empty">No recent kills in this system.</div>'}
         </div>
     `;
@@ -212,30 +277,73 @@ function renderSystemDetails() {
 
 function renderFeed() {
     const feed = document.getElementById('intelFeed');
-    feed.innerHTML = intelState.feed.map(item => `
-        <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-item${intelState.selectedSystemId === item.system_id ? ' is-active' : ''}" data-system-id="${item.system_id}">
-            <img src="${item.ship_image_url}" alt="${item.ship_type}" class="intel-feed-ship">
+    const visible = visibleFeed();
+    feed.innerHTML = visible.length ? visible.map(item => `
+        <div class="intel-feed-item${intelState.selectedKillmailId === item.killmail_id ? ' is-active' : ''}" data-killmail-id="${item.killmail_id}" data-system-id="${item.system_id}" role="button" tabindex="0">
+            <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-ship-link"><img src="${item.ship_image_url}" alt="${item.ship_type}" class="intel-feed-ship"></a>
             <div class="intel-feed-copy">
                 <div class="intel-feed-line">
-                    <strong>${item.victim_name}</strong>
+                    <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-pilot">${item.victim_name}</a>
                     <span>${minutesAgo(item.timestamp)}</span>
                 </div>
                 <div class="intel-feed-line intel-feed-line-secondary">
                     <span>${item.ship_type}</span>
-                    <span>${item.system_name}</span>
+                    <a href="https://zkillboard.com/system/${item.system_id}/" target="_blank" rel="noopener" class="intel-feed-system">${item.system_name}</a>
                     <span>${formatIsk(item.isk_value)} ISK</span>
                 </div>
             </div>
-        </a>
-    `).join('');
-    feed.querySelectorAll('[data-system-id]').forEach(node => {
+        </div>
+    `).join('') : '<div class="intel-empty">No kills in the visible map area.</div>';
+
+    feed.querySelectorAll('[data-killmail-id]').forEach(node => {
         node.addEventListener('click', event => {
+            if (event.target.closest('a')) return;
+            intelState.selectedKillmailId = Number(node.getAttribute('data-killmail-id'));
             intelState.selectedSystemId = Number(node.getAttribute('data-system-id'));
             renderMap();
             renderFeed();
             renderSystemDetails();
         });
     });
+}
+
+function zoom(factor) {
+    const bounds = parseViewBox();
+    const box = intelState.viewBox || bounds;
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const width = Math.max(bounds.width * 0.18, Math.min(bounds.width, box.width * factor));
+    const height = Math.max(bounds.height * 0.18, Math.min(bounds.height, box.height * factor));
+    intelState.viewBox = {
+        x: centerX - width / 2,
+        y: centerY - height / 2,
+        width,
+        height,
+    };
+    clampViewBox();
+    renderMap();
+    renderFeed();
+}
+
+function clampViewBox() {
+    const bounds = parseViewBox();
+    const box = intelState.viewBox || bounds;
+    box.x = Math.max(bounds.x, Math.min(bounds.x + bounds.width - box.width, box.x));
+    box.y = Math.max(bounds.y, Math.min(bounds.y + bounds.height - box.height, box.y));
+    intelState.viewBox = box;
+}
+
+function resetZoom() {
+    intelState.viewBox = parseViewBox();
+    renderMap();
+    renderFeed();
+}
+
+function refreshAll() {
+    renderNeighbors();
+    renderMap();
+    renderFeed();
+    renderSystemDetails();
 }
 
 async function refreshIntel() {
@@ -250,14 +358,12 @@ async function refreshIntel() {
     intelState.region = payload.region;
     intelState.activity = payload.activity;
     intelState.feed = payload.feed;
+    intelState.viewBox = parseViewBox();
     if (!intelState.selectedSystemId || !systemById(intelState.selectedSystemId)) {
         intelState.selectedSystemId = intelState.region.systems[0]?.id || null;
     }
     document.getElementById('intelRegionTitle').textContent = payload.region.name;
-    renderNeighbors();
-    renderMap();
-    renderFeed();
-    renderSystemDetails();
+    refreshAll();
 }
 
 async function changeRegion(regionKey) {
@@ -267,6 +373,10 @@ async function changeRegion(regionKey) {
 }
 
 document.getElementById('intelRegionSelect').addEventListener('change', event => changeRegion(event.target.value));
+document.getElementById('intelLayoutSelect').addEventListener('change', event => {
+    intelState.layout = event.target.value;
+    refreshAll();
+});
 document.getElementById('intelWindowSelect').addEventListener('change', async event => {
     intelState.window = event.target.value;
     await refreshIntel();
@@ -275,11 +385,40 @@ document.getElementById('intelKillTypeSelect').addEventListener('change', async 
     intelState.killType = event.target.value;
     await refreshIntel();
 });
+document.getElementById('intelZoomIn').addEventListener('click', () => zoom(0.8));
+document.getElementById('intelZoomOut').addEventListener('click', () => zoom(1.25));
+document.getElementById('intelZoomReset').addEventListener('click', resetZoom);
 
-renderNeighbors();
-renderMap();
-renderFeed();
-renderSystemDetails();
+document.getElementById('intelMapStage').addEventListener('wheel', event => {
+    event.preventDefault();
+    zoom(event.deltaY < 0 ? 0.85 : 1.15);
+}, { passive: false });
+
+document.getElementById('intelMapStage').addEventListener('pointerdown', event => {
+    intelState.dragging = true;
+    intelState.dragOrigin = { x: event.clientX, y: event.clientY, viewBox: { ...(intelState.viewBox || parseViewBox()) } };
+});
+window.addEventListener('pointerup', () => {
+    intelState.dragging = false;
+    intelState.dragOrigin = null;
+});
+window.addEventListener('pointermove', event => {
+    if (!intelState.dragging || !intelState.dragOrigin) return;
+    const stage = document.getElementById('intelMapStage').getBoundingClientRect();
+    const dx = ((event.clientX - intelState.dragOrigin.x) / stage.width) * intelState.dragOrigin.viewBox.width;
+    const dy = ((event.clientY - intelState.dragOrigin.y) / stage.height) * intelState.dragOrigin.viewBox.height;
+    intelState.viewBox = {
+        ...intelState.dragOrigin.viewBox,
+        x: intelState.dragOrigin.viewBox.x - dx,
+        y: intelState.dragOrigin.viewBox.y - dy,
+    };
+    clampViewBox();
+    renderMap();
+    renderFeed();
+});
+
+intelState.viewBox = parseViewBox();
+refreshAll();
 setInterval(refreshIntel, 20000);
 </script>
 <style>
@@ -301,15 +440,16 @@ setInterval(refreshIntel, 20000);
 .intel-controls { display:flex; gap:.9rem; flex-wrap:wrap; align-items:end; }
 .intel-control-group { min-width:11rem; }
 .intel-control-group label { display:block; font-size:.75rem; text-transform:uppercase; letter-spacing:.12em; color:var(--eve-text-muted); margin-bottom:.35rem; }
-.intel-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(320px, .95fr); gap:1.5rem; }
+.intel-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(340px, .95fr); gap:1.5rem; }
 .intel-map-card { padding:1.2rem; }
 .intel-map-header { display:flex; justify-content:space-between; gap:1rem; align-items:start; margin-bottom:1rem; }
-.intel-map-header h2, .intel-panel-title { margin:0; }
 .intel-subtle { color:var(--eve-text-muted); font-size:.92rem; }
 .intel-neighbors { display:flex; gap:.45rem; flex-wrap:wrap; }
 .intel-neighbor-btn { border:1px solid rgba(126, 200, 227, 0.22); background:rgba(126, 200, 227, 0.08); color:#9dd9ec; border-radius:999px; padding:.38rem .72rem; font-size:.8rem; }
-.intel-map-stage { overflow:auto; border-radius:1rem; border:1px solid rgba(255,255,255,.04); background:linear-gradient(180deg, rgba(5, 12, 18, .95), rgba(9, 15, 20, .95)); }
-.intel-map-svg { width:100%; min-height:760px; }
+.intel-map-tools { display:flex; gap:.45rem; align-items:center; margin-bottom:.85rem; }
+.intel-visible-note { margin-left:auto; color:var(--eve-text-muted); font-size:.8rem; }
+.intel-map-stage { overflow:hidden; border-radius:1rem; border:1px solid rgba(255,255,255,.04); background:linear-gradient(180deg, rgba(5, 12, 18, .95), rgba(9, 15, 20, .95)); touch-action:none; }
+.intel-map-svg { width:100%; min-height:760px; display:block; }
 .intel-link { stroke:rgba(126, 200, 227, .15); stroke-width:1.6; }
 .intel-node { cursor:pointer; }
 .intel-node-glow { fill:#00b4d8; }
@@ -323,18 +463,22 @@ setInterval(refreshIntel, 20000);
 .intel-panel { padding:1rem; }
 .intel-panel-title { font-size:1rem; margin-bottom:.8rem; }
 .intel-system-name { font-size:1.25rem; font-weight:700; }
+.intel-system-name a, .intel-feed-pilot, .intel-feed-system, .intel-mini-top a { color:#c8f1ff; text-decoration:none; }
 .intel-system-meta, .intel-empty { color:var(--eve-text-muted); }
 .intel-heatbar { height:.7rem; background:rgba(255,255,255,.05); border-radius:999px; overflow:hidden; margin:.85rem 0 1rem; }
 .intel-heatbar span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg, #00b4d8, #f4a300, #ff5e5b); }
 .intel-mini-list { display:grid; gap:.5rem; }
-.intel-mini-row { display:grid; grid-template-columns:38px 1fr; gap:.65rem; padding:.55rem .65rem; border:1px solid rgba(255,255,255,.05); border-radius:.85rem; background:rgba(255,255,255,.02); color:inherit; text-decoration:none; align-items:center; }
+.intel-mini-row { display:grid; grid-template-columns:38px 1fr; gap:.65rem; padding:.55rem .65rem; border:1px solid rgba(255,255,255,.05); border-radius:.85rem; background:rgba(255,255,255,.02); align-items:center; }
+.intel-mini-row.is-active { border-color:rgba(0,180,216,.34); background:rgba(0,180,216,.08); }
 .intel-mini-row img { width:38px; height:38px; object-fit:contain; }
+.intel-mini-top { display:flex; justify-content:space-between; gap:.5rem; font-size:.82rem; }
 .intel-feed { display:grid; gap:.45rem; max-height:42rem; overflow:auto; }
-.intel-feed-item { display:grid; grid-template-columns:42px 1fr; gap:.6rem; align-items:center; padding:.45rem .55rem; border:1px solid rgba(255,255,255,.05); border-radius:.8rem; background:rgba(255,255,255,.02); text-decoration:none; color:inherit; }
-.intel-feed-item.is-active { border-color:rgba(0, 180, 216, .34); background:rgba(0, 180, 216, .08); }
+.intel-feed-item { display:grid; grid-template-columns:42px 1fr; gap:.6rem; align-items:center; padding:.45rem .55rem; border:1px solid rgba(255,255,255,.05); border-radius:.8rem; background:rgba(255,255,255,.02); color:inherit; text-align:left; }
+.intel-feed-item.is-active { border-color:rgba(0,180,216,.34); background:rgba(0,180,216,.08); }
+.intel-feed-ship-link { display:flex; }
 .intel-feed-ship { width:42px; height:42px; object-fit:contain; }
 .intel-feed-copy { min-width:0; }
-.intel-feed-line { display:flex; justify-content:space-between; gap:.6rem; font-size:.82rem; }
+.intel-feed-line { display:flex; justify-content:space-between; gap:.6rem; font-size:.82rem; align-items:center; }
 .intel-feed-line-secondary { color:var(--eve-text-muted); font-size:.74rem; }
 @media (max-width: 1100px) {
     .intel-layout { grid-template-columns:1fr; }
