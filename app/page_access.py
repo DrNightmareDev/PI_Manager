@@ -28,7 +28,7 @@ PAGE_DEFINITIONS: tuple[PageDefinition, ...] = (
     PageDefinition("hauling", "Hauling", "/hauling", "manager"),
     PageDefinition("system", "System Analysis", "/system", "member"),
     PageDefinition("market", "Market", "/market", "member"),
-    PageDefinition("intel_map", "Combat Intel Map", "/intel/map", admin_only=True),
+    PageDefinition("intel_map", "Combat Intel Map", "/intel/map", "manager"),
     PageDefinition("manager", "Manager Panel", "/manager", "manager"),
 )
 

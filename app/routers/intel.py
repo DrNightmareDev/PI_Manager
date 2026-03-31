@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app import sde
 from app.database import get_db
-from app.dependencies import require_owner
+from app.dependencies import require_account
 from app.models import KillActivityCache
 from app.templates_env import templates
 from app.zkill import get_region_kills, get_system_kill_summary, normalize_kill, resolve_kill_names
@@ -222,7 +222,7 @@ def intel_map(
     window: str = Query("60m"),
     kill_type: str = Query("all"),
     layout: str = Query("geo"),
-    account=Depends(require_owner),
+    account=Depends(require_account),
 ):
     regions = sde.get_region_catalog()
     selected_window = window if window in WINDOW_SECONDS else "60m"
@@ -253,7 +253,7 @@ def intel_map_live(
     region: str = Query("10000010"),
     window: str = Query("60m"),
     kill_type: str = Query("all"),
-    account=Depends(require_owner),
+    account=Depends(require_account),
 ):
     graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region), window, kill_type)
     return JSONResponse({
@@ -271,7 +271,7 @@ def intel_map_live(
 def intel_system_details(
     system_id: int,
     window: str = Query("60m"),
-    account=Depends(require_owner),
+    account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
     selected_window = window if window in WINDOW_SECONDS else "60m"
