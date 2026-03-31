@@ -90,7 +90,6 @@
 
         <aside class="intel-sidebar">
             <div class="intel-panel">
-                <div class="intel-panel-title">System Details</div>
                 <div id="intelSystemDetails" class="intel-system-details"></div>
             </div>
 
@@ -396,7 +395,8 @@ function renderSystemDetails() {
     const activity = activityFor(system.id);
     const detailState = intelState.systemDetails[String(system.id)] || null;
     const regionFallback = intelState.feed.filter(item => item.system_id === system.id);
-    const relatedKills = (detailState?.latest_kills || regionFallback).slice(0, 5);
+    const detailKills = Array.isArray(detailState?.latest_kills) ? detailState.latest_kills : [];
+    const relatedKills = (detailKills.length ? detailKills : regionFallback).slice(0, 5);
     const cacheState = detailState?.cache_state || '';
     const cacheAge = Number(detailState?.cache_age_seconds || 0);
     const fetchedAt = detailState?.fetched_at_iso ? new Date(detailState.fetched_at_iso).toLocaleTimeString() : '';
