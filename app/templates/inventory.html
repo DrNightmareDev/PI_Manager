@@ -244,7 +244,7 @@
             <div class="inventory-panel-head">
                 <div>
                     <div class="inventory-panel-kicker">Audit</div>
-                    <div class="inventory-panel-title"><i class="bi bi-journal-check me-2"></i>Recent Adjustments</div>
+                    <div class="inventory-panel-title"><i class="bi bi-journal-check me-2"></i>Recent Transactions</div>
                 </div>
             </div>
             <div class="table-responsive">
@@ -252,6 +252,7 @@
                     <thead>
                         <tr>
                             <th>Item</th>
+                            <th>Type</th>
                             <th>Reason</th>
                             <th class="text-end">Delta</th>
                             <th>Created</th>
@@ -259,15 +260,16 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for entry in inventory_adjustments %}
+                        {% for entry in inventory_transactions %}
                         <tr>
                             <td>{{ entry.tier }} - {{ entry.item_name }}</td>
+                            <td>{{ entry.kind }}</td>
                             <td>{{ entry.reason }}{% if entry.note %}<div class="text-muted small">{{ entry.note }}</div>{% endif %}</td>
                             <td class="text-end {% if entry.delta_quantity < 0 %}text-danger{% else %}text-success{% endif %}">{{ "{:+,}".format(entry.delta_quantity) }}</td>
                             <td>{{ entry.created_at }}</td>
                             <td class="text-end">
                                 <form method="post" action="/inventory/transaction/remove-page" class="inventory-remove-form">
-                                    <input type="hidden" name="transaction_kind" value="adjustment">
+                                    <input type="hidden" name="transaction_kind" value="{{ entry.kind }}">
                                     <input type="hidden" name="transaction_id" value="{{ entry.id }}">
                                     <input type="hidden" name="tier" value="{{ selected_tier }}">
                                     <button type="submit" class="btn btn-sm eve-btn-ghost inventory-remove-btn">Remove</button>
@@ -275,7 +277,7 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="text-center text-muted py-4">No adjustments yet.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-4">No transactions yet.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

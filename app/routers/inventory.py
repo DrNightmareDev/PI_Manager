@@ -64,6 +64,7 @@ def inventory_page(
     )
     lot_rows = [
         {
+            "id": int(row.id),
             "tier": row.tier,
             "item_name": row.item_name,
             "source_kind": row.source_kind,
@@ -71,21 +72,38 @@ def inventory_page(
             "quantity_remaining": int(row.quantity_remaining or 0),
             "unit_cost": row.unit_cost,
             "created_at": format_utc_compact(row.created_at),
+            "created_sort": row.created_at.isoformat() if row.created_at else "",
         }
         for row in lots
     ]
-    adjustment_rows = [
+    transaction_rows = [
         {
             "id": int(row.id),
+            "kind": "batch",
             "tier": row.tier,
             "item_name": row.item_name,
-            "reason": row.reason,
+            "reason": row.source_kind.replace("_", " ").title(),
+            "note": row.note,
+            "delta_quantity": int(row.quantity_added or 0),
+            "created_at": format_utc_compact(row.created_at),
+            "created_sort": row.created_at.isoformat() if row.created_at else "",
+        }
+        for row in lots
+    ] + [
+        {
+            "id": int(row.id),
+            "kind": "adjustment",
+            "tier": row.tier,
+            "item_name": row.item_name,
+            "reason": row.reason.replace("_", " ").title(),
             "note": row.note,
             "delta_quantity": int(row.delta_quantity or 0),
             "created_at": format_utc_compact(row.created_at),
+            "created_sort": row.created_at.isoformat() if row.created_at else "",
         }
         for row in adjustments
     ]
+    transaction_rows.sort(key=lambda row: row["created_sort"], reverse=True)
     distinct_items = len(rows)
     total_units = sum(int(item["quantity_on_hand"] or 0) for item in rows)
     estimated_value = sum(float(item["estimated_value"] or 0.0) for item in rows)
@@ -99,7 +117,7 @@ def inventory_page(
         "inventory_catalog": selectable_catalog,
         "inventory_rows": rows,
         "inventory_lots": lot_rows,
-        "inventory_adjustments": adjustment_rows,
+        "inventory_transactions": transaction_rows[:60],
         "inventory_tiers": TIERS,
         "selected_tier": tier if tier in TIERS else "",
         "inventory_message": request.query_params.get("message", ""),
