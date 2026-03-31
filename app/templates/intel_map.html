@@ -100,6 +100,46 @@
             </div>
         </aside>
     </section>
+
+    {% if can_view_debug and intel_debug %}
+    <section class="intel-panel intel-debug-panel">
+        <div class="intel-panel-title">Intel Debug</div>
+        <div class="intel-debug-grid">
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Stream</div>
+                <div class="intel-debug-value">{{ intel_debug.stream_key }}</div>
+            </div>
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Last Sequence</div>
+                <div class="intel-debug-value">{{ intel_debug.last_sequence_id or 'n/a' }}</div>
+            </div>
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Last Success</div>
+                <div class="intel-debug-value">{{ intel_debug.last_success_at or 'n/a' }}</div>
+            </div>
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Latest Event Age</div>
+                <div class="intel-debug-value">{{ intel_debug.latest_event_age_seconds if intel_debug.latest_event_age_seconds is not none else 'n/a' }}</div>
+            </div>
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Events 5m</div>
+                <div class="intel-debug-value">{{ intel_debug.recent_events_5m }}</div>
+            </div>
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Events 15m</div>
+                <div class="intel-debug-value">{{ intel_debug.recent_events_15m }}</div>
+            </div>
+            <div class="intel-debug-item">
+                <div class="intel-debug-label">Total Events</div>
+                <div class="intel-debug-value">{{ intel_debug.total_events }}</div>
+            </div>
+            <div class="intel-debug-item intel-debug-item-wide">
+                <div class="intel-debug-label">Last Error</div>
+                <div class="intel-debug-value">{{ intel_debug.last_error or 'none' }}</div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -761,6 +801,12 @@ setInterval(() => refreshIntel(false, { showLoading: false }), 20000);
 .intel-feed-copy { min-width:0; }
 .intel-feed-line { display:flex; justify-content:space-between; gap:.6rem; font-size:.82rem; align-items:center; }
 .intel-feed-line-secondary { color:var(--eve-text-muted); font-size:.74rem; }
+.intel-debug-panel { padding:1rem 1.1rem; }
+.intel-debug-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:.8rem; }
+.intel-debug-item { border:1px solid rgba(255,255,255,.05); border-radius:.85rem; background:rgba(255,255,255,.02); padding:.7rem .8rem; }
+.intel-debug-item-wide { grid-column:1 / -1; }
+.intel-debug-label { color:var(--eve-text-muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; margin-bottom:.25rem; }
+.intel-debug-value { color:#d8f3ff; font-size:.9rem; word-break:break-word; }
 @media (max-width: 1100px) { .intel-layout { grid-template-columns:1fr; } }
 </style>
 {% endblock %}

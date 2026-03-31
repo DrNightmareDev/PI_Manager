@@ -10,13 +10,14 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import sde
 from app.database import SessionLocal, get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_location
-from app.models import Character, CombatIntelPreference, IntelKillEvent, KillActivityCache
+from app.models import Character, CombatIntelPreference, IntelKillEvent, IntelStreamState, KillActivityCache
 from app.templates_env import templates
 from app.zkill import get_region_kills_db_first, get_system_kill_summary
 
@@ -219,6 +220,40 @@ def _latest_ws_status() -> tuple[str, int]:
         db.close()
 
 
+def _intel_debug_info(db: Session) -> dict:
+    now = datetime.now(timezone.utc)
+    stream = db.get(IntelStreamState, "r2z2")
+    recent_5m = (
+        db.query(func.count(IntelKillEvent.id))
+        .filter(IntelKillEvent.created_at >= now - timedelta(minutes=5))
+        .scalar()
+        or 0
+    )
+    recent_15m = (
+        db.query(func.count(IntelKillEvent.id))
+        .filter(IntelKillEvent.created_at >= now - timedelta(minutes=15))
+        .scalar()
+        or 0
+    )
+    total_events = db.query(func.count(IntelKillEvent.id)).scalar() or 0
+    latest_event = db.query(IntelKillEvent).order_by(IntelKillEvent.created_at.desc(), IntelKillEvent.id.desc()).first()
+    latest_event_age = None
+    if latest_event and latest_event.created_at:
+        created_at = latest_event.created_at if latest_event.created_at.tzinfo else latest_event.created_at.replace(tzinfo=timezone.utc)
+        latest_event_age = int((now - created_at).total_seconds())
+    return {
+        "stream_key": getattr(stream, "stream_key", "r2z2"),
+        "last_sequence_id": getattr(stream, "last_sequence_id", None),
+        "last_success_at": getattr(stream, "last_success_at", None),
+        "last_error": getattr(stream, "last_error", ""),
+        "updated_at": getattr(stream, "updated_at", None),
+        "recent_events_5m": int(recent_5m),
+        "recent_events_15m": int(recent_15m),
+        "total_events": int(total_events),
+        "latest_event_age_seconds": latest_event_age,
+    }
+
+
 def _build_live_snapshot(region_id: int, window: str, kill_type: str, force_refresh: bool = False) -> tuple[dict, list[dict], list[dict], dict]:
     graph = _resolve_region(str(region_id))
     alt_positions = _build_alt_layout(graph)
@@ -338,6 +373,7 @@ def intel_map(
         selected_kill_type,
     )
     ws_status, ws_last_kill_ago = _latest_ws_status()
+    can_view_debug = bool(getattr(account, "is_owner", False) or getattr(account, "is_admin", False))
     return templates.TemplateResponse("intel_map.html", {
         "request": request,
         "account": account,
@@ -355,6 +391,8 @@ def intel_map(
         "initial_source_meta": source_meta,
         "initial_ws_status": ws_status,
         "initial_ws_last_kill_ago": ws_last_kill_ago,
+        "can_view_debug": can_view_debug,
+        "intel_debug": _intel_debug_info(db) if can_view_debug else None,
     })
 
 
