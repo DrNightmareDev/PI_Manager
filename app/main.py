@@ -12,7 +12,8 @@ from app.config import get_settings
 from app.database import engine, SessionLocal
 from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_translations
 from app.models import SSOState
-from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard
+from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
+from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -129,10 +130,49 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 @app.middleware("http")
 async def impersonate_middleware(request: Request, call_next):
     from app.session import read_session
+    from app.models import Account
+
     session = read_session(request)
     request.state.is_impersonating = bool(session and session.get("real_owner_id"))
     request.state.real_owner_id = session.get("real_owner_id") if session else None
-    return await call_next(request)
+
+    request.state.account = None
+    request.state.page_permissions = {}
+    request.state.page_access_levels = {}
+
+    path = request.url.path
+    if is_public_path(path):
+        return await call_next(request)
+
+    db = SessionLocal()
+    try:
+        account_id = session.get("account_id") if session else None
+        account = db.query(Account).filter(Account.id == account_id).first() if account_id else None
+        request.state.account = account
+        settings_map = get_access_settings_map(db)
+        request.state.page_access_levels = settings_map
+        request.state.page_permissions = get_page_visibility(account, settings_map=settings_map)
+
+        page = match_page_for_path(path)
+        if page is None:
+            return await call_next(request)
+
+        if account is None:
+            return RedirectResponse(url="/", status_code=303)
+
+        if not request.state.page_permissions.get(page.key, True):
+            if page.admin_only:
+                level = "admin"
+            else:
+                level = settings_map.get(page.key, page.default_access)
+            return templates.TemplateResponse("access_denied.html", {
+                "request": request,
+                "account": account,
+                "required_role": level,
+            }, status_code=403)
+        return await call_next(request)
+    finally:
+        db.close()
 
 # Router einbinden
 app.include_router(auth.router)
@@ -147,6 +187,7 @@ app.include_router(hauling.router)
 app.include_router(killboard.router)
 app.include_router(colony_plan.router)
 app.include_router(pi_templates.router)
+app.include_router(intel.router)
 
 
 @app.get("/", response_class=HTMLResponse)

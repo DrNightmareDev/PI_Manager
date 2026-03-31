@@ -217,6 +217,14 @@ class AccessPolicyEntry(Base):
     policy = relationship("AccessPolicy", back_populates="entries")
 
 
+class PageAccessSetting(Base):
+    __tablename__ = "page_access_settings"
+
+    page_key = Column(String(100), primary_key=True)
+    access_level = Column(String(20), nullable=False, default="member")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class TranslationEntry(Base):
     __tablename__ = "translation_entries"
     __table_args__ = (

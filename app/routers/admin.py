@@ -6,7 +6,8 @@ from sqlalchemy import func
 from app.database import get_db
 from app.dependencies import require_admin, require_account
 from app.i18n import get_translation_rows, save_translation, SUPPORTED_LANGUAGES
-from app.models import Account, Character, AccessPolicy, AccessPolicyEntry
+from app.models import Account, Character, AccessPolicy, AccessPolicyEntry, PageAccessSetting
+from app.page_access import get_access_settings_map, get_page_definitions
 from app.session import create_session, create_impersonate_session, read_session
 from app.templates_env import templates
 
@@ -72,6 +73,21 @@ def admin_panel(
         .order_by(AccessPolicyEntry.entity_type, AccessPolicyEntry.entity_name)
         .all()
     )
+    page_access_map = get_access_settings_map(db)
+    page_access_rows = []
+    for page in get_page_definitions():
+        if page.admin_only:
+            page_access_rows.append({
+                "page": page,
+                "access_level": "admin",
+                "read_only": True,
+            })
+            continue
+        page_access_rows.append({
+            "page": page,
+            "access_level": page_access_map.get(page.key, page.default_access),
+            "read_only": False,
+        })
 
     return templates.TemplateResponse("admin.html", {
         "request": request,
@@ -83,6 +99,7 @@ def admin_panel(
         "total_colonies": total_colonies,
         "policy": policy,
         "policy_entries": policy_entries,
+        "page_access_rows": page_access_rows,
         "translation_rows": get_translation_rows(),
         "translation_languages": [lang for lang in SUPPORTED_LANGUAGES if lang not in ("en", "de")],
     })
@@ -330,6 +347,34 @@ def remove_access_policy_entry(
         db.delete(entry)
         db.commit()
     return RedirectResponse(url="/manager#access-policy", status_code=302)
+
+
+@router.post("/page-access")
+async def update_page_access(
+    request: Request,
+    account=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    _require_owner(account)
+    form = await request.form()
+    page_key = (form.get("page_key") or "").strip()
+    access_level = (form.get("access_level") or "").strip()
+    page = next((entry for entry in get_page_definitions() if entry.key == page_key), None)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+    if page.admin_only:
+        raise HTTPException(status_code=400, detail="Admin-only pages cannot be changed")
+    if access_level not in ("none", "manager", "member"):
+        raise HTTPException(status_code=400, detail="Invalid access level")
+
+    row = db.get(PageAccessSetting, page_key)
+    if row is None:
+        row = PageAccessSetting(page_key=page_key, access_level=access_level)
+        db.add(row)
+    else:
+        row.access_level = access_level
+    db.commit()
+    return RedirectResponse(url="/manager#page-access", status_code=302)
 
 
 @router.get("/access-policy/search")

@@ -56,57 +56,75 @@
 
         <div class="collapse navbar-collapse" id="navMain">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
+                {% if request.state.page_permissions.get('dashboard', True) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/dashboard') and not request.url.path.startswith('/dashboard/characters') and not request.url.path.startswith('/dashboard/corp') %}active{% endif %}"
                        href="/dashboard">
                         <i class="bi bi-speedometer2 me-1"></i>{{ t('nav.dashboard') }}
                     </a>
                 </li>
+                {% endif %}
+                {% if request.state.page_permissions.get('skyhook', True) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/skyhook') %}active{% endif %}"
                        href="/skyhook">
                         <i class="bi bi-box-seam me-1"></i>{{ t('nav.skyhooks') }}
                     </a>
                 </li>
+                {% endif %}
                 <!-- Planer Dropdown -->
+                {% set planer_visible = request.state.page_permissions.get('planner', True) or request.state.page_permissions.get('colony_plan', True) or request.state.page_permissions.get('pi_templates', True) or request.state.page_permissions.get('hauling', True) %}
                 {% set planer_active = request.url.path.startswith('/planner') or request.url.path.startswith('/colony-plan') or request.url.path.startswith('/templates') or request.url.path.startswith('/hauling') %}
+                {% if planer_visible %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if planer_active %}active{% endif %}"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-diagram-3 me-1"></i>{{ t('nav.planer_group') }}
                     </a>
                     <ul class="dropdown-menu eve-dropdown">
+                        {% if request.state.page_permissions.get('planner', True) %}
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/planner') %}active{% endif %}" href="/planner">
                                 <i class="bi bi-diagram-3 me-2 text-muted"></i>{{ t('nav.planner') }}
                             </a>
                         </li>
+                        {% endif %}
+                        {% if request.state.page_permissions.get('colony_plan', True) %}
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/colony-plan') %}active{% endif %}" href="/colony-plan">
                                 <i class="bi bi-diagram-2 me-2 text-muted"></i>{{ t('nav.colony_plan') }}
                             </a>
                         </li>
+                        {% endif %}
+                        {% if request.state.page_permissions.get('pi_templates', True) %}
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/templates') %}active{% endif %}" href="/templates">
                                 <i class="bi bi-geo-alt me-2 text-muted"></i>{{ t('nav.templates', default='PI Templates') }}
                             </a>
                         </li>
+                        {% endif %}
+                        {% if request.state.page_permissions.get('hauling', True) %}
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/hauling') %}active{% endif %}" href="/hauling">
                                 <i class="bi bi-truck me-2 text-muted"></i>{{ t('nav.hauling') }}
                             </a>
                         </li>
+                        {% endif %}
                     </ul>
                 </li>
+                {% endif %}
 
                 <!-- Analyse Dropdown -->
-                {% set analyse_active = request.url.path.startswith('/system') %}
+                {% set analyse_visible = request.state.page_permissions.get('system', True) or request.state.page_permissions.get('intel_map', False) %}
+                {% set analyse_active = request.url.path.startswith('/system') or request.url.path.startswith('/intel/map') %}
+                {% if analyse_visible %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if analyse_active %}active{% endif %}"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-globe2 me-1"></i>{{ t('nav.analyse_group') }}
                     </a>
                     <ul class="dropdown-menu eve-dropdown">
+                        {% if request.state.page_permissions.get('system', True) %}
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/system') and not request.url.path.startswith('/system/compare') and not request.url.path.startswith('/system/mix') and not request.url.path.startswith('/system/fittings') %}active{% endif %}" href="/system">
                                 <i class="bi bi-globe2 me-2 text-muted"></i>{{ t('nav.system') }}
@@ -127,16 +145,28 @@
                                 <i class="bi bi-cpu me-2 text-muted"></i>{{ t('nav.fittings', default='Fittings') }}
                             </a>
                         </li>
+                        {% endif %}
+                        {% if request.state.page_permissions.get('intel_map', False) %}
+                        <li><hr class="dropdown-divider eve-divider"></li>
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/intel/map') %}active{% endif %}" href="/intel/map">
+                                <i class="bi bi-broadcast-pin me-2 text-muted"></i>Combat Intel Map
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                 </li>
+                {% endif %}
 
+                {% if request.state.page_permissions.get('market', True) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path.startswith('/market') %}active{% endif %}"
                        href="/market">
                         <i class="bi bi-graph-up-arrow me-1"></i>{{ t('nav.market') }}
                     </a>
                 </li>
-                {% if account_can_access_corp_nav(account) %}
+                {% endif %}
+                {% if request.state.page_permissions.get('dashboard_corp', False) %}
                 <li class="nav-item">
                     <a class="nav-link {% if request.url.path == '/dashboard/corp' %}active{% endif %}"
                        href="/dashboard/corp">
@@ -144,7 +174,7 @@
                     </a>
                 </li>
                 {% endif %}
-                {% if account and account.is_admin %}
+                {% if request.state.page_permissions.get('manager', False) %}
                 <li class="nav-item">
                     <a class="nav-link eve-admin-link {% if request.url.path.startswith('/manager') %}active{% endif %}"
                        href="/manager">
@@ -212,11 +242,13 @@
                     {% endif %}
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end eve-dropdown">
+                    {% if request.state.page_permissions.get('dashboard_characters', True) %}
                     <li>
                         <a class="dropdown-item" href="/dashboard/characters">
                             <i class="bi bi-people me-2"></i>{{ t('common.manage_characters') }}
                         </a>
                     </li>
+                    {% endif %}
                     <li>
                         <button class="dropdown-item" type="button" onclick="openWebhookModal()">
                             <i class="bi bi-bell me-2"></i>{{ t('common.discord_alerts', default='Discord alerts') }}

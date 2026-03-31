@@ -56,6 +56,73 @@
     </div>
 </div>
 
+{% if account.is_owner %}
+<div class="eve-card card border-0 mb-4" id="page-access">
+    <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-layout-text-window-reverse eve-accent me-1"></i>
+            <span class="fw-medium">Page Access Control</span>
+        </div>
+        <span class="small text-muted">Member access always includes Manager access.</span>
+    </div>
+    <div class="card-body p-3">
+        <div class="table-responsive">
+            <table class="table eve-table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Page</th>
+                        <th>Route</th>
+                        <th>Status</th>
+                        <th class="text-end">Access</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page_access_rows %}
+                    <tr>
+                        <td>
+                            <div class="fw-medium">{{ row.page.label }}</div>
+                            <div class="small text-muted">{{ row.page.key }}</div>
+                        </td>
+                        <td><code>{{ row.page.path_prefix }}</code></td>
+                        <td>
+                            {% if row.read_only %}
+                            <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">Admin only</span>
+                            {% elif row.access_level == 'member' %}
+                            <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;">Member + Manager</span>
+                            {% elif row.access_level == 'manager' %}
+                            <span class="badge eve-badge-admin">Manager only</span>
+                            {% else %}
+                            <span class="badge" style="background:#e6394620;color:#ff7b7b;border:1px solid #e6394640;">No access</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if row.read_only %}
+                            <span class="btn btn-sm eve-btn-outline disabled">
+                                <i class="bi bi-lock me-1"></i>Fixed
+                            </span>
+                            {% else %}
+                            <form method="post" action="/manager/page-access" class="d-inline-flex align-items-center gap-2">
+                                <input type="hidden" name="page_key" value="{{ row.page.key }}">
+                                <select class="form-select form-select-sm eve-input" name="access_level" style="min-width: 210px;">
+                                    <option value="none" {% if row.access_level == 'none' %}selected{% endif %}>No Access</option>
+                                    <option value="manager" {% if row.access_level == 'manager' %}selected{% endif %}>Manager Only</option>
+                                    <option value="member" {% if row.access_level == 'member' %}selected{% endif %}>Member + Manager</option>
+                                </select>
+                                <button type="submit" class="btn btn-sm eve-btn-gold">
+                                    <i class="bi bi-save me-1"></i>Save
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Account-Liste -->
 <div class="eve-card card border-0">
     <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
