@@ -140,7 +140,7 @@ if [[ "${MODE}" == "compose" ]]; then
 
     echo ""
     echo -e "${GREEN}Docker Compose upgrade complete.${NC}"
-    echo -e "${CYAN}Logs:${NC} docker compose logs -f app"
+    echo -e "${CYAN}Logs:${NC} docker compose logs -f app celery_worker celery_beat celery_ws"
     echo ""
     exit 0
 fi

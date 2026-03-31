@@ -423,6 +423,7 @@ sleep 3
 APP_STATUS=$(systemctl is-active "${SERVICE_NAME}"        2>/dev/null || echo "failed")
 WRK_STATUS=$(systemctl is-active "${SERVICE_NAME}-worker" 2>/dev/null || echo "failed")
 BET_STATUS=$(systemctl is-active "${SERVICE_NAME}-beat"   2>/dev/null || echo "failed")
+WS_STATUS=$(systemctl is-active "${SERVICE_NAME}-ws"      2>/dev/null || echo "failed")
 RMQ_STATUS=$(systemctl is-active rabbitmq-server          2>/dev/null || echo "failed")
 NGX_STATUS=$(systemctl is-active nginx                    2>/dev/null || echo "failed")
 PG_STATUS=$(systemctl is-active  postgresql               2>/dev/null || echo "failed")
@@ -442,6 +443,7 @@ _svc_line "RabbitMQ"      "$RMQ_STATUS"
 _svc_line "App (web)"     "$APP_STATUS"
 _svc_line "Celery Worker" "$WRK_STATUS"
 _svc_line "Celery Beat"   "$BET_STATUS"
+_svc_line "Celery WS"     "$WS_STATUS"
 _svc_line "Nginx"         "$NGX_STATUS"
 echo ""
 echo -e "  ${CYAN}URL:${NC}           http://${IP_ADDR}"
@@ -460,7 +462,7 @@ echo -e "       esi-skills.read_skills.v1"
 echo -e "       esi-fittings.read_fittings.v1"
 echo -e "  2. .env bearbeiten:      nano ${APP_DIR}/.env"
 echo -e "     EVE_CLIENT_ID / EVE_CLIENT_SECRET eintragen"
-echo -e "  3. Services neu starten: systemctl restart ${SERVICE_NAME} ${SERVICE_NAME}-worker ${SERVICE_NAME}-beat"
+echo -e "  3. Services neu starten: systemctl restart ${SERVICE_NAME} ${SERVICE_NAME}-worker ${SERVICE_NAME}-beat ${SERVICE_NAME}-ws"
 echo -e "  4. Browser öffnen:       http://${IP_ADDR}"
 echo -e "  5. Erster Login = Admin"
 echo ""
@@ -468,4 +470,5 @@ echo -e "  ${CYAN}Logs:${NC}"
 echo -e "  Web:    journalctl -u ${SERVICE_NAME} -f"
 echo -e "  Worker: journalctl -u ${SERVICE_NAME}-worker -f"
 echo -e "  Beat:   journalctl -u ${SERVICE_NAME}-beat -f"
+echo -e "  WS:     journalctl -u ${SERVICE_NAME}-ws -f"
 echo ""
