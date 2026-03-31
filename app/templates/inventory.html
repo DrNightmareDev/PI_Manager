@@ -3,11 +3,14 @@
 
 {% block content %}
 <div class="inventory-shell">
-    <section class="inventory-hero">
-        <div>
-            <div class="inventory-kicker">PI inventory</div>
-            <h1>Inventory / Stock Management</h1>
-            <p>Track current PI stock, record purchased or self-produced batches, and keep a weighted average cost basis for better buy-vs-build decisions.</p>
+    <section class="inventory-hero eve-card card border-0">
+        <div class="card-body inventory-hero-body">
+            <div class="inventory-hero-copy">
+                <div class="inventory-kicker">PI inventory</div>
+                <h1><i class="bi bi-boxes me-2 eve-accent"></i>Inventory / Stock Management</h1>
+                <p>Track current PI stock, record purchased or self-produced batches, and keep a weighted average cost basis for better buy-vs-build decisions.</p>
+            </div>
+            <div class="inventory-hero-glow" aria-hidden="true"></div>
         </div>
         <div class="inventory-stats">
             <div class="inventory-stat">
@@ -38,8 +41,15 @@
     {% endif %}
 
     <section class="inventory-actions">
-        <div class="inventory-panel">
-            <div class="inventory-panel-title">Add Stock Batch</div>
+        <div class="inventory-panel eve-card card border-0">
+            <div class="card-body">
+            <div class="inventory-panel-head">
+                <div>
+                    <div class="inventory-panel-kicker">Stock input</div>
+                    <div class="inventory-panel-title"><i class="bi bi-plus-square me-2"></i>Add Stock Batch</div>
+                </div>
+                <span class="inventory-panel-badge">Purchase / Production</span>
+            </div>
             <form method="post" action="/inventory/lots" class="inventory-form-grid">
                 <div>
                     <label class="form-label">PI Item</label>
@@ -73,10 +83,18 @@
                     <button type="submit" class="btn eve-btn-primary">Add Batch</button>
                 </div>
             </form>
+            </div>
         </div>
 
-        <div class="inventory-panel">
-            <div class="inventory-panel-title">Manual Adjustment</div>
+        <div class="inventory-panel eve-card card border-0">
+            <div class="card-body">
+            <div class="inventory-panel-head">
+                <div>
+                    <div class="inventory-panel-kicker">Corrections</div>
+                    <div class="inventory-panel-title"><i class="bi bi-sliders2 me-2"></i>Manual Adjustment</div>
+                </div>
+                <span class="inventory-panel-badge">Inventory delta</span>
+            </div>
             <form method="post" action="/inventory/adjust" class="inventory-form-grid">
                 <div>
                     <label class="form-label">PI Item</label>
@@ -109,12 +127,17 @@
                     <button type="submit" class="btn eve-btn-outline">Apply Adjustment</button>
                 </div>
             </form>
+            </div>
         </div>
     </section>
 
-    <section class="inventory-panel">
+    <section class="inventory-panel eve-card card border-0 inventory-stock-panel">
+        <div class="card-body">
         <div class="inventory-table-header">
-            <div class="inventory-panel-title">Current Stock</div>
+            <div>
+                <div class="inventory-panel-kicker">Overview</div>
+                <div class="inventory-panel-title"><i class="bi bi-grid-3x3-gap me-2"></i>Current Stock</div>
+            </div>
             <div class="inventory-table-actions">
                 <input type="search" id="inventorySearch" class="form-control eve-input" placeholder="Filter stock by item">
                 <select id="inventoryValueMode" class="form-select eve-input inventory-value-mode">
@@ -173,11 +196,18 @@
                 </tbody>
             </table>
         </div>
+        </div>
     </section>
 
     <section class="inventory-history-grid">
-        <div class="inventory-panel">
-            <div class="inventory-panel-title">Recent Stock Batches</div>
+        <div class="inventory-panel eve-card card border-0">
+            <div class="card-body">
+            <div class="inventory-panel-head">
+                <div>
+                    <div class="inventory-panel-kicker">History</div>
+                    <div class="inventory-panel-title"><i class="bi bi-clock-history me-2"></i>Recent Stock Batches</div>
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm align-middle">
                     <thead>
@@ -206,10 +236,17 @@
                     </tbody>
                 </table>
             </div>
+            </div>
         </div>
 
-        <div class="inventory-panel">
-            <div class="inventory-panel-title">Recent Adjustments</div>
+        <div class="inventory-panel eve-card card border-0">
+            <div class="card-body">
+            <div class="inventory-panel-head">
+                <div>
+                    <div class="inventory-panel-kicker">Audit</div>
+                    <div class="inventory-panel-title"><i class="bi bi-journal-check me-2"></i>Recent Adjustments</div>
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-dark table-sm align-middle">
                     <thead>
@@ -242,6 +279,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
             </div>
         </div>
     </section>
@@ -511,22 +549,36 @@
 </script>
 <style>
 .inventory-shell { display:grid; gap:1.35rem; }
-.inventory-hero,.inventory-panel { background:radial-gradient(circle at top right, rgba(0,180,216,0.12), transparent 30%),linear-gradient(180deg, rgba(14,23,31,0.98), rgba(11,18,25,0.98)); border:1px solid rgba(0,180,216,0.12); border-radius:1.2rem; box-shadow:0 18px 40px rgba(0,0,0,0.2); }
-.inventory-hero { padding:1.4rem 1.5rem; display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-.inventory-kicker { color:#7ec8e3; text-transform:uppercase; letter-spacing:.18em; font-size:.74rem; margin-bottom:.5rem; }
-.inventory-hero h1 { margin:0 0 .35rem; font-size:clamp(1.7rem, 3vw, 2.5rem); }
-.inventory-hero p { margin:0; max-width:48rem; color:var(--eve-text-muted); }
-.inventory-stats { display:flex; gap:.8rem; flex-wrap:wrap; }
-.inventory-stat { min-width:170px; padding:.9rem 1rem; border:1px solid rgba(255,255,255,.05); border-radius:1rem; background:rgba(255,255,255,.025); }
+.inventory-hero,
+.inventory-panel { overflow:hidden; background:
+    radial-gradient(circle at top right, rgba(0,180,216,0.14), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(244,163,0,0.08), transparent 28%),
+    linear-gradient(180deg, rgba(14,23,31,0.98), rgba(11,18,25,0.98));
+    border:1px solid rgba(0,180,216,0.12);
+    box-shadow:0 18px 40px rgba(0,0,0,0.22);
+}
+.inventory-hero-body { position:relative; display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; padding:1.55rem 1.65rem 1.2rem; }
+.inventory-hero-copy { position:relative; z-index:1; }
+.inventory-hero-glow { position:absolute; right:-60px; top:-70px; width:260px; height:260px; border-radius:50%; background:radial-gradient(circle, rgba(0,180,216,.16), transparent 64%); pointer-events:none; }
+.inventory-kicker,
+.inventory-panel-kicker { color:#7ec8e3; text-transform:uppercase; letter-spacing:.18em; font-size:.7rem; margin-bottom:.45rem; }
+.inventory-hero h1 { margin:0 0 .35rem; font-size:clamp(1.7rem, 3vw, 2.5rem); display:flex; align-items:center; flex-wrap:wrap; gap:.15rem; }
+.inventory-hero p { margin:0; max-width:48rem; color:var(--eve-text-muted); font-size:.96rem; }
+.inventory-stats { display:grid; grid-template-columns:repeat(3, minmax(170px, 1fr)); gap:.8rem; width:100%; padding:0 1.65rem 1.45rem; }
+.inventory-stat { min-width:170px; padding:1rem 1.05rem; border:1px solid rgba(255,255,255,.05); border-radius:1rem; background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02)); box-shadow:inset 0 1px 0 rgba(255,255,255,.03); }
 .inventory-stat-label { font-size:.74rem; color:var(--eve-text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.3rem; }
-.inventory-stat-value { font-size:1.2rem; color:#dff7ff; font-weight:700; }
+.inventory-stat-value { font-size:1.2rem; color:#dff7ff; font-weight:700; text-shadow:0 0 18px rgba(0,180,216,.1); }
 .inventory-actions,.inventory-history-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1.2rem; }
-.inventory-panel { padding:1rem 1.1rem; }
-.inventory-panel-title { font-size:1rem; margin-bottom:.85rem; }
-.inventory-form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.85rem; }
+.inventory-panel .card-body { padding:1.15rem 1.15rem 1.05rem; }
+.inventory-panel-head { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; margin-bottom:1rem; flex-wrap:wrap; }
+.inventory-panel-title { font-size:1rem; margin:0; color:#e8f7ff; }
+.inventory-panel-badge { display:inline-flex; align-items:center; padding:.3rem .65rem; border-radius:999px; background:rgba(0,180,216,.1); border:1px solid rgba(0,180,216,.18); color:#9deeff; font-size:.73rem; }
+.inventory-form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.95rem; }
+.inventory-form-grid label { color:#c7d6df; font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; }
 .inventory-form-wide,.inventory-form-actions { grid-column:1 / -1; }
 .inventory-form-actions { display:flex; gap:.6rem; justify-content:flex-end; }
-.inventory-table-header { display:flex; justify-content:space-between; gap:.8rem; align-items:center; margin-bottom:.85rem; flex-wrap:wrap; }
+.inventory-stock-panel .card-body { padding-bottom:.8rem; }
+.inventory-table-header { display:flex; justify-content:space-between; gap:.8rem; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap; }
 .inventory-table-actions { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
 .inventory-table-actions input { min-width:220px; }
 .inventory-value-mode { min-width:150px; }
@@ -538,8 +590,20 @@
 .inventory-tier-p2 { color:#f0c36d; background:rgba(244,163,0,.08); }
 .inventory-tier-p3 { color:#e9a1ff; background:rgba(171,104,255,.08); }
 .inventory-tier-p4 { color:#ff8a7c; background:rgba(220,70,70,.08); }
+.inventory-table,
+.inventory-history-grid table { margin-bottom:0; border-collapse:separate; border-spacing:0 .45rem; }
+.inventory-table thead th,
+.inventory-history-grid thead th { border:none; color:#7f97a9; font-size:.76rem; text-transform:uppercase; letter-spacing:.09em; padding:.35rem .85rem .2rem; }
+.inventory-table tbody tr,
+.inventory-history-grid tbody tr { background:rgba(255,255,255,.025); box-shadow:inset 0 0 0 1px rgba(255,255,255,.03); }
+.inventory-table tbody td,
+.inventory-history-grid tbody td { border:none; padding:.85rem .85rem; }
+.inventory-table tbody tr td:first-child,
+.inventory-history-grid tbody tr td:first-child { border-radius:.9rem 0 0 .9rem; }
+.inventory-table tbody tr td:last-child,
+.inventory-history-grid tbody tr td:last-child { border-radius:0 .9rem .9rem 0; }
 .inventory-summary-row { cursor:pointer; }
-.inventory-summary-row:hover td { background:rgba(0,180,216,.06); }
+.inventory-summary-row:hover td { background:rgba(0,180,216,.07); }
 .inventory-modal { background:linear-gradient(180deg, rgba(14,23,31,0.99), rgba(11,18,25,0.99)); color:#e8f7ff; border:1px solid rgba(0,180,216,0.18); }
 .inventory-modal-toolbar { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; flex-wrap:wrap; margin-bottom:1rem; }
 .inventory-modal-stats { display:flex; gap:.8rem; flex-wrap:wrap; }
@@ -548,7 +612,15 @@
 .inventory-modal-stat strong,.inventory-price-value { font-size:1.05rem; color:#dff7ff; }
 .inventory-price-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.8rem; margin-bottom:1rem; }
 .inventory-modal-table td,.inventory-modal-table th { vertical-align:middle; }
-@media (max-width: 1100px) { .inventory-actions,.inventory-history-grid { grid-template-columns:1fr; } }
-@media (max-width: 720px) { .inventory-form-grid,.inventory-price-grid { grid-template-columns:1fr; } }
+@media (max-width: 1100px) {
+    .inventory-actions,.inventory-history-grid { grid-template-columns:1fr; }
+    .inventory-stats { grid-template-columns:1fr; }
+}
+@media (max-width: 720px) {
+    .inventory-hero-body { padding:1.2rem 1.1rem .95rem; }
+    .inventory-stats { padding:0 1.1rem 1.1rem; }
+    .inventory-form-grid,.inventory-price-grid { grid-template-columns:1fr; }
+    .inventory-panel .card-body { padding:1rem; }
+}
 </style>
 {% endblock %}
