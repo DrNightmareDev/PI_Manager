@@ -215,9 +215,9 @@ def _load_systems() -> None:
         # INSERT row: (regionID, constellationID, solarSystemID, 'name', x,y,z,xMin,xMax,yMin,yMax,zMin,zMax,
         #               luminosity, border, fringe, corridor, hub, international, regional, constellation,
         #               security, factionID, radius, sunTypeID, securityClass)
-        # col 0: regionID, col 2: solarSystemID, col 3: name, cols 4-20: 17 numerics, col 21: security
+        # col 0: regionID, col 2: solarSystemID, col 3: name, col 4/5: x/y, col 21: security
         pattern = re.compile(
-            r"\((\d+),(\d+),(\d+),'([^']+)'(?:,[^,)]+){17},(-?[\d.eE+\-]+)"
+            r"\((\d+),(\d+),(\d+),'([^']+)',(-?[\d.eE+\-]+),(-?[\d.eE+\-]+)(?:,[^,)]+){15},(-?[\d.eE+\-]+)"
         )
         result: dict[str, tuple[int, str, float]] = {}
         by_id: dict[int, dict] = {}
@@ -226,13 +226,17 @@ def _load_systems() -> None:
             constellation_id = int(m.group(2))
             sys_id = int(m.group(3))
             name = m.group(4)
-            security = float(m.group(5))
+            x = float(m.group(5))
+            y = float(m.group(6))
+            security = float(m.group(7))
             result[name.lower()] = (sys_id, name, security)
             by_id[sys_id] = {
                 "name": name,
                 "security": security,
                 "region_id": region_id,
                 "constellation_id": constellation_id,
+                "x": x,
+                "y": y,
             }
         _systems = result
         _systems_by_id = by_id
@@ -591,17 +595,25 @@ def get_region_system_graph(region_id: int) -> dict | None:
 
     systems = []
     system_ids = []
+    raw_x_values: list[float] = []
+    raw_y_values: list[float] = []
     for system_id, data in _systems_by_id.items():
         if int(data.get("region_id") or 0) != region_id:
             continue
+        raw_x = float(data.get("x") or 0.0)
+        raw_y = float(data.get("y") or 0.0)
         systems.append({
             "id": system_id,
             "name": data.get("name") or f"System {system_id}",
             "security": round(float(data.get("security") or 0.0), 1),
             "constellation_id": int(data.get("constellation_id") or 0),
             "constellation_name": _constellations.get(int(data.get("constellation_id") or 0), {}).get("name"),
+            "raw_x": raw_x,
+            "raw_y": raw_y,
         })
         system_ids.append(system_id)
+        raw_x_values.append(raw_x)
+        raw_y_values.append(raw_y)
 
     system_set = set(system_ids)
     connections: list[list[int]] = []
@@ -622,6 +634,25 @@ def get_region_system_graph(region_id: int) -> dict | None:
         {"id": rid, "name": _regions.get(rid, f"Region {rid}")}
         for rid in sorted(neighbor_region_ids, key=lambda rid: _regions.get(rid, "").lower())
     ]
+
+    min_x = min(raw_x_values) if raw_x_values else 0.0
+    max_x = max(raw_x_values) if raw_x_values else 1.0
+    min_y = min(raw_y_values) if raw_y_values else 0.0
+    max_y = max(raw_y_values) if raw_y_values else 1.0
+    range_x = max(1.0, max_x - min_x)
+    range_y = max(1.0, max_y - min_y)
+    width = 1280.0
+    padding = 80.0
+    usable_width = width - (padding * 2)
+    height = max(760.0, min(1480.0, (range_y / range_x) * usable_width + padding * 2))
+    usable_height = height - (padding * 2)
+
+    for system in systems:
+        projected_x = padding + ((float(system["raw_x"]) - min_x) / range_x) * usable_width
+        projected_y = padding + ((max_y - float(system["raw_y"])) / range_y) * usable_height
+        system["x"] = round(projected_x, 2)
+        system["y"] = round(projected_y, 2)
+
     systems.sort(key=lambda item: ((item.get("constellation_name") or "").lower(), item["name"].lower()))
     return {
         "id": region_id,
@@ -629,6 +660,7 @@ def get_region_system_graph(region_id: int) -> dict | None:
         "systems": systems,
         "connections": connections,
         "neighbors": neighbors,
+        "view_box": f"0 0 {int(width)} {int(height)}",
     }
 
 

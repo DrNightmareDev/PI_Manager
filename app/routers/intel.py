@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -43,48 +42,6 @@ def _resolve_region(region: str) -> dict:
         "systems": [],
         "connections": [],
         "neighbors": [],
-    }
-
-
-def _layout_region(graph: dict) -> dict:
-    systems = list(graph["systems"])
-    constellation_groups: dict[int, list[dict]] = defaultdict(list)
-    for system in systems:
-        constellation_groups[int(system.get("constellation_id") or 0)].append(system)
-
-    ordered_groups = sorted(
-        constellation_groups.items(),
-        key=lambda item: ((item[1][0].get("constellation_name") or "").lower(), item[0]),
-    )
-    group_count = max(1, len(ordered_groups))
-    width = 1180
-    height = max(820, 220 + group_count * 110)
-    center_x = width / 2
-    center_y = height / 2
-
-    laid_out = []
-    for group_index, (_, group_systems) in enumerate(ordered_groups):
-        angle = (group_index / group_count) * 6.28318
-        orbit_x = center_x + 320 * __import__("math").cos(angle)
-        orbit_y = center_y + 250 * __import__("math").sin(angle)
-        group_systems = sorted(group_systems, key=lambda item: item["name"].lower())
-        inner_count = max(1, len(group_systems))
-        for system_index, system in enumerate(group_systems):
-            inner_angle = (system_index / inner_count) * 6.28318
-            radius = 58 + (system_index % 5) * 18
-            laid_out.append({
-                **system,
-                "x": round(orbit_x + radius * __import__("math").cos(inner_angle), 2),
-                "y": round(orbit_y + radius * __import__("math").sin(inner_angle), 2),
-            })
-
-    return {
-        "id": graph["id"],
-        "name": graph["name"],
-        "systems": laid_out,
-        "connections": graph["connections"],
-        "neighbors": graph["neighbors"],
-        "view_box": f"0 0 {width} {height}",
     }
 
 
@@ -175,7 +132,7 @@ def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict]
     systems = []
     feed = []
     for index, system in enumerate(graph["systems"]):
-        seed = int(hashlib.sha1(f"{graph['id']}-{window}-{kill_type}-{system['id']}".encode("ascii")).hexdigest()[:8], 16)
+        seed = ((int(graph["id"]) * 131) + (int(system["id"]) * 17) + len(window) + len(kill_type) + index) % 2_147_483_647
         count = (seed % 7) + (index % 3)
         systems.append({
             "system_id": system["id"],
@@ -202,7 +159,7 @@ def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict]
 
 
 def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict]]:
-    graph = _layout_region(_resolve_region(str(region_id)))
+    graph = _resolve_region(str(region_id))
     raw_kills = _fetch_region_kills(region_id)
     if not raw_kills:
         activity, feed = _fallback_feed(graph, window, kill_type)
