@@ -2,6 +2,7 @@
 {% block title %}Access denied - {{ t('app.name') }}{% endblock %}
 
 {% block content %}
+{% set role_label = 'No access' if required_role == 'none' else 'Admin only' if required_role == 'admin' else 'Manager only' if required_role == 'manager' else 'Member + Manager' if required_role == 'member' else required_role %}
 <div class="eve-card card border-0 mx-auto" style="max-width:720px;">
     <div class="card-body p-4 p-md-5 text-center">
         <div class="mb-3" style="font-size:3rem;color:#ff7b7b;">
@@ -10,13 +11,13 @@
         <h1 class="eve-page-title mb-3">Access denied</h1>
         <p class="text-muted mb-4">
             This page is currently not available for your role. Ask an administrator to unlock it for
-            <strong>{{ required_role }}</strong> access or return to the dashboard.
+            <strong>{{ role_label }}</strong> access or return to the dashboard.
         </p>
         <div class="d-flex justify-content-center gap-2 flex-wrap">
             <a href="/dashboard" class="btn eve-btn-primary">
                 <i class="bi bi-speedometer2 me-1"></i>Back to dashboard
             </a>
-            {% if account and account.is_admin %}
+            {% if account and (account.is_admin or account.is_owner) %}
             <a href="/manager#page-access" class="btn eve-btn-outline">
                 <i class="bi bi-sliders me-1"></i>Open page access
             </a>

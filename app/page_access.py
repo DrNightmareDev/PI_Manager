@@ -100,11 +100,17 @@ def can_account_access_page(page_key: str, account, db: Session | None = None, s
     page = get_page_definition(page_key)
     if not page:
         return True
+    access_level = get_effective_access_level(page_key, db=db, settings_map=settings_map)
+    if access_level == "none":
+        return False
     if account is None:
         return False
+    if bool(getattr(account, "is_owner", False)):
+        return access_level in {"admin", "manager", "member"}
     if page.admin_only:
-        return bool(getattr(account, "is_owner", False))
-    access_level = get_effective_access_level(page_key, db=db, settings_map=settings_map)
+        return False
+    if access_level == "admin":
+        return False
     if access_level == "member":
         return True
     if access_level == "manager":

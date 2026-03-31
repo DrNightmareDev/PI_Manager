@@ -364,7 +364,7 @@ async def update_page_access(
         raise HTTPException(status_code=404, detail="Page not found")
     if page.admin_only:
         raise HTTPException(status_code=400, detail="Admin-only pages cannot be changed")
-    if access_level not in ("none", "manager", "member"):
+    if access_level not in ("none", "admin", "manager", "member"):
         raise HTTPException(status_code=400, detail="Invalid access level")
 
     row = db.get(PageAccessSetting, page_key)

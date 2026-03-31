@@ -77,7 +77,7 @@
             <i class="bi bi-layout-text-window-reverse eve-accent me-1"></i>
             <span class="fw-medium">Page Access Control</span>
         </div>
-        <span class="small text-muted">Member access always includes Manager access.</span>
+        <span class="small text-muted">Admin always sees Admin only, Manager only and Member + Manager. No access hides it completely.</span>
     </div>
     <div class="card-body p-3">
         <div class="table-responsive">
@@ -103,6 +103,8 @@
                             <span class="badge" style="background:#f4a30022;color:#f4a300;border:1px solid #f4a30040;">Admin only</span>
                             {% elif row.access_level == 'member' %}
                             <span class="badge" style="background:#2dc65322;color:#2dc653;border:1px solid #2dc65340;">Member + Manager</span>
+                            {% elif row.access_level == 'admin' %}
+                            <span class="badge" style="background:#7c3aed22;color:#b794f6;border:1px solid #7c3aed40;">Admin only</span>
                             {% elif row.access_level == 'manager' %}
                             <span class="badge eve-badge-admin">Manager only</span>
                             {% else %}
@@ -119,6 +121,7 @@
                                 <input type="hidden" name="page_key" value="{{ row.page.key }}">
                                 <select class="form-select form-select-sm eve-input" name="access_level" style="min-width: 210px;">
                                     <option value="none" {% if row.access_level == 'none' %}selected{% endif %}>No Access</option>
+                                    <option value="admin" {% if row.access_level == 'admin' %}selected{% endif %}>Admin Only</option>
                                     <option value="manager" {% if row.access_level == 'manager' %}selected{% endif %}>Manager Only</option>
                                     <option value="member" {% if row.access_level == 'member' %}selected{% endif %}>Member + Manager</option>
                                 </select>
