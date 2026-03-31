@@ -45,7 +45,7 @@ _jumps_by_system: dict[int, set[int]] = {}          # system_id -> connected sys
 _regions: dict[int, str] = {}                       # region_id -> region_name
 _constellations: dict[int, dict] = {}               # constellation_id -> {name, region_id}
 _constellations_by_name: dict[str, dict] = {}       # name_lower -> {id, name, region_id}
-_static_planets: dict[int, dict] = {}               # planet_id -> {system_id, planet_name, planet_number, radius}
+_static_planets: dict[int, dict] = {}               # planet_id -> {system_id, planet_name, planet_number, radius, x, y, z}
 _static_stargates: dict[int, dict] = {}             # gate_id -> {system_id, gate_name, destination_system_id, x, y, z}
 _system_gate_distances: dict[tuple[int, int, int], dict] = {}  # (system_id, from_system_id, to_system_id) -> distance payload
 _dotlan_layout_cache: dict[int, tuple[float, dict]] = {}
@@ -460,6 +460,9 @@ def _load_static_planets() -> None:
                         "planet_name": item_name,
                         "planet_number": celestial_index,
                         "radius": radius,
+                        "x": float(m.group(8)),
+                        "y": float(m.group(9)),
+                        "z": float(m.group(10)),
                     }
         _static_planets = result
         logger.info(f"SDE: {len(_static_planets)} statische Planeten geladen.")

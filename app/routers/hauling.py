@@ -4,6 +4,7 @@ import logging
 import re
 import time
 import io
+import itertools
 from collections import deque
 from functools import lru_cache
 from heapq import heappop, heappush
@@ -21,7 +22,7 @@ from app.dependencies import require_account, require_manager_or_admin
 from app.esi import ensure_valid_token, get_character_location
 from app.i18n import translate
 from app.market import PI_TYPE_IDS
-from app.models import Character, CorpBridgeConnection, HaulingPreference, MarketCache, SystemGateDistance
+from app.models import Character, CorpBridgeConnection, HaulingPreference, MarketCache, StaticPlanet, SystemGateDistance
 from app.routers.dashboard import _apply_price_mode, _load_colony_cache, _recompute_expiry
 from app.templates_env import templates
 
@@ -198,6 +199,13 @@ def _format_gate_distance_au(distance_au: float | None) -> str:
     if value >= 10:
         return f"{value:,.1f} AU"
     return f"{value:,.2f} AU"
+
+
+def _distance3(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    dx = float(a[0]) - float(b[0])
+    dy = float(a[1]) - float(b[1])
+    dz = float(a[2]) - float(b[2])
+    return (dx * dx + dy * dy + dz * dz) ** 0.5
 
 
 def _load_gate_distance_map(db: Session) -> dict[tuple[int, int, int], dict]:
@@ -720,8 +728,54 @@ def _route_score(
     return (int(total_jumps), float(total_gate_warp_m))
 
 
-def _build_system_stop_map(hauling_colonies: list[dict]) -> dict[int, dict]:
+def _optimize_planet_route(
+    planets: list[dict],
+    entry_point: tuple[float, float, float] | None,
+    exit_point: tuple[float, float, float] | None,
+    system_name: str,
+) -> tuple[list[dict], float]:
+    if len(planets) <= 1:
+        return list(planets), 0.0
+
+    def path_cost(sequence: list[dict]) -> float:
+        total = 0.0
+        current_point = entry_point
+        if current_point is not None:
+            total += _distance3(current_point, sequence[0]["coords"])
+        for idx in range(1, len(sequence)):
+            total += _distance3(sequence[idx - 1]["coords"], sequence[idx]["coords"])
+        if exit_point is not None:
+            total += _distance3(sequence[-1]["coords"], exit_point)
+        return total
+
+    if len(planets) <= 7:
+        best_order = list(planets)
+        best_cost = float("inf")
+        for perm in itertools.permutations(planets):
+            perm_list = list(perm)
+            cost = path_cost(perm_list)
+            if cost < best_cost:
+                best_cost = cost
+                best_order = perm_list
+        return best_order, best_cost
+
+    remaining = list(planets)
+    ordered: list[dict] = []
+    current_point = entry_point
+    while remaining:
+        if current_point is None:
+            next_planet = min(remaining, key=lambda item: _planet_sort_tuple(item["planet_name"], system_name))
+        else:
+            next_planet = min(remaining, key=lambda item: _distance3(current_point, item["coords"]))
+        ordered.append(next_planet)
+        remaining.remove(next_planet)
+        current_point = next_planet["coords"]
+    return ordered, path_cost(ordered)
+
+
+def _build_system_stop_map(hauling_colonies: list[dict], db: Session) -> dict[int, dict]:
     grouped: dict[int, dict] = {}
+    system_ids: set[int] = set()
     for colony in hauling_colonies:
         system_id = int(colony.get("solar_system_id") or 0)
         if not system_id:
@@ -729,6 +783,7 @@ def _build_system_stop_map(hauling_colonies: list[dict]) -> dict[int, dict]:
         planet_name = str(colony.get("planet_name") or "").strip()
         if not planet_name:
             continue
+        system_ids.add(system_id)
         group = grouped.setdefault(system_id, {
             "system_name": colony.get("solar_system_name") or _system_name(system_id),
             "planets": [],
@@ -736,24 +791,107 @@ def _build_system_stop_map(hauling_colonies: list[dict]) -> dict[int, dict]:
         if planet_name not in group["planets"]:
             group["planets"].append(planet_name)
 
+    if not system_ids:
+        return grouped
+
+    planet_rows = (
+        db.query(StaticPlanet)
+        .filter(StaticPlanet.system_id.in_(list(system_ids)))
+        .all()
+    )
+    planet_map = {
+        (int(row.system_id), str(row.planet_name or "").strip()): {
+            "planet_id": int(row.planet_id),
+            "planet_name": str(row.planet_name or ""),
+            "planet_number": str(row.planet_number or ""),
+            "coords": (
+                float(row.x or 0.0),
+                float(row.y or 0.0),
+                float(row.z or 0.0),
+            ) if row.x is not None and row.y is not None and row.z is not None else None,
+        }
+        for row in planet_rows
+    }
+
     for system_id, group in grouped.items():
         system_name = str(group.get("system_name") or _system_name(system_id))
-        planets = sorted(group["planets"], key=lambda name: _planet_sort_tuple(name, system_name))
-        group["planets"] = planets
-        group["planet_count"] = len(planets)
-        group["planet_route_label"] = " -> ".join(planets)
+        ordered_names = sorted(group["planets"], key=lambda name: _planet_sort_tuple(name, system_name))
+        planet_entries = []
+        for planet_name in ordered_names:
+            static_row = planet_map.get((int(system_id), planet_name))
+            planet_entries.append({
+                "planet_name": planet_name,
+                "coords": static_row.get("coords") if static_row else None,
+            })
+        group["planets"] = ordered_names
+        group["planet_entries"] = planet_entries
+        group["planet_count"] = len(ordered_names)
+        group["planet_route_label"] = " -> ".join(ordered_names)
+        group["planet_route_distance_m"] = 0.0
+        group["planet_route_distance_au"] = 0.0
+        group["planet_route_distance_label"] = ""
     return grouped
 
 
 def _apply_system_stop_map(route_items: list[dict], system_stop_map: dict[int, dict]) -> list[dict]:
     annotated: list[dict] = []
-    for item in route_items:
+    gate_distance_map = sde.get_system_gate_distances()
+    gate_lookup = sde.get_static_stargates()
+    for index, item in enumerate(route_items):
         enriched = dict(item)
         stop = system_stop_map.get(int(item.get("system_id") or 0), {})
         planets = list(stop.get("planets") or [])
         enriched["system_planets"] = planets
         enriched["system_planet_count"] = int(stop.get("planet_count") or len(planets))
         enriched["system_planet_route_label"] = str(stop.get("planet_route_label") or "")
+        enriched["system_planet_route_distance_m"] = float(stop.get("planet_route_distance_m") or 0.0)
+        enriched["system_planet_route_distance_au"] = float(stop.get("planet_route_distance_au") or 0.0)
+        enriched["system_planet_route_distance_label"] = str(stop.get("planet_route_distance_label") or "")
+        planet_entries = list(stop.get("planet_entries") or [])
+        coords_ready = planets and all(entry.get("coords") is not None for entry in planet_entries)
+        if coords_ready:
+            previous_system_id = int(route_items[index - 1]["system_id"]) if index > 0 else 0
+            next_system_id = int(route_items[index + 1]["system_id"]) if index + 1 < len(route_items) else 0
+            entry_gate = None
+            exit_gate = None
+            if previous_system_id and not item.get("bridge_incoming"):
+                entry_gate = gate_distance_map.get((int(item["system_id"]), previous_system_id, next_system_id or previous_system_id))
+                if not entry_gate:
+                    candidates = [
+                        payload for key, payload in gate_distance_map.items()
+                        if int(key[0]) == int(item["system_id"]) and int(key[1]) == previous_system_id
+                    ]
+                    entry_gate = candidates[0] if candidates else None
+            if next_system_id and not item.get("bridge_outgoing"):
+                exit_gate = gate_distance_map.get((int(item["system_id"]), previous_system_id or next_system_id, next_system_id))
+                if not exit_gate:
+                    candidates = [
+                        payload for key, payload in gate_distance_map.items()
+                        if int(key[0]) == int(item["system_id"]) and int(key[2]) == next_system_id
+                    ]
+                    exit_gate = candidates[0] if candidates else None
+            entry_point = None
+            exit_point = None
+            if entry_gate:
+                gate_row = gate_lookup.get(int(entry_gate.get("entry_gate_id") or 0))
+                if gate_row:
+                    entry_point = (float(gate_row["x"]), float(gate_row["y"]), float(gate_row["z"]))
+            if exit_gate:
+                gate_row = gate_lookup.get(int(exit_gate.get("exit_gate_id") or 0))
+                if gate_row:
+                    exit_point = (float(gate_row["x"]), float(gate_row["y"]), float(gate_row["z"]))
+            optimized_entries, total_distance_m = _optimize_planet_route(
+                planet_entries,
+                entry_point,
+                exit_point,
+                str(stop.get("system_name") or item.get("system_name") or ""),
+            )
+            optimized_names = [entry["planet_name"] for entry in optimized_entries]
+            enriched["system_planets"] = optimized_names
+            enriched["system_planet_route_label"] = " -> ".join(optimized_names)
+            enriched["system_planet_route_distance_m"] = total_distance_m
+            enriched["system_planet_route_distance_au"] = total_distance_m / _AU_IN_METERS
+            enriched["system_planet_route_distance_label"] = _format_gate_distance_au(total_distance_m / _AU_IN_METERS)
         annotated.append(enriched)
     return annotated
 
@@ -880,7 +1018,7 @@ def hauling_page(
     hauling_pref = db.get(HaulingPreference, int(account.id))
     return_to_origin = bool(hauling_pref.return_to_start) if hauling_pref else False
     route_mode = _route_mode_value(getattr(hauling_pref, "route_mode", "jumps"))
-    system_stop_map = _build_system_stop_map(hauling_colonies)
+    system_stop_map = _build_system_stop_map(hauling_colonies, db)
 
     location = _get_cached_location(selected_character, db) if selected_character else None
     route_ordered: list[dict] = []
@@ -1204,7 +1342,7 @@ def get_route(
         _, selected_character = _resolve_selected_character(account, db, character_id)
         selected_character = selected_character if character_id not in (None, -1) else None
         hauling_colonies = _load_hauling_colonies(account, db, selected_character)
-        system_stop_map = _build_system_stop_map(hauling_colonies)
+        system_stop_map = _build_system_stop_map(hauling_colonies, db)
         ordered, total_jumps, total_gate_warp_m = _build_route(
             origin_system_id,
             system_ids,

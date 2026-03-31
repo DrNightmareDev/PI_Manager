@@ -362,6 +362,9 @@ class StaticPlanet(Base):
     planet_name = Column(String(255), nullable=False)
     planet_number = Column(String(16), nullable=True)
     radius = Column(BigInteger, nullable=True)
+    x = Column(Float, nullable=True)
+    y = Column(Float, nullable=True)
+    z = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

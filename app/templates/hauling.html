@@ -208,6 +208,9 @@
                                         {% if item.system_planet_count and item.system_planet_count > 1 %}
                                         <div class="small text-info-emphasis" style="color:#7ec8e3;">
                                             {{ t('hauling.in_system_route', default='In-system route') }}: {{ item.system_planet_route_label }}
+                                            {% if item.system_planet_route_distance_label %}
+                                            <span class="text-muted">· {{ item.system_planet_route_distance_label }}</span>
+                                            {% endif %}
                                         </div>
                                         {% endif %}
                                     </div>
@@ -369,6 +372,7 @@
         returnToStart: {{ t('hauling.return_to_start', default='Return to start system') | tojson }},
         returnLeg: {{ t('hauling.return_leg', default='Return') | tojson }},
         inSystemRoute: {{ t('hauling.in_system_route', default='In-system route') | tojson }},
+        inSystemDistance: {{ t('hauling.in_system_distance', default='In-system distance') | tojson }},
         gateWarpLabel: {{ t('hauling.gate_warp_label', default='Gate warp') | tojson }},
         gateWarpNone: {{ t('hauling.gate_warp_none', default='0 AU gate warp') | tojson }},
         viewOnly: {{ t('hauling.bridge_view_only', default='View only') | tojson }},
@@ -447,7 +451,7 @@
                 return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i><div class="d-flex flex-column" style="min-width:0;"><span class="small text-muted text-truncate">${escapeHtml(item.system_name)}</span>${gateWarpLine}</div></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end" style="min-width:6rem;">${killBadge}</div></div></li>`;
             }
             const inSystemRoute = Number(item.system_planet_count || 0) > 1
-                ? `<div class="small" style="color:#7ec8e3;">${escapeHtml(_i18n.inSystemRoute)}: ${escapeHtml(item.system_planet_route_label || '')}</div>`
+                ? `<div class="small" style="color:#7ec8e3;">${escapeHtml(_i18n.inSystemRoute)}: ${escapeHtml(item.system_planet_route_label || '')}${item.system_planet_route_distance_label ? ` <span class="text-muted">· ${escapeHtml(item.system_planet_route_distance_label)}</span>` : ''}</div>`
                 : '';
             const badgeClass = isFirst ? 'bg-secondary' : item.is_return ? 'bg-info text-dark' : 'bg-primary';
             const badgeLabel = isFirst ? _i18n.start : item.is_return ? _i18n.returnLeg : `${item.jumps_from_prev}${_i18n.jumps}`;

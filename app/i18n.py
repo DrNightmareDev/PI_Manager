@@ -290,6 +290,9 @@ def bootstrap_static_planets() -> int:
                     planet_name=planet.get("planet_name") or f"Planet {planet_id}",
                     planet_number=str(planet.get("planet_number") or ""),
                     radius=int(planet.get("radius")) if planet.get("radius") is not None else None,
+                    x=float(planet.get("x")) if planet.get("x") is not None else None,
+                    y=float(planet.get("y")) if planet.get("y") is not None else None,
+                    z=float(planet.get("z")) if planet.get("z") is not None else None,
                 ))
                 inserted += 1
                 continue
@@ -299,6 +302,9 @@ def bootstrap_static_planets() -> int:
                 ("planet_name", planet.get("planet_name") or f"Planet {planet_id}"),
                 ("planet_number", str(planet.get("planet_number") or "")),
                 ("radius", int(planet.get("radius")) if planet.get("radius") is not None else None),
+                ("x", float(planet.get("x")) if planet.get("x") is not None else None),
+                ("y", float(planet.get("y")) if planet.get("y") is not None else None),
+                ("z", float(planet.get("z")) if planet.get("z") is not None else None),
             ):
                 if getattr(row, attr) != value:
                     setattr(row, attr, value)
