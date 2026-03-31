@@ -160,7 +160,7 @@ def _latest_ws_status() -> tuple[str, int]:
         db.close()
 
 
-def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict], dict]:
+def _build_live_snapshot(region_id: int, window: str, kill_type: str, force_refresh: bool = False) -> tuple[dict, list[dict], list[dict], dict]:
     graph = _resolve_region(str(region_id))
     alt_positions = _build_alt_layout(graph)
     systems = []
@@ -175,7 +175,7 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
         })
     graph = {**graph, "systems": systems}
 
-    raw_kills, cache_meta = get_region_kills_db_first(region_id, window=window, limit=200)
+    raw_kills, cache_meta = get_region_kills_db_first(region_id, window=window, limit=200, force_refresh=force_refresh)
     if not raw_kills:
         activity, feed = _fallback_feed(graph)
         return graph, activity, feed, {
@@ -295,9 +295,11 @@ def intel_map_live(
     region: str = Query("10000010"),
     window: str = Query("60m"),
     kill_type: str = Query("all"),
+    force: int = Query(0),
     account=Depends(require_account),
 ):
-    graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region), window, kill_type)
+    force_refresh = bool(force) and bool(getattr(account, "is_owner", False))
+    graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region), window, kill_type, force_refresh=force_refresh)
     ws_status, ws_last_kill_ago = _latest_ws_status()
     return JSONResponse({
         "region": graph,
@@ -306,6 +308,7 @@ def intel_map_live(
         "activity": system_activity,
         "feed": kill_feed,
         "source_meta": source_meta,
+        "force_refresh": force_refresh,
         "ws_status": ws_status,
         "ws_last_kill_ago": ws_last_kill_ago,
         "updated_at": datetime.now(timezone.utc).isoformat(),

@@ -56,6 +56,9 @@
                 <div class="intel-action-row">
                     <button type="button" class="btn btn-sm eve-btn-ghost" id="intelJumpCharacter">Jump</button>
                     <button type="button" class="btn btn-sm eve-btn-ghost" id="intelFollowCharacter">Follow off</button>
+                    {% if account.is_owner %}
+                    <button type="button" class="btn btn-sm eve-btn-gold" id="intelForceRefresh">Force update</button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -114,6 +117,7 @@ const INTEL_BOOTSTRAP = {
     characters: {{ intel_characters | tojson }},
     wsStatus: {{ initial_ws_status | tojson }},
     wsLastKillAgo: {{ initial_ws_last_kill_ago | tojson }},
+    canForceRefresh: {{ account.is_owner | tojson }},
 };
 
 const intelState = {
@@ -137,6 +141,7 @@ const intelState = {
     dragOrigin: null,
     wsStatus: INTEL_BOOTSTRAP.wsStatus,
     wsLastKillAgo: INTEL_BOOTSTRAP.wsLastKillAgo,
+    canForceRefresh: INTEL_BOOTSTRAP.canForceRefresh,
 };
 
 let _sseLastId = 0;
@@ -541,10 +546,11 @@ function startSse() {
     };
 }
 
-async function refreshIntel() {
+async function refreshIntel(forceRefresh = false) {
     syncQueryParams();
-    renderLoadStatus('loading');
+    renderLoadStatus('loading', forceRefresh ? 'Force refreshing selected region...' : '');
     const params = new URLSearchParams({ region: intelState.selectedRegion, window: intelState.window, kill_type: intelState.killType });
+    if (forceRefresh && intelState.canForceRefresh) params.set('force', '1');
     let response;
     try {
         response = await fetch(`/intel/map/live?${params.toString()}`);
@@ -609,6 +615,11 @@ document.getElementById('intelFollowCharacter').addEventListener('click', async 
     syncQueryParams();
     if (intelState.followCharacter) await jumpToTrackedCharacter(true);
 });
+if (document.getElementById('intelForceRefresh')) {
+    document.getElementById('intelForceRefresh').addEventListener('click', async () => {
+        await refreshIntel(true);
+    });
+}
 document.getElementById('intelZoomIn').addEventListener('click', () => zoom(0.8));
 document.getElementById('intelZoomOut').addEventListener('click', () => zoom(1.25));
 document.getElementById('intelZoomReset').addEventListener('click', resetZoom);

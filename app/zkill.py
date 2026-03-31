@@ -211,15 +211,15 @@ def get_system_kill_summaries(system_ids: list[int], window: str = "60m", limit:
     return results
 
 
-def get_region_kills(region_id: int, window: str = "60m", limit: int = 200) -> list[dict]:
+def get_region_kills(region_id: int, window: str = "60m", limit: int = 200, force_refresh: bool = False) -> list[dict]:
     past_seconds = int(WINDOW_SECONDS.get(window, 3600))
     cache_key = (int(region_id), past_seconds)
     cached = _REGION_CACHE.get(cache_key)
     now = time.time()
-    if cached and now - cached[0] <= _REGION_CACHE_TTL:
+    if not force_refresh and cached and now - cached[0] <= _REGION_CACHE_TTL:
         return cached[1]
     last = _LAST_REGION_FETCH.get(int(region_id), 0.0)
-    if now - last < ZKILL_MIN_INTERVAL:
+    if not force_refresh and now - last < ZKILL_MIN_INTERVAL:
         return cached[1] if cached else []
     _LAST_REGION_FETCH[int(region_id)] = now
 
@@ -241,11 +241,11 @@ def normalize_region_kills(raw_kills: list[dict], limit: int = 200) -> list[dict
     return normalized
 
 
-def get_region_kills_db_first(region_id: int, window: str = "60m", limit: int = 200) -> tuple[list[dict], dict]:
+def get_region_kills_db_first(region_id: int, window: str = "60m", limit: int = 200, force_refresh: bool = False) -> tuple[list[dict], dict]:
     cache_key = ("db", int(region_id), window)
     cached = _REGION_CACHE.get(cache_key)
     now = time.time()
-    if cached and now - cached[0] <= _REGION_CACHE_TTL:
+    if not force_refresh and cached and now - cached[0] <= _REGION_CACHE_TTL:
         return cached[1], {
             "source": "memory",
             "cache_age_seconds": int(now - cached[0]),
@@ -259,7 +259,7 @@ def get_region_kills_db_first(region_id: int, window: str = "60m", limit: int = 
         if row and row.fetched_at:
             fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
             age = (now_utc - fetched_at).total_seconds()
-            if age <= REGION_DB_TTL:
+            if not force_refresh and age <= REGION_DB_TTL:
                 try:
                     kills = json.loads(row.kills_json or "[]")
                     _REGION_CACHE[cache_key] = (time.time(), kills)
@@ -270,7 +270,7 @@ def get_region_kills_db_first(region_id: int, window: str = "60m", limit: int = 
                 except Exception:
                     logger.exception("zkill: failed to deserialize region cache for %s/%s", region_id, window)
 
-        raw_kills = get_region_kills(region_id, window=window, limit=limit)
+        raw_kills = get_region_kills(region_id, window=window, limit=limit, force_refresh=force_refresh)
         kills = normalize_region_kills(raw_kills, limit=limit)
         newest_time = max((str(item.get("killmail_time_utc") or "") for item in kills), default=None)
         upsert = RegionKillCache(
@@ -285,12 +285,12 @@ def get_region_kills_db_first(region_id: int, window: str = "60m", limit: int = 
         db.commit()
         _REGION_CACHE[cache_key] = (time.time(), kills)
         return kills, {
-            "source": "fresh",
+            "source": "fresh_forced" if force_refresh else "fresh",
             "cache_age_seconds": 0,
         }
     except Exception:
         logger.exception("zkill: region DB cache upsert failed for %s/%s", region_id, window)
-        raw_kills = get_region_kills(region_id, window=window, limit=limit)
+        raw_kills = get_region_kills(region_id, window=window, limit=limit, force_refresh=force_refresh)
         kills = normalize_region_kills(raw_kills, limit=limit)
         _REGION_CACHE[cache_key] = (time.time(), kills)
         return kills, {
