@@ -188,7 +188,7 @@ def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict]
             "isk_value": 15_000_000 + index * 8_500_000,
         })
     feed.sort(key=lambda item: item["timestamp"], reverse=True)
-        return systems, feed[:200]
+    return systems, feed[:200]
 
 
 def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict]]:
