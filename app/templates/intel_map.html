@@ -166,6 +166,7 @@ const INTEL_BOOTSTRAP = {
     sourceMeta: {{ initial_source_meta | tojson }},
     characters: {{ intel_characters | tojson }},
     wsStatus: {{ initial_ws_status | tojson }},
+    wsLastSuccessAgo: {{ initial_ws_last_success_ago | tojson }},
     wsLastKillAgo: {{ initial_ws_last_kill_ago | tojson }},
     canForceRefresh: {{ account.is_owner | tojson }},
     trackedCharacterId: {{ selected_character_id | tojson }},
@@ -192,6 +193,7 @@ const intelState = {
     dragging: false,
     dragOrigin: null,
     wsStatus: INTEL_BOOTSTRAP.wsStatus,
+    wsLastSuccessAgo: INTEL_BOOTSTRAP.wsLastSuccessAgo,
     wsLastKillAgo: INTEL_BOOTSTRAP.wsLastKillAgo,
     canForceRefresh: INTEL_BOOTSTRAP.canForceRefresh,
 };
@@ -301,18 +303,24 @@ function renderLoadStatus(state = 'idle', message = '') {
     node.textContent = `${prefix} - raw ${rawKills} - feed ${feedKills} - systems ${activeSystems} - ${source}${ageLabel}${detail ? ` - ${detail}` : ''}`;
 }
 
-function renderWsStatus(status, lastKillAgo) {
+function renderWsStatus(status, lastSuccessAgo, lastKillAgo) {
     const node = document.getElementById('intelWsStatus');
     node.className = `intel-ws-status ws-${status}`;
     if (status === 'connected') {
-        node.textContent = `Feed live - ${lastKillAgo}s ago`;
+        if (lastKillAgo >= 0) {
+            node.textContent = `Poller live · last kill ${lastKillAgo < 60 ? `${lastKillAgo}s` : `${Math.max(1, Math.round(lastKillAgo / 60))}m`} ago`;
+        } else {
+            node.textContent = `Poller live · no kills yet`;
+        }
         return;
     }
     if (status === 'degraded') {
-        node.textContent = `Feed delayed - ${Math.max(1, Math.round(lastKillAgo / 60))}m ago`;
+        node.textContent = `Poller delayed · last success ${Math.max(1, Math.round(lastSuccessAgo / 60))}m ago`;
         return;
     }
-    node.textContent = 'Feed idle';
+    node.textContent = lastSuccessAgo >= 0
+        ? `Poller offline · last success ${Math.max(1, Math.round(lastSuccessAgo / 60))}m ago`
+        : 'Poller offline';
 }
 
 function formatDebugTimestamp(value) {
@@ -599,7 +607,7 @@ function refreshAll() {
     renderMap();
     renderFeed();
     renderSystemDetails();
-    renderWsStatus(intelState.wsStatus, intelState.wsLastKillAgo);
+    renderWsStatus(intelState.wsStatus, intelState.wsLastSuccessAgo, intelState.wsLastKillAgo);
 }
 
 function mergeIncomingKill(kill) {
@@ -639,6 +647,7 @@ function mergeIncomingKill(kill) {
         detail.fetched_at_iso = new Date().toISOString();
     }
     intelState.wsStatus = 'connected';
+    intelState.wsLastSuccessAgo = 0;
     intelState.wsLastKillAgo = 0;
     renderMap(); renderFeed(); if (intelState.selectedSystemId === kill.system_id) renderSystemDetails(); updateVisibleNote();
     const el = document.querySelector(`[data-killmail-id="${kill.killmail_id}"]`);
@@ -689,6 +698,7 @@ async function refreshIntel(forceRefresh = false, options = {}) {
     intelState.feed = payload.feed;
     intelState.sourceMeta = payload.source_meta || {};
     intelState.wsStatus = payload.ws_status || 'disconnected';
+    intelState.wsLastSuccessAgo = Number(payload.ws_last_success_ago ?? -1);
     intelState.wsLastKillAgo = Number(payload.ws_last_kill_ago ?? -1);
     if (previousViewBox) {
         intelState.viewBox = previousViewBox;

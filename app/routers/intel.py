@@ -203,19 +203,30 @@ def _fallback_feed(graph: dict) -> tuple[list[dict], list[dict]]:
     return systems, []
 
 
-def _latest_ws_status() -> tuple[str, int]:
+def _latest_ws_status() -> tuple[str, int, int]:
     db = SessionLocal()
     try:
+        now = datetime.now(timezone.utc)
+        stream = db.get(IntelStreamState, "r2z2")
         latest_event = db.query(IntelKillEvent).order_by(IntelKillEvent.created_at.desc(), IntelKillEvent.id.desc()).first()
-        if not latest_event or not latest_event.created_at:
-            return "disconnected", -1
-        created_at = latest_event.created_at if latest_event.created_at.tzinfo else latest_event.created_at.replace(tzinfo=timezone.utc)
-        age = int((datetime.now(timezone.utc) - created_at).total_seconds())
-        if age < 60:
-            return "connected", age
-        if age < 300:
-            return "degraded", age
-        return "disconnected", age
+
+        poller_age = -1
+        if stream and stream.last_success_at:
+            success_at = stream.last_success_at if stream.last_success_at.tzinfo else stream.last_success_at.replace(tzinfo=timezone.utc)
+            poller_age = int((now - success_at).total_seconds())
+
+        event_age = -1
+        if latest_event and latest_event.created_at:
+            created_at = latest_event.created_at if latest_event.created_at.tzinfo else latest_event.created_at.replace(tzinfo=timezone.utc)
+            event_age = int((now - created_at).total_seconds())
+
+        if poller_age < 0:
+            return "disconnected", poller_age, event_age
+        if poller_age < 15:
+            return "connected", poller_age, event_age
+        if poller_age < 60:
+            return "degraded", poller_age, event_age
+        return "disconnected", poller_age, event_age
     finally:
         db.close()
 
@@ -380,7 +391,7 @@ def intel_map(
         selected_window,
         selected_kill_type,
     )
-    ws_status, ws_last_kill_ago = _latest_ws_status()
+    ws_status, ws_last_success_ago, ws_last_kill_ago = _latest_ws_status()
     can_view_debug = bool(getattr(account, "is_owner", False) or getattr(account, "is_admin", False))
     return templates.TemplateResponse("intel_map.html", {
         "request": request,
@@ -398,6 +409,7 @@ def intel_map(
         "initial_feed": kill_feed,
         "initial_source_meta": source_meta,
         "initial_ws_status": ws_status,
+        "initial_ws_last_success_ago": ws_last_success_ago,
         "initial_ws_last_kill_ago": ws_last_kill_ago,
         "can_view_debug": can_view_debug,
         "intel_debug": _intel_debug_info(db) if can_view_debug else None,
@@ -476,7 +488,7 @@ def intel_map_live(
 ):
     force_refresh = bool(force) and bool(getattr(account, "is_owner", False))
     graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region), window, kill_type, force_refresh=force_refresh)
-    ws_status, ws_last_kill_ago = _latest_ws_status()
+    ws_status, ws_last_success_ago, ws_last_kill_ago = _latest_ws_status()
     return JSONResponse({
         "region": graph,
         "window": window,
@@ -486,6 +498,7 @@ def intel_map_live(
         "source_meta": source_meta,
         "force_refresh": force_refresh,
         "ws_status": ws_status,
+        "ws_last_success_ago": ws_last_success_ago,
         "ws_last_kill_ago": ws_last_kill_ago,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
