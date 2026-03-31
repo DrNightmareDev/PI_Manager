@@ -102,6 +102,19 @@
         </div>
     </div>
 
+    {% if can_view_inventory_summary %}
+    <div class="eve-card card border-0 mb-4">
+        <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-boxes eve-accent"></i>
+                <span class="fw-medium">Inventory Coverage</span>
+            </div>
+            <a href="/inventory" class="btn btn-sm eve-btn-ghost">Open Inventory</a>
+        </div>
+        <div class="card-body p-3" id="plannerInventoryCoverage"></div>
+    </div>
+    {% endif %}
+
     <!-- Produktions-Graph -->
     <div class="eve-card card border-0 mb-4">
         <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -190,8 +203,10 @@ const PLANET_COLORS  = {{ planet_type_colors | tojson }};
 const ALL_PRODUCTS   = {{ all_products | tojson }};
 const PRODUCT_LABELS = {{ product_labels | tojson }};
 const PLANET_TYPE_LABELS = {{ planet_type_labels | tojson }};
+const INVENTORY_SUMMARY = {{ inventory_summary | tojson }};
 
 const TIER_COLORS = {P0:'#7a9a6a', P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+const TIER_SORT = {P0: 0, P1: 1, P2: 2, P3: 3, P4: 4};
 const TIER_ORDER  = ['P1', 'P2', 'P3', 'P4'];
 const SYSTEM_FAV_KEY = 'pi_fav_systems';
 
@@ -317,6 +332,55 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function formatIskCompact(value) {
+    if (value == null) return 'n/a';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 'n/a';
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)} B ISK`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M ISK`;
+    return `${n.toFixed(2)} ISK`;
+}
+
+function collectChainProducts(name, tier, acc = new Map()) {
+    const key = `${tier}|${name}`;
+    if (acc.has(key)) return acc;
+    acc.set(key, {name, tier});
+    const inputs = getInputs(name, tier);
+    if (tier === 'P1') {
+        inputs.forEach((p0) => acc.set(`P0|${p0}`, {name: p0, tier: 'P0'}));
+        return acc;
+    }
+    inputs.forEach((input) => {
+        const inputTier = getTier(input);
+        if (inputTier) collectChainProducts(input, inputTier, acc);
+    });
+    return acc;
+}
+
+function renderInventoryCoverage(product) {
+    const container = document.getElementById('plannerInventoryCoverage');
+    if (!container) return;
+    const entries = [...collectChainProducts(product.name, product.tier).values()];
+    entries.sort((a, b) => (TIER_SORT[a.tier] - TIER_SORT[b.tier]) || productLabel(a.name).localeCompare(productLabel(b.name)));
+    container.innerHTML = entries.map((entry) => {
+        const stock = INVENTORY_SUMMARY[entry.name] || {};
+        const qty = Number(stock.quantity_on_hand || 0);
+        const avg = stock.weighted_average_cost;
+        const est = stock.estimated_value;
+        const tone = qty > 0 ? 'var(--bs-success)' : 'var(--eve-text-muted)';
+        return `<div class="d-flex align-items-center justify-content-between gap-3 py-2 border-bottom border-secondary-subtle">
+            <div>
+                <div class="fw-medium">${escapeHtml(productLabel(entry.name))}</div>
+                <div class="text-muted small">${entry.tier}</div>
+            </div>
+            <div class="text-end">
+                <div style="color:${tone};">${qty.toLocaleString()} in stock</div>
+                <div class="text-muted small">${formatIskCompact(avg)} avg · ${formatIskCompact(est)} total</div>
+            </div>
+        </div>`;
+    }).join('') || '<span class="text-muted small">No chain inputs found.</span>';
 }
 
 function productLabel(name) {
@@ -849,6 +913,8 @@ function renderChain(product) {
                 </div>
             </div>`;
         }).join('') || '<span class="text-muted small">-</span>';
+
+    renderInventoryCoverage(product);
 
     if (selectedSystem) applySystemCheck();
 }

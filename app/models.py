@@ -205,6 +205,61 @@ class PiFavorite(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class InventoryItemSummary(Base):
+    __tablename__ = "inventory_item_summaries"
+    __table_args__ = (
+        UniqueConstraint("account_id", "type_id", name="uq_inventory_item_account_type"),
+        Index("ix_inventory_item_account_tier", "account_id", "tier"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    type_id = Column(Integer, nullable=False, index=True)
+    item_name = Column(String(255), nullable=False)
+    tier = Column(String(10), nullable=False, index=True)
+    quantity_on_hand = Column(BigInteger, nullable=False, default=0, server_default="0")
+    weighted_average_cost = Column(String(50), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class InventoryLot(Base):
+    __tablename__ = "inventory_lots"
+    __table_args__ = (
+        Index("ix_inventory_lot_account_type_created", "account_id", "type_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    type_id = Column(Integer, nullable=False, index=True)
+    item_name = Column(String(255), nullable=False)
+    tier = Column(String(10), nullable=False, index=True)
+    quantity_added = Column(BigInteger, nullable=False)
+    quantity_remaining = Column(BigInteger, nullable=False)
+    unit_cost = Column(String(50), nullable=True)
+    total_cost = Column(String(50), nullable=True)
+    source_kind = Column(String(20), nullable=False, default="manual", server_default="manual")
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class InventoryAdjustment(Base):
+    __tablename__ = "inventory_adjustments"
+    __table_args__ = (
+        Index("ix_inventory_adjustment_account_type_created", "account_id", "type_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    type_id = Column(Integer, nullable=False, index=True)
+    item_name = Column(String(255), nullable=False)
+    tier = Column(String(10), nullable=False, index=True)
+    delta_quantity = Column(BigInteger, nullable=False)
+    reason = Column(String(50), nullable=False, default="manual", server_default="manual")
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
 class SkyhookEntry(Base):
     __tablename__ = "skyhook_entries"
     __table_args__ = (

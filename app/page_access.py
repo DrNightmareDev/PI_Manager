@@ -23,6 +23,7 @@ PAGE_DEFINITIONS: tuple[PageDefinition, ...] = (
     PageDefinition("dashboard", "Dashboard", "/dashboard", "member"),
     PageDefinition("skyhook", "Skyhooks", "/skyhook", "member"),
     PageDefinition("planner", "Planner", "/planner", "member"),
+    PageDefinition("inventory", "Inventory", "/inventory", "admin"),
     PageDefinition("colony_plan", "Colony Plan", "/colony-plan", "member"),
     PageDefinition("pi_templates", "PI Templates", "/templates", "member"),
     PageDefinition("hauling", "Hauling", "/hauling", "manager"),

@@ -13,7 +13,7 @@ from app.database import engine, SessionLocal
 from app.i18n import bootstrap_pi_type_translations, bootstrap_static_planets, bootstrap_translations
 from app.models import SSOState
 from app.page_access import get_access_settings_map, get_page_visibility, is_public_path, match_page_for_path
-from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel
+from app.routers import auth, dashboard, admin, pi, market, system, planner, skyhook, colony_plan, pi_templates, hauling, killboard, intel, inventory
 from app.templates_env import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -182,6 +182,7 @@ app.include_router(pi.router)
 app.include_router(market.router)
 app.include_router(system.router)
 app.include_router(planner.router)
+app.include_router(inventory.router)
 app.include_router(skyhook.router)
 app.include_router(hauling.router)
 app.include_router(killboard.router)

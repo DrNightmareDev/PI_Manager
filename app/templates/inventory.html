@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Inventory - {{ t('app.name') }}{% endblock %}
+
+{% block content %}
+<div class="inventory-shell">
+    <section class="inventory-hero">
+        <div>
+            <div class="inventory-kicker">PI inventory</div>
+            <h1>Inventory / Stock Management</h1>
+            <p>Track current PI stock, record purchased or self-produced batches, and keep a weighted average cost basis for better buy-vs-build decisions.</p>
+        </div>
+        <div class="inventory-stats">
+            <div class="inventory-stat">
+                <div class="inventory-stat-label">Tracked Items</div>
+                <div class="inventory-stat-value">{{ inventory_stats.distinct_items }}</div>
+            </div>
+            <div class="inventory-stat">
+                <div class="inventory-stat-label">Units On Hand</div>
+                <div class="inventory-stat-value">{{ "{:,}".format(inventory_stats.total_units) }}</div>
+            </div>
+            <div class="inventory-stat">
+                <div class="inventory-stat-label">Estimated Stock Value</div>
+                <div class="inventory-stat-value">{{ "{:,.2f}".format(inventory_stats.estimated_value) }} ISK</div>
+            </div>
+        </div>
+    </section>
+
+    {% if inventory_message %}
+    <div class="alert {% if inventory_level == 'danger' %}alert-danger{% else %}alert-success{% endif %} eve-card border-0">
+        {{ inventory_message }}
+    </div>
+    {% endif %}
+
+    <section class="inventory-actions">
+        <div class="inventory-panel">
+            <div class="inventory-panel-title">Add Stock Batch</div>
+            <form method="post" action="/inventory/lots" class="inventory-form-grid">
+                <div>
+                    <label class="form-label">PI Item</label>
+                    <select name="type_id" class="form-select eve-input" required>
+                        {% for item in inventory_catalog %}
+                        <option value="{{ item.type_id }}">{{ item.tier }} - {{ item.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Quantity</label>
+                    <input type="number" min="1" step="1" name="quantity" class="form-control eve-input" required>
+                </div>
+                <div>
+                    <label class="form-label">Source</label>
+                    <select name="source_kind" class="form-select eve-input" required>
+                        <option value="purchase">Purchased</option>
+                        <option value="production">Self-produced</option>
+                        <option value="manual">Manual stock</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Unit Cost (ISK)</label>
+                    <input type="number" min="0" step="0.01" name="unit_cost" class="form-control eve-input" placeholder="Optional unless purchased">
+                </div>
+                <div class="inventory-form-wide">
+                    <label class="form-label">Note</label>
+                    <input type="text" maxlength="255" name="note" class="form-control eve-input" placeholder="Optional purchase or production note">
+                </div>
+                <div class="inventory-form-actions">
+                    <button type="submit" class="btn eve-btn-primary">Add Batch</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="inventory-panel">
+            <div class="inventory-panel-title">Manual Adjustment</div>
+            <form method="post" action="/inventory/adjust" class="inventory-form-grid">
+                <div>
+                    <label class="form-label">PI Item</label>
+                    <select name="type_id" class="form-select eve-input" required>
+                        {% for item in inventory_catalog %}
+                        <option value="{{ item.type_id }}">{{ item.tier }} - {{ item.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Direction</label>
+                    <select name="direction" class="form-select eve-input" required>
+                        <option value="add">Increase stock</option>
+                        <option value="remove">Decrease stock</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Quantity</label>
+                    <input type="number" min="1" step="1" name="quantity" class="form-control eve-input" required>
+                </div>
+                <div>
+                    <label class="form-label">Unit Cost (optional)</label>
+                    <input type="number" min="0" step="0.01" name="unit_cost" class="form-control eve-input" placeholder="Used for positive adjustments">
+                </div>
+                <div class="inventory-form-wide">
+                    <label class="form-label">Reason / Note</label>
+                    <input type="text" maxlength="255" name="note" class="form-control eve-input" placeholder="Why was the stock corrected?">
+                </div>
+                <div class="inventory-form-actions">
+                    <button type="submit" class="btn eve-btn-outline">Apply Adjustment</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <section class="inventory-panel">
+        <div class="inventory-table-header">
+            <div class="inventory-panel-title">Current Stock</div>
+            <div class="inventory-table-actions">
+                <input type="search" id="inventorySearch" class="form-control eve-input" placeholder="Filter stock by item">
+                <div class="btn-group">
+                    <a href="/inventory" class="btn btn-sm {% if not selected_tier %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}">All</a>
+                    {% for tier in inventory_tiers %}
+                    <a href="/inventory?tier={{ tier }}" class="btn btn-sm {% if selected_tier == tier %}eve-btn-primary{% else %}eve-btn-ghost{% endif %}">{{ tier }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle inventory-table" id="inventorySummaryTable">
+                <thead>
+                    <tr>
+                        <th>Tier</th>
+                        <th>Item</th>
+                        <th class="text-end">On Hand</th>
+                        <th class="text-end">Weighted Avg Cost</th>
+                        <th class="text-end">Estimated Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in inventory_rows %}
+                    <tr data-item-name="{{ row.item_name | lower }}">
+                        <td><span class="inventory-tier inventory-tier-{{ row.tier | lower }}">{{ row.tier }}</span></td>
+                        <td>{{ row.item_name }}</td>
+                        <td class="text-end">{{ "{:,}".format(row.quantity_on_hand) }}</td>
+                        <td class="text-end">{% if row.weighted_average_cost is not none %}{{ "{:,.2f}".format(row.weighted_average_cost) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
+                        <td class="text-end">{% if row.estimated_value is not none %}{{ "{:,.2f}".format(row.estimated_value) }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">No PI stock tracked yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="inventory-history-grid">
+        <div class="inventory-panel">
+            <div class="inventory-panel-title">Recent Stock Batches</div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Source</th>
+                            <th class="text-end">Added</th>
+                            <th class="text-end">Remaining</th>
+                            <th class="text-end">Unit Cost</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lot in inventory_lots %}
+                        <tr>
+                            <td>{{ lot.tier }} - {{ lot.item_name }}</td>
+                            <td>{{ lot.source_kind }}</td>
+                            <td class="text-end">{{ "{:,}".format(lot.quantity_added) }}</td>
+                            <td class="text-end">{{ "{:,}".format(lot.quantity_remaining) }}</td>
+                            <td class="text-end">{% if lot.unit_cost %}{{ lot.unit_cost }} ISK{% else %}<span class="text-muted">n/a</span>{% endif %}</td>
+                            <td>{{ lot.created_at }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">No stock batches yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="inventory-panel">
+            <div class="inventory-panel-title">Recent Adjustments</div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Reason</th>
+                            <th class="text-end">Delta</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in inventory_adjustments %}
+                        <tr>
+                            <td>{{ entry.tier }} - {{ entry.item_name }}</td>
+                            <td>{{ entry.reason }}{% if entry.note %}<div class="text-muted small">{{ entry.note }}</div>{% endif %}</td>
+                            <td class="text-end {% if entry.delta_quantity < 0 %}text-danger{% else %}text-success{% endif %}">{{ "{:+,}".format(entry.delta_quantity) }}</td>
+                            <td>{{ entry.created_at }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-center text-muted py-4">No adjustments yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('inventorySearch')?.addEventListener('input', (event) => {
+    const query = String(event.target.value || '').trim().toLowerCase();
+    document.querySelectorAll('#inventorySummaryTable tbody tr[data-item-name]').forEach((row) => {
+        row.style.display = !query || row.getAttribute('data-item-name').includes(query) ? '' : 'none';
+    });
+});
+</script>
+<style>
+.inventory-shell { display:grid; gap:1.35rem; }
+.inventory-hero,.inventory-panel { background:radial-gradient(circle at top right, rgba(0,180,216,0.12), transparent 30%),linear-gradient(180deg, rgba(14,23,31,0.98), rgba(11,18,25,0.98)); border:1px solid rgba(0,180,216,0.12); border-radius:1.2rem; box-shadow:0 18px 40px rgba(0,0,0,0.2); }
+.inventory-hero { padding:1.4rem 1.5rem; display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.inventory-kicker { color:#7ec8e3; text-transform:uppercase; letter-spacing:.18em; font-size:.74rem; margin-bottom:.5rem; }
+.inventory-hero h1 { margin:0 0 .35rem; font-size:clamp(1.7rem, 3vw, 2.5rem); }
+.inventory-hero p { margin:0; max-width:48rem; color:var(--eve-text-muted); }
+.inventory-stats { display:flex; gap:.8rem; flex-wrap:wrap; }
+.inventory-stat { min-width:170px; padding:.9rem 1rem; border:1px solid rgba(255,255,255,.05); border-radius:1rem; background:rgba(255,255,255,.025); }
+.inventory-stat-label { font-size:.74rem; color:var(--eve-text-muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:.3rem; }
+.inventory-stat-value { font-size:1.2rem; color:#dff7ff; font-weight:700; }
+.inventory-actions,.inventory-history-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1.2rem; }
+.inventory-panel { padding:1rem 1.1rem; }
+.inventory-panel-title { font-size:1rem; margin-bottom:.85rem; }
+.inventory-form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.85rem; }
+.inventory-form-wide,.inventory-form-actions { grid-column:1 / -1; }
+.inventory-form-actions { display:flex; gap:.6rem; justify-content:flex-end; }
+.inventory-table-header { display:flex; justify-content:space-between; gap:.8rem; align-items:center; margin-bottom:.85rem; flex-wrap:wrap; }
+.inventory-table-actions { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; }
+.inventory-table-actions input { min-width:220px; }
+.inventory-tier { display:inline-flex; align-items:center; padding:.22rem .48rem; border-radius:999px; font-size:.74rem; border:1px solid rgba(255,255,255,.08); }
+.inventory-tier-p0 { color:#7ec8e3; background:rgba(0,180,216,.08); }
+.inventory-tier-p1 { color:#73d483; background:rgba(45,198,83,.08); }
+.inventory-tier-p2 { color:#f0c36d; background:rgba(244,163,0,.08); }
+.inventory-tier-p3 { color:#e9a1ff; background:rgba(171,104,255,.08); }
+.inventory-tier-p4 { color:#ff8a7c; background:rgba(220,70,70,.08); }
+@media (max-width: 1100px) { .inventory-actions,.inventory-history-grid { grid-template-columns:1fr; } }
+@media (max-width: 720px) { .inventory-form-grid { grid-template-columns:1fr; } }
+</style>
+{% endblock %}

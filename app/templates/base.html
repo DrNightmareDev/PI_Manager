@@ -73,8 +73,8 @@
                 </li>
                 {% endif %}
                 <!-- Planer Dropdown -->
-                {% set planer_visible = request.state.page_permissions.get('planner', True) or request.state.page_permissions.get('colony_plan', True) or request.state.page_permissions.get('pi_templates', True) or request.state.page_permissions.get('hauling', True) %}
-                {% set planer_active = request.url.path.startswith('/planner') or request.url.path.startswith('/colony-plan') or request.url.path.startswith('/templates') or request.url.path.startswith('/hauling') %}
+                {% set planer_visible = request.state.page_permissions.get('planner', True) or request.state.page_permissions.get('inventory', False) or request.state.page_permissions.get('colony_plan', True) or request.state.page_permissions.get('pi_templates', True) or request.state.page_permissions.get('hauling', True) %}
+                {% set planer_active = request.url.path.startswith('/planner') or request.url.path.startswith('/inventory') or request.url.path.startswith('/colony-plan') or request.url.path.startswith('/templates') or request.url.path.startswith('/hauling') %}
                 {% if planer_visible %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if planer_active %}active{% endif %}"
@@ -86,6 +86,13 @@
                         <li>
                             <a class="dropdown-item {% if request.url.path.startswith('/planner') %}active{% endif %}" href="/planner">
                                 <i class="bi bi-diagram-3 me-2 text-muted"></i>{{ t('nav.planner') }}
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if request.state.page_permissions.get('inventory', False) %}
+                        <li>
+                            <a class="dropdown-item {% if request.url.path.startswith('/inventory') %}active{% endif %}" href="/inventory">
+                                <i class="bi bi-boxes me-2 text-muted"></i>Inventory
                             </a>
                         </li>
                         {% endif %}

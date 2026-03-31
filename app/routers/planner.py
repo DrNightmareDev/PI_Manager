@@ -3,8 +3,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.dependencies import require_account
+from app.inventory_service import get_inventory_summary_map
 from app.i18n import get_language_from_request, translate, translate_type_name
 from app.market import PI_TYPE_IDS
 from app.models import PiFavorite
@@ -47,6 +48,14 @@ def planner_page(request: Request, account=Depends(require_account)):
     lang = get_language_from_request(request)
     product_labels = _build_product_labels(lang)
     planet_type_labels = _build_planet_type_labels(lang)
+    inventory_summary = {}
+    can_view_inventory_summary = bool(getattr(account, "is_owner", False) or getattr(account, "is_admin", False))
+    if can_view_inventory_summary:
+        db = SessionLocal()
+        try:
+            inventory_summary = get_inventory_summary_map(db, int(account.id))
+        finally:
+            db.close()
 
     def build_tier(names, tier):
         products = []
@@ -77,6 +86,8 @@ def planner_page(request: Request, account=Depends(require_account)):
         "all_products": all_products,
         "product_labels": product_labels,
         "planet_type_labels": planet_type_labels,
+        "inventory_summary": inventory_summary,
+        "can_view_inventory_summary": can_view_inventory_summary,
     })
 
 
