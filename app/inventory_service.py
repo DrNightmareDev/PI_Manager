@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+from datetime import timezone
 
 from sqlalchemy.orm import Session
 
@@ -58,6 +59,13 @@ def get_pi_catalog_maps() -> tuple[list[dict], dict[int, dict], dict[str, dict]]
     by_type_id = {int(item["type_id"]): item for item in catalog if int(item["type_id"] or 0)}
     by_name = {str(item["name"]): item for item in catalog}
     return catalog, by_type_id, by_name
+
+
+def format_utc_compact(value) -> str:
+    if not value:
+        return ""
+    dt = value if getattr(value, "tzinfo", None) else value.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y.%m.%d %H:%M")
 
 
 def recalculate_inventory_summary(db: Session, account_id: int, type_id: int, fallback_item: dict | None = None) -> InventoryItemSummary | None:
@@ -295,3 +303,19 @@ def get_inventory_summary_map(db: Session, account_id: int) -> dict[str, dict]:
         }
         for row in rows
     }
+
+
+def sync_inventory_summaries(db: Session, account_id: int) -> None:
+    catalog, by_type_id, _by_name = get_pi_catalog_maps()
+    type_ids = {
+        int(row.type_id)
+        for row in db.query(InventoryLot.type_id).filter(InventoryLot.account_id == int(account_id)).distinct().all()
+    }
+    type_ids |= {
+        int(row.type_id)
+        for row in db.query(InventoryItemSummary.type_id).filter(InventoryItemSummary.account_id == int(account_id)).distinct().all()
+    }
+    for type_id in type_ids:
+        fallback = by_type_id.get(int(type_id)) or next((item for item in catalog if int(item["type_id"] or 0) == int(type_id)), None)
+        recalculate_inventory_summary(db, int(account_id), int(type_id), fallback_item=fallback)
+    db.flush()

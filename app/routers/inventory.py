@@ -10,9 +10,11 @@ from app.inventory_service import (
     TIERS,
     add_inventory_lot,
     adjust_inventory,
+    format_utc_compact,
     get_inventory_rows,
     get_inventory_summary_map,
     get_pi_catalog_maps,
+    sync_inventory_summaries,
 )
 from app.models import InventoryAdjustment, InventoryLot
 from app.templates_env import templates
@@ -35,6 +37,7 @@ def inventory_page(
 ):
     catalog, _by_type_id, _by_name = get_pi_catalog_maps()
     selectable_catalog = [item for item in catalog if int(item["type_id"] or 0)]
+    sync_inventory_summaries(db, int(account.id))
     rows = get_inventory_rows(db, int(account.id), tier=tier if tier in TIERS else None)
     lots = (
         db.query(InventoryLot)
@@ -50,6 +53,29 @@ def inventory_page(
         .limit(60)
         .all()
     )
+    lot_rows = [
+        {
+            "tier": row.tier,
+            "item_name": row.item_name,
+            "source_kind": row.source_kind,
+            "quantity_added": int(row.quantity_added or 0),
+            "quantity_remaining": int(row.quantity_remaining or 0),
+            "unit_cost": row.unit_cost,
+            "created_at": format_utc_compact(row.created_at),
+        }
+        for row in lots
+    ]
+    adjustment_rows = [
+        {
+            "tier": row.tier,
+            "item_name": row.item_name,
+            "reason": row.reason,
+            "note": row.note,
+            "delta_quantity": int(row.delta_quantity or 0),
+            "created_at": format_utc_compact(row.created_at),
+        }
+        for row in adjustments
+    ]
     distinct_items = len(rows)
     total_units = sum(int(item["quantity_on_hand"] or 0) for item in rows)
     estimated_value = sum(float(item["estimated_value"] or 0.0) for item in rows)
@@ -59,8 +85,8 @@ def inventory_page(
         "account": account,
         "inventory_catalog": selectable_catalog,
         "inventory_rows": rows,
-        "inventory_lots": lots,
-        "inventory_adjustments": adjustments,
+        "inventory_lots": lot_rows,
+        "inventory_adjustments": adjustment_rows,
         "inventory_tiers": TIERS,
         "selected_tier": tier if tier in TIERS else "",
         "inventory_message": request.query_params.get("message", ""),
@@ -137,4 +163,5 @@ def adjust_inventory_stock(
 
 @router.get("/summary")
 def inventory_summary(account=Depends(require_account), db: Session = Depends(get_db)):
+    sync_inventory_summaries(db, int(account.id))
     return JSONResponse(get_inventory_summary_map(db, int(account.id)))
