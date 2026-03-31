@@ -97,6 +97,7 @@ def recalculate_inventory_summary(
             InventoryLot.account_id == int(account_id),
             InventoryLot.type_id == int(type_id),
             InventoryLot.quantity_remaining > 0,
+            InventoryLot.deleted_at.is_(None),
         )
         .all()
     )
@@ -225,6 +226,7 @@ def consume_inventory(
             InventoryLot.account_id == int(account_id),
             InventoryLot.type_id == int(item["type_id"]),
             InventoryLot.quantity_remaining > 0,
+            InventoryLot.deleted_at.is_(None),
         )
         .order_by(InventoryLot.created_at.asc(), InventoryLot.id.asc())
         .all()
@@ -339,6 +341,9 @@ def get_inventory_summary_map(db: Session, account_id: int) -> dict[str, dict]:
             "quantity_on_hand": row["quantity_on_hand"],
             "weighted_average_cost": row["weighted_average_cost"],
             "estimated_value": row["estimated_value"],
+            "estimated_value_buy": row["estimated_value_buy"],
+            "estimated_value_sell": row["estimated_value_sell"],
+            "estimated_value_split": row["estimated_value_split"],
         }
         for row in rows
     }
@@ -366,6 +371,7 @@ def get_inventory_item_detail(db: Session, account_id: int, type_id: int) -> dic
         .filter(
             InventoryLot.account_id == int(account_id),
             InventoryLot.type_id == int(type_id),
+            InventoryLot.deleted_at.is_(None),
         )
         .order_by(InventoryLot.created_at.desc(), InventoryLot.id.desc())
         .all()
@@ -375,6 +381,7 @@ def get_inventory_item_detail(db: Session, account_id: int, type_id: int) -> dic
         .filter(
             InventoryAdjustment.account_id == int(account_id),
             InventoryAdjustment.type_id == int(type_id),
+            InventoryAdjustment.deleted_at.is_(None),
         )
         .order_by(InventoryAdjustment.created_at.desc(), InventoryAdjustment.id.desc())
         .all()
@@ -383,6 +390,7 @@ def get_inventory_item_detail(db: Session, account_id: int, type_id: int) -> dic
     transactions: list[dict] = []
     for lot in lots:
         transactions.append({
+            "id": int(lot.id),
             "kind": "batch",
             "label": lot.source_kind.replace("_", " ").title(),
             "quantity_delta": int(lot.quantity_added or 0),
@@ -395,6 +403,7 @@ def get_inventory_item_detail(db: Session, account_id: int, type_id: int) -> dic
         })
     for adjustment in adjustments:
         transactions.append({
+            "id": int(adjustment.id),
             "kind": "adjustment",
             "label": adjustment.reason.replace("_", " ").title(),
             "quantity_delta": int(adjustment.delta_quantity or 0),
@@ -454,3 +463,39 @@ def soft_delete_inventory_summary(db: Session, account_id: int, type_id: int) ->
     summary.deleted_at = datetime.now(timezone.utc)
     db.flush()
     return True
+
+
+def soft_delete_inventory_transaction(db: Session, account_id: int, transaction_kind: str, transaction_id: int) -> int | None:
+    now = datetime.now(timezone.utc)
+    if transaction_kind == "batch":
+        row = (
+            db.query(InventoryLot)
+            .filter(
+                InventoryLot.account_id == int(account_id),
+                InventoryLot.id == int(transaction_id),
+                InventoryLot.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if row is None:
+            return None
+        row.deleted_at = now
+        recalculate_inventory_summary(db, int(account_id), int(row.type_id))
+        db.flush()
+        return int(row.type_id)
+    if transaction_kind == "adjustment":
+        row = (
+            db.query(InventoryAdjustment)
+            .filter(
+                InventoryAdjustment.account_id == int(account_id),
+                InventoryAdjustment.id == int(transaction_id),
+                InventoryAdjustment.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if row is None:
+            return None
+        row.deleted_at = now
+        db.flush()
+        return int(row.type_id)
+    raise ValueError("Unknown transaction kind.")

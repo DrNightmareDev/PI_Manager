@@ -240,6 +240,7 @@ class InventoryLot(Base):
     total_cost = Column(String(50), nullable=True)
     source_kind = Column(String(20), nullable=False, default="manual", server_default="manual")
     note = Column(String(255), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -258,6 +259,7 @@ class InventoryAdjustment(Base):
     delta_quantity = Column(BigInteger, nullable=False)
     reason = Column(String(50), nullable=False, default="manual", server_default="manual")
     note = Column(String(255), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

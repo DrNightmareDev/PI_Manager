@@ -298,10 +298,11 @@
                                 <th class="text-end">Unit Cost</th>
                                 <th class="text-end">Total Cost</th>
                                 <th>Note</th>
+                                <th class="text-end">Action</th>
                             </tr>
                         </thead>
                         <tbody id="inventoryModalTransactions">
-                            <tr><td colspan="8" class="text-center text-muted py-4">Select a current stock row to inspect transactions.</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-4">Select a current stock row to inspect transactions.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -359,7 +360,7 @@
         const body = document.getElementById('inventoryModalTransactions');
         const rows = currentItemDetail.transactions || [];
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No transactions found for this stock item.</td></tr>';
+            body.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No transactions found for this stock item.</td></tr>';
             return;
         }
         body.innerHTML = rows.map((entry) => `
@@ -372,8 +373,45 @@
                 <td class="text-end">${formatIsk(entry.unit_cost)}</td>
                 <td class="text-end">${formatIsk(entry.total_cost)}</td>
                 <td>${entry.note ? entry.note : '<span class="text-muted">-</span>'}</td>
+                <td class="text-end">
+                    <button
+                        type="button"
+                        class="btn btn-sm eve-btn-ghost inventory-transaction-remove-btn"
+                        data-transaction-kind="${entry.kind}"
+                        data-transaction-id="${entry.id}"
+                    >Remove</button>
+                </td>
             </tr>
         `).join('');
+    };
+
+    const refreshSummaryRow = async (typeId) => {
+        try {
+            const response = await fetch('/inventory/summary', { headers: { Accept: 'application/json' } });
+            if (!response.ok) return;
+            const payload = await response.json();
+            const row = document.querySelector(`.inventory-summary-row[data-type-id="${typeId}"]`);
+            const currentItemName = currentItemDetail?.item_name;
+            const summary = currentItemName ? payload[currentItemName] : null;
+            if (!row || !summary) {
+                window.location.reload();
+                return;
+            }
+            row.querySelector('td:nth-child(3)').textContent = formatInteger(summary.quantity_on_hand);
+            row.querySelector('td:nth-child(4)').innerHTML = summary.weighted_average_cost !== null
+                ? formatIsk(summary.weighted_average_cost)
+                : '<span class="text-muted">n/a</span>';
+            const priceMode = valueModeSelect?.value || 'split';
+            const estimatedCell = row.querySelector('.inventory-estimated-value');
+            if (estimatedCell) {
+                estimatedCell.dataset.valueBuy = summary.estimated_value_buy ?? '';
+                estimatedCell.dataset.valueSell = summary.estimated_value_sell ?? '';
+                estimatedCell.dataset.valueSplit = summary.estimated_value_split ?? '';
+            }
+            applyValueMode(priceMode);
+        } catch (_error) {
+            window.location.reload();
+        }
     };
 
     searchInput?.addEventListener('input', (event) => {
@@ -404,7 +442,7 @@
             } catch (_error) {
                 currentItemDetail = null;
                 document.getElementById('inventoryItemModalTitle').textContent = 'Inventory Item';
-                document.getElementById('inventoryModalTransactions').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Could not load transaction details for this item.</td></tr>';
+                document.getElementById('inventoryModalTransactions').innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">Could not load transaction details for this item.</td></tr>';
                 modal.show();
             }
         });
@@ -422,6 +460,41 @@
                 event.preventDefault();
             }
         });
+    });
+
+    document.getElementById('inventoryModalTransactions')?.addEventListener('click', async (event) => {
+        const button = event.target.closest('.inventory-transaction-remove-btn');
+        if (!button || !currentItemDetail) {
+            return;
+        }
+        if (!window.confirm('Hide this transaction? It will be soft-deleted for auditability.')) {
+            return;
+        }
+        button.disabled = true;
+        try {
+            const form = new URLSearchParams();
+            form.set('transaction_kind', button.dataset.transactionKind || '');
+            form.set('transaction_id', button.dataset.transactionId || '');
+            const response = await fetch('/inventory/transaction/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+                body: form.toString(),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            const refreshed = await fetch(`/inventory/item/${payload.type_id}`, { headers: { Accept: 'application/json' } });
+            if (!refreshed.ok) {
+                throw new Error(`HTTP ${refreshed.status}`);
+            }
+            currentItemDetail = await refreshed.json();
+            renderModal();
+            await refreshSummaryRow(payload.type_id);
+        } catch (_error) {
+            window.alert('Could not remove transaction.');
+            button.disabled = false;
+        }
     });
 
     applyValueMode(valueModeSelect?.value || 'split');

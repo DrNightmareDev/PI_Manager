@@ -15,6 +15,7 @@ from app.inventory_service import (
     get_inventory_rows,
     get_inventory_summary_map,
     get_pi_catalog_maps,
+    soft_delete_inventory_transaction,
     soft_delete_inventory_summary,
     sync_inventory_summaries,
 )
@@ -43,14 +44,20 @@ def inventory_page(
     rows = get_inventory_rows(db, int(account.id), tier=tier if tier in TIERS else None)
     lots = (
         db.query(InventoryLot)
-        .filter(InventoryLot.account_id == int(account.id))
+        .filter(
+            InventoryLot.account_id == int(account.id),
+            InventoryLot.deleted_at.is_(None),
+        )
         .order_by(InventoryLot.created_at.desc(), InventoryLot.id.desc())
         .limit(60)
         .all()
     )
     adjustments = (
         db.query(InventoryAdjustment)
-        .filter(InventoryAdjustment.account_id == int(account.id))
+        .filter(
+            InventoryAdjustment.account_id == int(account.id),
+            InventoryAdjustment.deleted_at.is_(None),
+        )
         .order_by(InventoryAdjustment.created_at.desc(), InventoryAdjustment.id.desc())
         .limit(60)
         .all()
@@ -185,6 +192,25 @@ def remove_inventory_row(
     except Exception as exc:
         db.rollback()
         return _status_redirect(str(exc), "danger", tier=tier or None)
+
+
+@router.post("/transaction/remove")
+def remove_inventory_transaction(
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+    transaction_kind: str = Form(...),
+    transaction_id: int = Form(...),
+):
+    try:
+        type_id = soft_delete_inventory_transaction(db, int(account.id), str(transaction_kind), int(transaction_id))
+        if type_id is None:
+            db.rollback()
+            return JSONResponse({"error": "Transaction not found."}, status_code=404)
+        db.commit()
+        return JSONResponse({"ok": True, "type_id": int(type_id)})
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse({"error": str(exc)}, status_code=400)
 
 
 @router.get("/summary")
