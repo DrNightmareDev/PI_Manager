@@ -565,6 +565,26 @@ def get_system_local(system_id: int) -> dict | None:
     """Gibt lokale System-Infos zurück: name, security, true_sec, region_name."""
     data = _systems_by_id.get(system_id)
     if not data:
+        try:
+            from app.esi import get_system_info
+
+            esi_system = get_system_info(int(system_id))
+            constellation_id = int(esi_system.get("constellation_id") or 0)
+            region_id = int((_constellations.get(constellation_id) or {}).get("region_id") or 0)
+            if esi_system and region_id:
+                data = {
+                    "name": str(esi_system.get("name") or f"System {int(system_id)}"),
+                    "security": float(esi_system.get("security_status") or 0.0),
+                    "region_id": region_id,
+                    "constellation_id": constellation_id,
+                    "x": 0.0,
+                    "y": 0.0,
+                }
+                _systems_by_id[int(system_id)] = data
+                _systems[data["name"].lower()] = (int(system_id), data["name"], data["security"])
+        except Exception:
+            data = None
+    if not data:
         return None
     return {
         "name": data["name"],
