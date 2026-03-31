@@ -272,7 +272,7 @@ function renderSystemDetails() {
 
 function renderFeed() {
     const feed = document.getElementById('intelFeed');
-    const visible = visibleFeed();
+    const visible = visibleFeed().slice(0, 40);
     feed.innerHTML = visible.length ? visible.map(item => `
         <div class="intel-feed-item${intelState.selectedKillmailId === item.killmail_id ? ' is-active' : ''}" data-killmail-id="${item.killmail_id}" data-system-id="${item.system_id}" role="button" tabindex="0">
             <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-ship-link"><img src="${item.ship_image_url}" alt="${item.ship_type}" class="intel-feed-ship"></a>
