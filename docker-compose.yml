@@ -122,7 +122,6 @@ services:
 
   celery_ws:
     build: .
-    user: "0:0"
     restart: unless-stopped
     entrypoint: ["/app/docker/celery_entrypoint.sh"]
     command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=1", "-Q", "ws", "--hostname=ws@%h"]

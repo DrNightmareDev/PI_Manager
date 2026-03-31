@@ -208,6 +208,8 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str, force_refr
             continue
         if kill_type == "ship" and ship_type_id == 670:
             continue
+        if kill_type == "other" and ship_type_id in {0, 670}:
+            continue
         try:
             kill_time = datetime.fromisoformat(str(kill.get("killmail_time_utc") or kill.get("timestamp") or "").replace("Z", "+00:00"))
         except Exception:
@@ -274,7 +276,7 @@ def intel_map(
         .all()
     )
     selected_window = window if window in WINDOW_SECONDS else "60m"
-    selected_kill_type = kill_type if kill_type in {"all", "ship", "pod"} else "all"
+    selected_kill_type = kill_type if kill_type in {"all", "ship", "pod", "other"} else "all"
     selected_layout = layout if layout in {"geo", "alt"} else "geo"
     graph, system_activity, kill_feed, source_meta = _build_live_snapshot(
         int(region or regions[0]["id"]),
