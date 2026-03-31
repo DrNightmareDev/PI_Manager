@@ -106,6 +106,21 @@ def _normalize_feed_entry(kill: dict, graph: dict, name_map: dict[int, str]) -> 
     }
 
 
+def _normalize_system_kill_entry(kill: dict) -> dict:
+    return {
+        "killmail_id": int(kill.get("killmail_id") or 0),
+        "kill_url": str(kill.get("kill_url") or ""),
+        "timestamp": str(kill.get("killmail_time_utc") or ""),
+        "timestamp_utc": str(kill.get("killmail_time_utc_label") or ""),
+        "system_id": int(kill.get("system_id") or 0),
+        "system_name": str(kill.get("system_name") or ""),
+        "pilot_name": str(kill.get("pilot_name") or "Unknown Pilot"),
+        "ship_type": str(kill.get("ship_type_name") or ""),
+        "ship_image_url": str(kill.get("ship_image_url") or ""),
+        "isk_value": float(kill.get("isk_value") or 0.0),
+    }
+
+
 def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict], list[dict]]:
     systems = []
     for system in graph["systems"]:
@@ -266,7 +281,7 @@ def intel_system_details(
         fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
         if row.window == selected_window and now - fetched_at <= SYSTEM_DETAIL_TTL:
             try:
-                latest_kills = json.loads(row.latest_kills_json or "[]")
+                latest_kills = [_normalize_system_kill_entry(item) for item in json.loads(row.latest_kills_json or "[]")]
             except Exception:
                 latest_kills = []
             return JSONResponse({
@@ -280,7 +295,8 @@ def intel_system_details(
 
     try:
         summary = get_system_kill_summary(int(system_id), window=selected_window, limit=5)
-        latest_kills = summary.get("latest_kills") or []
+        latest_kills = [_normalize_system_kill_entry(item) for item in (summary.get("latest_kills") or [])]
+        summary["latest_kills"] = latest_kills
         if row is None:
             row = KillActivityCache(
                 system_id=int(system_id),
@@ -304,7 +320,7 @@ def intel_system_details(
         if row and row.fetched_at:
             fetched_at = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=timezone.utc)
             try:
-                latest_kills = json.loads(row.latest_kills_json or "[]")
+                latest_kills = [_normalize_system_kill_entry(item) for item in json.loads(row.latest_kills_json or "[]")]
             except Exception:
                 latest_kills = []
             return JSONResponse({

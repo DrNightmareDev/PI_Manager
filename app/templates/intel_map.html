@@ -287,9 +287,7 @@ function renderSystemDetails() {
     const activity = activityFor(system.id);
     const relatedKills = intelState.feed.filter(item => item.system_id === system.id).slice(0, 5);
     container.innerHTML = `
-        <div class="intel-system-name">
-            <a href="https://zkillboard.com/system/${system.id}/" target="_blank" rel="noopener">${system.name}</a>
-        </div>
+        <div class="intel-system-name">${system.name}</div>
         <div class="intel-system-meta">Security ${system.security} · ${(system.constellation_name || 'Unknown constellation')} · ${activity.kill_count} kills</div>
         <div class="intel-heatbar"><span style="width:${Math.max(6, activity.heat * 100)}%"></span></div>
         <div class="intel-mini-list">
@@ -375,7 +373,7 @@ function renderFeed() {
                 </div>
                 <div class="intel-feed-line intel-feed-line-secondary">
                     <span>${item.ship_type}</span>
-                    <a href="https://zkillboard.com/system/${item.system_id}/" target="_blank" rel="noopener" class="intel-feed-system">${item.system_name}</a>
+                    <span class="intel-feed-system">${item.system_name}</span>
                     <span>${formatIsk(item.isk_value)} ISK</span>
                 </div>
             </div>
@@ -592,7 +590,8 @@ setInterval(refreshIntel, 20000);
 .intel-panel { padding:1rem; }
 .intel-panel-title { font-size:1rem; margin-bottom:.8rem; }
 .intel-system-name { font-size:1.25rem; font-weight:700; }
-.intel-system-name a, .intel-feed-pilot, .intel-feed-system, .intel-mini-top a { color:#c8f1ff; text-decoration:none; }
+.intel-system-name, .intel-feed-pilot, .intel-feed-system, .intel-mini-top a { color:#c8f1ff; text-decoration:none; }
+.intel-feed-system, .intel-system-name { user-select:text; }
 .intel-system-meta, .intel-empty { color:var(--eve-text-muted); }
 .intel-heatbar { height:.7rem; background:rgba(255,255,255,.05); border-radius:999px; overflow:hidden; margin:.85rem 0 1rem; }
 .intel-heatbar span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg, #00b4d8, #f4a300, #ff5e5b); }
