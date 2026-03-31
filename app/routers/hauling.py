@@ -5,6 +5,7 @@ import re
 import time
 import io
 from collections import deque
+from functools import lru_cache
 from urllib.parse import unquote, urlparse
 
 import requests
@@ -19,7 +20,7 @@ from app.dependencies import require_account, require_manager_or_admin
 from app.esi import ensure_valid_token, get_character_location
 from app.i18n import translate
 from app.market import PI_TYPE_IDS
-from app.models import Character, CorpBridgeConnection, MarketCache
+from app.models import Character, CorpBridgeConnection, HaulingPreference, MarketCache
 from app.routers.dashboard import _apply_price_mode, _load_colony_cache, _recompute_expiry
 from app.templates_env import templates
 
@@ -33,6 +34,7 @@ _location_cache: dict[int, tuple[dict, float]] = {}
 _route_cache: dict[tuple[int, int], tuple[list[int], float]] = {}
 _best_route_cache: dict[tuple[int, int, bool], tuple[dict, float]] = {}
 _DOTLAN_SYSTEM_LINK_RE = re.compile(r'href="/system/([^"/?#]+)"', re.IGNORECASE)
+_PLANET_NUMBER_RE = re.compile(r"(?:\s|[-])([IVXLCDM]+|\d+)$", re.IGNORECASE)
 
 
 def _storage_has_items(storage: list[dict] | None) -> bool:
@@ -124,6 +126,39 @@ def _storage_breakdown_title(breakdown: list[dict]) -> str:
 def _system_name(system_id: int) -> str:
     info = sde.get_system_local(system_id) or {}
     return info.get("name", f"System {system_id}")
+
+
+@lru_cache(maxsize=256)
+def _roman_to_int(value: str) -> int:
+    roman = str(value or "").upper()
+    if not roman:
+        return 0
+    numerals = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    total = 0
+    previous = 0
+    for char in reversed(roman):
+        current = numerals.get(char, 0)
+        if current < previous:
+            total -= current
+        else:
+            total += current
+            previous = current
+    return total
+
+
+def _planet_sort_tuple(planet_name: str, system_name: str | None = None) -> tuple[int, int, str]:
+    text = str(planet_name or "").strip()
+    base = text
+    sys_name = str(system_name or "").strip()
+    if sys_name and text.lower().startswith(sys_name.lower()):
+        base = text[len(sys_name):].strip(" -")
+    match = _PLANET_NUMBER_RE.search(base)
+    if match:
+        raw = match.group(1)
+        if raw.isdigit():
+            return (0, int(raw), text.casefold())
+        return (0, _roman_to_int(raw), text.casefold())
+    return (1, 0, text.casefold())
 
 
 def _system_info_or_404(system_id: int) -> dict:
@@ -520,7 +555,51 @@ def _jump_count(origin_system_id: int, destination_system_id: int, db: Session, 
     return total_jumps
 
 
-def _build_route(origin_system_id: int, system_ids: list[int], db: Session, use_ansiblex: bool = True) -> tuple[list[dict], int]:
+def _build_system_stop_map(hauling_colonies: list[dict]) -> dict[int, dict]:
+    grouped: dict[int, dict] = {}
+    for colony in hauling_colonies:
+        system_id = int(colony.get("solar_system_id") or 0)
+        if not system_id:
+            continue
+        planet_name = str(colony.get("planet_name") or "").strip()
+        if not planet_name:
+            continue
+        group = grouped.setdefault(system_id, {
+            "system_name": colony.get("solar_system_name") or _system_name(system_id),
+            "planets": [],
+        })
+        if planet_name not in group["planets"]:
+            group["planets"].append(planet_name)
+
+    for system_id, group in grouped.items():
+        system_name = str(group.get("system_name") or _system_name(system_id))
+        planets = sorted(group["planets"], key=lambda name: _planet_sort_tuple(name, system_name))
+        group["planets"] = planets
+        group["planet_count"] = len(planets)
+        group["planet_route_label"] = " -> ".join(planets)
+    return grouped
+
+
+def _apply_system_stop_map(route_items: list[dict], system_stop_map: dict[int, dict]) -> list[dict]:
+    annotated: list[dict] = []
+    for item in route_items:
+        enriched = dict(item)
+        stop = system_stop_map.get(int(item.get("system_id") or 0), {})
+        planets = list(stop.get("planets") or [])
+        enriched["system_planets"] = planets
+        enriched["system_planet_count"] = int(stop.get("planet_count") or len(planets))
+        enriched["system_planet_route_label"] = str(stop.get("planet_route_label") or "")
+        annotated.append(enriched)
+    return annotated
+
+
+def _build_route(
+    origin_system_id: int,
+    system_ids: list[int],
+    db: Session,
+    use_ansiblex: bool = True,
+    return_to_origin: bool = False,
+) -> tuple[list[dict], int]:
     remaining = list(dict.fromkeys(int(system_id) for system_id in system_ids if system_id and int(system_id) != int(origin_system_id)))[:20]
     ordered: list[dict] = [{
         "system_id": int(origin_system_id),
@@ -534,6 +613,7 @@ def _build_route(origin_system_id: int, system_ids: list[int], db: Session, use_
         "bridge_corporation_name": None,
         "bridge_incoming": False,
         "bridge_outgoing": False,
+        "is_return": False,
     }]
     total_jumps = 0
     current = int(origin_system_id)
@@ -548,16 +628,20 @@ def _build_route(origin_system_id: int, system_ids: list[int], db: Session, use_
         ordered.extend(leg_items)
         remaining.remove(next_id)
         current = next_id
+    if return_to_origin and len(ordered) > 1 and current != int(origin_system_id):
+        steps = _graph_steps(current, int(origin_system_id), db, use_ansiblex=use_ansiblex)
+        if steps and steps[0].get("type") == "bridge":
+            ordered[-1]["bridge_outgoing"] = True
+            ordered[-1]["bridge_label"] = steps[0].get("bridge_label")
+        leg_items, jumps = _best_leg(current, int(origin_system_id), db, use_ansiblex=use_ansiblex)
+        total_jumps += jumps
+        if leg_items:
+            leg_items[-1]["is_return"] = True
+        ordered.extend(leg_items)
     return ordered, total_jumps
 
 
-@router.get("", response_class=HTMLResponse)
-def hauling_page(
-    request: Request,
-    character_id: int | None = Query(default=None),
-    account=Depends(require_account),
-    db: Session = Depends(get_db),
-):
+def _resolve_selected_character(account, db: Session, character_id: int | None):
     characters = db.query(Character).filter(Character.account_id == account.id).all()
     selected_character = None
     if character_id:
@@ -565,7 +649,10 @@ def hauling_page(
             selected_character = None
         else:
             selected_character = next((char for char in characters if char.id == character_id), None)
+    return characters, selected_character
 
+
+def _load_hauling_colonies(account, db: Session, selected_character=None) -> list[dict]:
     cached = _load_colony_cache(account.id, db) or {}
     colonies = list(cached.get("colonies") or [])
     cache_meta = dict(cached.get("meta") or {})
@@ -573,7 +660,7 @@ def hauling_page(
         _recompute_expiry(colonies)
         colonies, _ = _apply_price_mode(colonies, cache_meta, getattr(account, "price_mode", "sell"))
 
-    hauling_colonies = []
+    hauling_colonies: list[dict] = []
     for colony in colonies:
         if selected_character is not None and colony.get("character_name") != selected_character.character_name:
             continue
@@ -597,6 +684,21 @@ def hauling_page(
         hauling_colonies.append(entry)
 
     hauling_colonies.sort(key=lambda colony: colony.get("urgency_score", 0.0), reverse=True)
+    return hauling_colonies
+
+
+@router.get("", response_class=HTMLResponse)
+def hauling_page(
+    request: Request,
+    character_id: int | None = Query(default=None),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    characters, selected_character = _resolve_selected_character(account, db, character_id)
+    hauling_colonies = _load_hauling_colonies(account, db, selected_character)
+    hauling_pref = db.get(HaulingPreference, int(account.id))
+    return_to_origin = bool(hauling_pref.return_to_start) if hauling_pref else False
+    system_stop_map = _build_system_stop_map(hauling_colonies)
 
     location = _get_cached_location(selected_character, db) if selected_character else None
     route_ordered: list[dict] = []
@@ -609,7 +711,9 @@ def hauling_page(
                 [int(colony.get("solar_system_id") or 0) for colony in hauling_colonies if colony.get("solar_system_id")],
                 db,
                 use_ansiblex=True,
+                return_to_origin=return_to_origin,
             )
+            route_ordered = _apply_system_stop_map(route_ordered, system_stop_map)
             ansiblex_status = _ansiblex.status()
         except Exception:
             logger.exception("hauling: failed to build initial route")
@@ -629,6 +733,7 @@ def hauling_page(
         "characters": characters,
         "selected_character_id": selected_character.id if selected_character else None,
         "selected_character_name": selected_character.character_name if selected_character else None,
+        "return_to_origin": return_to_origin,
         "location": location,
         "location_name": location_name,
         "hauling_colonies": hauling_colonies,
@@ -640,6 +745,21 @@ def hauling_page(
         "can_manage_bridges": bool(account.is_admin or account.is_owner),
         "can_manage_all_bridges": bool(account.is_owner),
     })
+
+
+@router.post("/api/preferences")
+def save_hauling_preferences(
+    payload: dict = Body(...),
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    pref = db.get(HaulingPreference, int(account.id))
+    if pref is None:
+        pref = HaulingPreference(account_id=int(account.id))
+        db.add(pref)
+    pref.return_to_start = bool(payload.get("return_to_start", False))
+    db.commit()
+    return JSONResponse({"ok": True, "return_to_start": bool(pref.return_to_start)})
 
 
 @router.get("/api/location")
@@ -882,11 +1002,33 @@ def get_route(
     origin_system_id = int(payload.get("origin_system_id") or 0)
     system_ids = [int(system_id) for system_id in (payload.get("system_ids") or []) if system_id]
     use_ansiblex = bool(payload.get("use_ansiblex", True))
+    return_to_origin = bool(payload.get("return_to_origin", False))
+    character_id = int(payload.get("character_id") or 0) if payload.get("character_id") is not None else None
     if not origin_system_id or not system_ids:
         return JSONResponse({"ordered": [], "total_jumps": 0})
     try:
-        ordered, total_jumps = _build_route(origin_system_id, system_ids, db, use_ansiblex=use_ansiblex)
+        _, selected_character = _resolve_selected_character(account, db, character_id)
+        selected_character = selected_character if character_id not in (None, -1) else None
+        hauling_colonies = _load_hauling_colonies(account, db, selected_character)
+        system_stop_map = _build_system_stop_map(hauling_colonies)
+        ordered, total_jumps = _build_route(
+            origin_system_id,
+            system_ids,
+            db,
+            use_ansiblex=use_ansiblex,
+            return_to_origin=return_to_origin,
+        )
+        ordered = _apply_system_stop_map(ordered, system_stop_map)
     except Exception:
         logger.exception("hauling: route rebuild failed")
         return JSONResponse({"ordered": [], "total_jumps": 0, "ansiblex_status": _ansiblex.status()})
-    return JSONResponse({"ordered": ordered, "total_jumps": total_jumps, "ansiblex_status": _ansiblex.status()})
+    dotlan_route_link = ""
+    if ordered and len(ordered) > 1:
+        names = [item["system_name"].replace(" ", "_") for item in ordered]
+        dotlan_route_link = f"https://evemaps.dotlan.net/route/{':'.join(names)}"
+    return JSONResponse({
+        "ordered": ordered,
+        "total_jumps": total_jumps,
+        "ansiblex_status": _ansiblex.status(),
+        "dotlan_route_link": dotlan_route_link,
+    })

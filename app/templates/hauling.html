@@ -28,6 +28,12 @@
                         <i class="bi bi-lightning-fill me-1 text-info"></i>{{ t('hauling.bridge_use_ansiblex') }}
                     </label>
                 </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="returnToStartSwitch"{% if return_to_origin %} checked{% endif %}>
+                    <label class="form-check-label small text-muted" for="returnToStartSwitch">
+                        <i class="bi bi-arrow-repeat me-1 text-info"></i>{{ t('hauling.return_to_start', default='Return to start system') }}
+                    </label>
+                </div>
                 <span class="small text-muted"><i class="bi bi-geo-alt me-1"></i>{{ t('common.location', default='Standort') }}: {{ t('hauling.location_unknown') if not location_name else location_name }}</span>
                 <button type="button" id="refreshLocationBtn" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-arrow-repeat me-1"></i>{{ t('hauling.refresh_location') }}
@@ -156,7 +162,7 @@
                 <div class="card-header eve-card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-signpost-split me-1"></i>{{ t('hauling.route') }}</span>
                     <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-secondary">{{ route_total_jumps }} {{ t('hauling.jumps') }}</span>
+                        <span class="badge bg-secondary" id="routeTotalJumpsBadge">{{ route_total_jumps }} {{ t('hauling.jumps') }}</span>
                     </div>
                 </div>
                 <div class="card-body">
@@ -175,8 +181,17 @@
                                     <i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i>
                                     <span class="small text-muted text-truncate">{{ item.system_name }}</span>
                                     {% else %}
-                                    <span class="fw-bold text-truncate">{{ item.system_name }}</span>
-                                    <span class="text-muted small">{% if loop.first %}{{ t('hauling.origin') }}{% else %}&rarr; {{ item.jumps_from_prev }} {{ t('hauling.jumps') }}{% endif %}</span>
+                                    <div class="d-flex flex-column" style="min-width:0;">
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <span class="fw-bold text-truncate">{{ item.system_name }}</span>
+                                            <span class="text-muted small">{% if loop.first %}{{ t('hauling.origin') }}{% else %}&rarr; {{ item.jumps_from_prev }} {{ t('hauling.jumps') }}{% endif %}</span>
+                                        </div>
+                                        {% if item.system_planet_count and item.system_planet_count > 1 %}
+                                        <div class="small text-info-emphasis" style="color:#7ec8e3;">
+                                            {{ t('hauling.in_system_route', default='In-system route') }}: {{ item.system_planet_route_label }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
                                     {% endif %}
                                 </div>
                                 <div class="d-flex justify-content-center" style="min-width:7.5rem;">
@@ -195,8 +210,8 @@
                                     <span class="small text-muted">&mdash;</span>
                                     {% endif %}
                                     {% if not item.is_intermediate %}
-                                    <span class="badge {% if loop.first %}bg-secondary{% else %}bg-primary{% endif %}">
-                                        {% if loop.first %}{{ t('common.start', default='Start') }}{% else %}{{ item.jumps_from_prev }}{{ t('hauling.jumps') }}{% endif %}
+                                    <span class="badge {% if loop.first %}bg-secondary{% elif item.is_return %}bg-info text-dark{% else %}bg-primary{% endif %}">
+                                        {% if loop.first %}{{ t('common.start', default='Start') }}{% elif item.is_return %}{{ t('hauling.return_leg', default='Return') }}{% else %}{{ item.jumps_from_prev }}{{ t('hauling.jumps') }}{% endif %}
                                     </span>
                                     {% endif %}
                                 </div>
@@ -204,13 +219,11 @@
                         </li>
                         {% endfor %}
                     </ol>
-                    {% if dotlan_route_link %}
-                    <div class="mt-3">
+                    <div class="mt-3" id="routeDotlanWrap"{% if not dotlan_route_link %} style="display:none;"{% endif %}>
                         <a class="btn btn-sm btn-outline-secondary" href="{{ dotlan_route_link }}" target="_blank" rel="noopener noreferrer">
                             <i class="bi bi-map me-1"></i>{{ t('common.dotlan', default='Dotlan') }}
                         </a>
                     </div>
-                    {% endif %}
                     {% else %}
                     <div class="text-muted text-center py-4"><i class="bi bi-inbox fs-2 d-block mb-2"></i>{{ t('hauling.location_unknown') }}</div>
                     {% endif %}
@@ -334,6 +347,9 @@
         bridgeSelectSystems: {{ t('hauling.bridge_select_systems') | tojson }},
         bridgeDotlanRequired: {{ t('hauling.bridge_dotlan_required') | tojson }},
         bridgeImportResult: {{ t('hauling.bridge_import_result', created='{created}', updated='{updated}') | tojson }},
+        returnToStart: {{ t('hauling.return_to_start', default='Return to start system') | tojson }},
+        returnLeg: {{ t('hauling.return_leg', default='Return') | tojson }},
+        inSystemRoute: {{ t('hauling.in_system_route', default='In-system route') | tojson }},
         viewOnly: {{ t('hauling.bridge_view_only', default='View only') | tojson }},
         loading: {{ t('common.loading', default='Loading...') | tojson }},
         loadError: {{ t('hauling.bridge_load_error', default='Could not load connections.') | tojson }},
@@ -346,6 +362,9 @@
     const charSelect = document.getElementById('haulingCharacterSelect');
     const refreshBtn = document.getElementById('refreshLocationBtn');
     const useAnsiblex = document.getElementById('useAnsiblex');
+    const returnToStartSwitch = document.getElementById('returnToStartSwitch');
+    const routeTotalJumpsBadge = document.getElementById('routeTotalJumpsBadge');
+    const routeDotlanWrap = document.getElementById('routeDotlanWrap');
     const bridgeModalEl = document.getElementById('bridgeConnectionsModal');
     const bridgeExportPanel = document.getElementById('bridgeExportPanel');
     const bridgeManagePanel = document.getElementById('bridgeManagePanel');
@@ -362,10 +381,53 @@
     const bridgeResetBtn = document.getElementById('bridgeResetBtn');
     const bridgeTbody = document.getElementById('bridgeConnectionsTbody');
     const bridgeState = { manual: [], manageableCorps: [], exportableCorps: [], canManage: false };
+    async function saveHaulingPreferences() {
+        try {
+            await fetch('/hauling/api/preferences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    return_to_start: Boolean(returnToStartSwitch?.checked),
+                }),
+            });
+        } catch {
+            // Preference persistence is best-effort; the route refresh still continues.
+        }
+    }
     function escapeHtml(value) {
         return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
     if (charSelect) charSelect.addEventListener('change', () => { window.location.href = '/hauling?character_id=' + charSelect.value; });
+    function renderRouteList(ordered) {
+        const routeList = document.getElementById('routeList');
+        if (!routeList) return;
+        let waypointIndex = 0;
+        routeList.innerHTML = ordered.map((item, index) => {
+            const isIntermediate = item.is_intermediate;
+            const isFirst = index === 0;
+            const bridgeTitle = escapeHtml(item.bridge_label || _i18n.bridgeLabel);
+            const bridgeBadge = item.bridge_outgoing
+                ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">${_i18n.bridgeForward}</span>`
+                : item.bridge_incoming
+                    ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">${_i18n.bridgeBackward}</span>`
+                    : '<span class="small text-muted">&mdash;</span>';
+            const killBadge = item.system_id
+                ? `<span class="kill-badge" data-sys-id="${item.system_id}"></span>`
+                : '<span class="small text-muted">&mdash;</span>';
+            if (!isIntermediate) waypointIndex += 1;
+            const numberLabel = isIntermediate ? '&nbsp;' : `${waypointIndex}.`;
+            if (isIntermediate) {
+                return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i><span class="small text-muted text-truncate">${escapeHtml(item.system_name)}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end" style="min-width:6rem;">${killBadge}</div></div></li>`;
+            }
+            const inSystemRoute = Number(item.system_planet_count || 0) > 1
+                ? `<div class="small" style="color:#7ec8e3;">${escapeHtml(_i18n.inSystemRoute)}: ${escapeHtml(item.system_planet_route_label || '')}</div>`
+                : '';
+            const badgeClass = isFirst ? 'bg-secondary' : item.is_return ? 'bg-info text-dark' : 'bg-primary';
+            const badgeLabel = isFirst ? _i18n.start : item.is_return ? _i18n.returnLeg : `${item.jumps_from_prev}${_i18n.jumps}`;
+            const jumpLabel = isFirst ? _i18n.origin : '&rarr; ' + item.jumps_from_prev + ' ' + _i18n.jumps;
+            return `<li class="list-group-item eve-list-item bg-transparent text-light border-secondary"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><div class="d-flex flex-column" style="min-width:0;"><div class="d-flex align-items-center gap-2 flex-wrap"><span class="fw-bold text-truncate">${escapeHtml(item.system_name)}</span><span class="text-muted small">${jumpLabel}</span></div>${inSystemRoute}</div></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end align-items-center gap-2" style="min-width:6rem;">${killBadge}<span class="badge ${badgeClass}">${badgeLabel}</span></div></div></li>`;
+        }).join('');
+    }
     function setBridgeAlert(message, variant = 'danger') {
         if (!bridgeAlert) return;
         if (!message) {
@@ -395,6 +457,8 @@
                     origin_system_id: locationData.solar_system_id,
                     system_ids: systemIds,
                     use_ansiblex: useAnsiblex ? useAnsiblex.checked : true,
+                    return_to_origin: Boolean(returnToStartSwitch?.checked),
+                    character_id: Number(charSelect.value || 0),
                 }),
             });
             const routeData = await routeResp.json();
@@ -402,28 +466,18 @@
                 window.location.reload();
                 return;
             }
-            const routeList = document.getElementById('routeList');
-            if (routeList) {
-                let waypointIndex = 0;
-                routeList.innerHTML = routeData.ordered.map((item, index) => {
-                    const isIntermediate = item.is_intermediate;
-                    const isFirst = index === 0;
-                    const bridgeTitle = escapeHtml(item.bridge_label || _i18n.bridgeLabel);
-                    const bridgeBadge = item.bridge_outgoing
-                        ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">${_i18n.bridgeForward}</span>`
-                        : item.bridge_incoming
-                            ? `<span class="badge bg-info text-dark" title="${bridgeTitle}">${_i18n.bridgeBackward}</span>`
-                            : '<span class="small text-muted">&mdash;</span>';
-                    const killBadge = item.system_id
-                        ? `<span class="kill-badge" data-sys-id="${item.system_id}"></span>`
-                        : '<span class="small text-muted">&mdash;</span>';
-                    if (!isIntermediate) waypointIndex += 1;
-                    const numberLabel = isIntermediate ? '&nbsp;' : `${waypointIndex}.`;
-                    if (isIntermediate) {
-                        return `<li class="list-group-item py-1 border-0 opacity-75 bg-transparent text-light"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><i class="bi bi-arrow-down text-muted" style="font-size:.7rem;min-width:14px;"></i><span class="small text-muted text-truncate">${escapeHtml(item.system_name)}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end" style="min-width:6rem;">${killBadge}</div></div></li>`;
-                    }
-                    return `<li class="list-group-item eve-list-item bg-transparent text-light border-secondary"><div class="d-flex justify-content-between align-items-center gap-3"><div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width:0;"><span class="text-muted" style="min-width:2rem;">${numberLabel}</span><span class="fw-bold text-truncate">${escapeHtml(item.system_name)}</span><span class="text-muted small">${isFirst ? _i18n.origin : '&rarr; ' + item.jumps_from_prev + ' ' + _i18n.jumps}</span></div><div class="d-flex justify-content-center" style="min-width:7.5rem;">${bridgeBadge}</div><div class="d-flex justify-content-end align-items-center gap-2" style="min-width:6rem;">${killBadge}<span class="badge ${isFirst ? 'bg-secondary' : 'bg-primary'}">${isFirst ? _i18n.start : item.jumps_from_prev + _i18n.jumps}</span></div></div></li>`;
-                }).join('');
+            renderRouteList(routeData.ordered || []);
+            if (routeTotalJumpsBadge) {
+                routeTotalJumpsBadge.textContent = `${routeData.total_jumps || 0} ${_i18n.jumps}`;
+            }
+            const dotlanLink = routeDotlanWrap?.querySelector('a');
+            if (routeDotlanWrap && dotlanLink) {
+                if (routeData.dotlan_route_link) {
+                    routeDotlanWrap.style.display = '';
+                    dotlanLink.href = routeData.dotlan_route_link;
+                } else {
+                    routeDotlanWrap.style.display = 'none';
+                }
             }
             loadKillBadges();
         } catch {
@@ -718,6 +772,10 @@
     }
     refreshBtn?.addEventListener('click', refreshRouteLocation);
     useAnsiblex?.addEventListener('change', refreshRouteLocation);
+    returnToStartSwitch?.addEventListener('change', async () => {
+        await saveHaulingPreferences();
+        await refreshRouteLocation();
+    });
     bridgeModalEl?.addEventListener('show.bs.modal', loadBridgeConnections);
     bridgeForm?.addEventListener('submit', saveBridgeConnection);
     bridgeImportBtn?.addEventListener('click', importDotlanBridges);

@@ -166,6 +166,14 @@ class CombatIntelPreference(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class HaulingPreference(Base):
+    __tablename__ = "hauling_preferences"
+
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    return_to_start = Column(Boolean, nullable=False, default=False, server_default="false")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class IntelStreamState(Base):
     __tablename__ = "intel_stream_state"
 
