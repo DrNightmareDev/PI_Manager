@@ -153,6 +153,19 @@ class IntelKillEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
+class CombatIntelPreference(Base):
+    __tablename__ = "combat_intel_preferences"
+
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    region_id = Column(BigInteger, nullable=True)
+    window = Column(String(10), nullable=False, default="60m", server_default="60m")
+    kill_type = Column(String(20), nullable=False, default="all", server_default="all")
+    layout = Column(String(10), nullable=False, default="geo", server_default="geo")
+    tracked_character_id = Column(Integer, ForeignKey("characters.id", ondelete="SET NULL"), nullable=True)
+    follow_character = Column(Boolean, nullable=False, default=False, server_default="false")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class DashboardCache(Base):
     """Persistenter Colony-Cache pro Account — überlebt Server-Neustarts."""
     __tablename__ = "dashboard_cache_db"

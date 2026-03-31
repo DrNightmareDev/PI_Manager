@@ -345,8 +345,37 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
+cat > "/etc/systemd/system/${SERVICE_NAME}-ws.service" << EOF
+[Unit]
+Description=EVE PI Manager - zKillboard WebSocket Subscriber
+After=rabbitmq-server.service postgresql.service network.target
+Wants=rabbitmq-server.service postgresql.service
+
+[Service]
+Type=simple
+User=${APP_USER}
+Group=${APP_USER}
+WorkingDirectory=${APP_DIR}
+EnvironmentFile=${ENV_FILE}
+Environment=CELERY_WS_AUTOSTART=1
+ExecStart=${APP_DIR}/venv/bin/celery -A app.celery_app worker \\
+    --loglevel=info --concurrency=1 -Q ws --hostname=ws@%H
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=${SERVICE_NAME}-ws
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=${APP_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
-systemctl enable "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat" --quiet
+systemctl enable "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat" "${SERVICE_NAME}-ws" --quiet
 log_ok "Systemd units updated"
 
 # ── Step 9: Restart all services ─────────────────────────────────────────────
@@ -354,11 +383,13 @@ log_step "Restart services"
 systemctl restart "${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}-worker"
 systemctl restart "${SERVICE_NAME}-beat"
+systemctl restart "${SERVICE_NAME}-ws"
 sleep 3
 
 APP_STATUS=$(systemctl is-active "${SERVICE_NAME}"        2>/dev/null || echo "failed")
 WRK_STATUS=$(systemctl is-active "${SERVICE_NAME}-worker" 2>/dev/null || echo "failed")
 BET_STATUS=$(systemctl is-active "${SERVICE_NAME}-beat"   2>/dev/null || echo "failed")
+WS_STATUS=$(systemctl is-active "${SERVICE_NAME}-ws"      2>/dev/null || echo "failed")
 RMQ_STATUS=$(systemctl is-active rabbitmq-server          2>/dev/null || echo "failed")
 PG_STATUS=$(systemctl is-active  postgresql               2>/dev/null || echo "failed")
 
@@ -382,10 +413,12 @@ _svc "RabbitMQ"            "$RMQ_STATUS"
 _svc "Web (gunicorn)"      "$APP_STATUS"
 _svc "Celery Worker"       "$WRK_STATUS"
 _svc "Celery Beat"         "$BET_STATUS"
+_svc "Celery WS"           "$WS_STATUS"
 echo ""
 echo -e "  ${CYAN}Logs:${NC}"
 echo -e "  Web:    journalctl -u ${SERVICE_NAME} -f"
 echo -e "  Worker: journalctl -u ${SERVICE_NAME}-worker -f"
+echo -e "  WS:     journalctl -u ${SERVICE_NAME}-ws -f"
 echo -e "  Beat:   journalctl -u ${SERVICE_NAME}-beat -f"
 echo ""
 

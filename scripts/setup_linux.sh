@@ -344,10 +344,40 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 
+# ── Celery WS Subscriber ──────────────────────────────────────────────────────
+cat > "/etc/systemd/system/${SERVICE_NAME}-ws.service" << EOF
+[Unit]
+Description=EVE PI Manager - zKillboard WebSocket Subscriber
+After=rabbitmq-server.service postgresql.service network.target
+Wants=rabbitmq-server.service postgresql.service
+
+[Service]
+Type=simple
+User=${APP_USER}
+Group=${APP_USER}
+WorkingDirectory=${APP_DIR}
+EnvironmentFile=${APP_DIR}/.env
+Environment=CELERY_WS_AUTOSTART=1
+ExecStart=${APP_DIR}/venv/bin/celery -A app.celery_app worker \
+    --loglevel=info --concurrency=1 -Q ws --hostname=ws@%H
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=${SERVICE_NAME}-ws
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=${APP_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
-systemctl enable "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat" --quiet
-systemctl start  "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat"
-log_ok "Systemd Services gestartet (web + worker + beat)"
+systemctl enable "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat" "${SERVICE_NAME}-ws" --quiet
+systemctl start  "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat" "${SERVICE_NAME}-ws"
+log_ok "Systemd Services gestartet (web + worker + beat + ws)"
 
 # ============ 11. Nginx konfigurieren ============
 log_info "Konfiguriere Nginx..."

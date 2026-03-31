@@ -16,7 +16,7 @@ from app import sde
 from app.database import SessionLocal, get_db
 from app.dependencies import require_account
 from app.esi import ensure_valid_token, get_character_location
-from app.models import Character, IntelKillEvent, KillActivityCache
+from app.models import Character, CombatIntelPreference, IntelKillEvent, KillActivityCache
 from app.templates_env import templates
 from app.zkill import get_region_kills_db_first, get_system_kill_summary
 
@@ -27,6 +27,57 @@ WINDOW_SECONDS = {"5m": 300, "15m": 900, "60m": 3600, "24h": 86400}
 SYSTEM_DETAIL_TTL = timedelta(minutes=5)
 _CHAR_LOCATION_CACHE: dict[int, tuple[dict, float]] = {}
 _CHAR_LOCATION_CACHE_TTL = 60.0
+
+
+def _default_region_for_account(account, db: Session) -> str:
+    catalog = sde.get_region_catalog()
+    fallback = str(catalog[0]["id"]) if catalog else "10000010"
+    if not getattr(account, "main_character_id", None):
+        return fallback
+    main_character = (
+        db.query(Character)
+        .filter(Character.account_id == account.id, Character.id == int(account.main_character_id))
+        .first()
+    )
+    if main_character is None:
+        return fallback
+    location = _get_cached_character_location(main_character, db)
+    region_id = int((location or {}).get("region_id") or 0)
+    return str(region_id or fallback)
+
+
+def _resolve_initial_preferences(account, db: Session, region: str | None, window: str | None, kill_type: str | None, layout: str | None, tracked_character_id: str | None, follow: str | None) -> dict:
+    pref = db.get(CombatIntelPreference, int(account.id))
+    selected_region = str(region).strip() if region else ""
+    selected_window = str(window).strip() if window else ""
+    selected_kill_type = str(kill_type).strip() if kill_type else ""
+    selected_layout = str(layout).strip() if layout else ""
+    selected_tracked = str(tracked_character_id).strip() if tracked_character_id else ""
+
+    resolved_region = selected_region or (str(pref.region_id) if pref and pref.region_id else "") or _default_region_for_account(account, db)
+    resolved_window = selected_window if selected_window in WINDOW_SECONDS else (pref.window if pref and pref.window in WINDOW_SECONDS else "60m")
+    resolved_kill_type = selected_kill_type if selected_kill_type in {"all", "ship", "pod", "other"} else (pref.kill_type if pref and pref.kill_type in {"all", "ship", "pod", "other"} else "all")
+    resolved_layout = selected_layout if selected_layout in {"geo", "alt"} else (pref.layout if pref and pref.layout in {"geo", "alt"} else "geo")
+    resolved_tracked = int(selected_tracked) if selected_tracked.isdigit() else int(pref.tracked_character_id) if pref and pref.tracked_character_id else None
+
+    if resolved_tracked:
+        owned = db.query(Character.id).filter(Character.account_id == account.id, Character.id == int(resolved_tracked)).first()
+        if owned is None:
+            resolved_tracked = None
+
+    if follow in {"0", "1"}:
+        resolved_follow = follow == "1"
+    else:
+        resolved_follow = bool(pref.follow_character) if pref else False
+
+    return {
+        "region": resolved_region,
+        "window": resolved_window,
+        "kill_type": resolved_kill_type,
+        "layout": resolved_layout,
+        "tracked_character_id": resolved_tracked,
+        "follow_character": resolved_follow,
+    }
 
 
 def _get_cached_character_location(character: Character, db: Session) -> dict | None:
@@ -261,10 +312,12 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str, force_refr
 @router.get("/map", response_class=HTMLResponse)
 def intel_map(
     request: Request,
-    region: str = Query("10000010"),
-    window: str = Query("60m"),
-    kill_type: str = Query("all"),
-    layout: str = Query("geo"),
+    region: str | None = Query(None),
+    window: str | None = Query(None),
+    kill_type: str | None = Query(None),
+    layout: str | None = Query(None),
+    character_id: str | None = Query(None),
+    follow: str | None = Query(None),
     account=Depends(require_account),
     db: Session = Depends(get_db),
 ):
@@ -275,11 +328,12 @@ def intel_map(
         .order_by(Character.character_name.asc())
         .all()
     )
-    selected_window = window if window in WINDOW_SECONDS else "60m"
-    selected_kill_type = kill_type if kill_type in {"all", "ship", "pod", "other"} else "all"
-    selected_layout = layout if layout in {"geo", "alt"} else "geo"
+    preferences = _resolve_initial_preferences(account, db, region, window, kill_type, layout, character_id, follow)
+    selected_window = preferences["window"]
+    selected_kill_type = preferences["kill_type"]
+    selected_layout = preferences["layout"]
     graph, system_activity, kill_feed, source_meta = _build_live_snapshot(
-        int(region or regions[0]["id"]),
+        int(preferences["region"] or regions[0]["id"]),
         selected_window,
         selected_kill_type,
     )
@@ -292,6 +346,8 @@ def intel_map(
         "selected_window": selected_window,
         "selected_kill_type": selected_kill_type,
         "selected_layout": selected_layout,
+        "selected_character_id": preferences["tracked_character_id"],
+        "selected_follow": preferences["follow_character"],
         "intel_characters": [{"id": int(char.id), "name": char.character_name} for char in characters],
         "region_data": graph,
         "initial_activity": system_activity,
@@ -300,6 +356,61 @@ def intel_map(
         "initial_ws_status": ws_status,
         "initial_ws_last_kill_ago": ws_last_kill_ago,
     })
+
+
+@router.post("/preferences")
+async def intel_preferences_save(
+    request: Request,
+    account=Depends(require_account),
+    db: Session = Depends(get_db),
+):
+    payload = await request.json()
+    region_id = payload.get("region")
+    window = str(payload.get("window") or "60m")
+    kill_type = str(payload.get("kill_type") or "all")
+    layout = str(payload.get("layout") or "geo")
+    tracked_character_id = payload.get("character_id")
+    follow_character = bool(payload.get("follow"))
+
+    if window not in WINDOW_SECONDS:
+        window = "60m"
+    if kill_type not in {"all", "ship", "pod", "other"}:
+        kill_type = "all"
+    if layout not in {"geo", "alt"}:
+        layout = "geo"
+
+    valid_region_id = None
+    try:
+        candidate_region = int(region_id)
+        if sde.get_region_system_graph(candidate_region):
+            valid_region_id = candidate_region
+    except (TypeError, ValueError):
+        valid_region_id = None
+
+    valid_character_id = None
+    try:
+        if tracked_character_id is not None and str(tracked_character_id).strip():
+            candidate_character = int(tracked_character_id)
+            owned = db.query(Character.id).filter(Character.account_id == account.id, Character.id == candidate_character).first()
+            if owned is not None:
+                valid_character_id = candidate_character
+    except (TypeError, ValueError):
+        valid_character_id = None
+
+    pref = db.get(CombatIntelPreference, int(account.id))
+    if pref is None:
+        pref = CombatIntelPreference(account_id=int(account.id))
+        db.add(pref)
+
+    pref.region_id = valid_region_id
+    pref.window = window
+    pref.kill_type = kill_type
+    pref.layout = layout
+    pref.tracked_character_id = valid_character_id
+    pref.follow_character = follow_character and valid_character_id is not None
+    db.commit()
+
+    return JSONResponse({"ok": True})
 
 
 @router.get("/map/live")

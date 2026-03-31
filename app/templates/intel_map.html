@@ -118,6 +118,8 @@ const INTEL_BOOTSTRAP = {
     wsStatus: {{ initial_ws_status | tojson }},
     wsLastKillAgo: {{ initial_ws_last_kill_ago | tojson }},
     canForceRefresh: {{ account.is_owner | tojson }},
+    trackedCharacterId: {{ selected_character_id | tojson }},
+    followCharacter: {{ selected_follow | tojson }},
 };
 
 const intelState = {
@@ -133,8 +135,8 @@ const intelState = {
     layout: INTEL_BOOTSTRAP.selectedLayout,
     systemDetails: {},
     characters: INTEL_BOOTSTRAP.characters,
-    trackedCharacterId: null,
-    followCharacter: false,
+    trackedCharacterId: INTEL_BOOTSTRAP.trackedCharacterId,
+    followCharacter: INTEL_BOOTSTRAP.followCharacter,
     trackedSystemId: null,
     viewBox: null,
     dragging: false,
@@ -154,7 +156,27 @@ let _sseSource = null;
     if (characterId && /^\d+$/.test(characterId)) {
         intelState.trackedCharacterId = Number(characterId);
     }
-    intelState.followCharacter = follow === '1';
+    if (follow === '0' || follow === '1') {
+        intelState.followCharacter = follow === '1';
+    }
+}
+
+async function persistPreferences() {
+    try {
+        await fetch('/intel/preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                region: intelState.selectedRegion,
+                window: intelState.window,
+                kill_type: intelState.killType,
+                layout: intelState.layout,
+                character_id: intelState.trackedCharacterId,
+                follow: intelState.followCharacter,
+            }),
+            keepalive: true,
+        });
+    } catch {}
 }
 
 function parseViewBox() {
@@ -601,6 +623,7 @@ async function changeRegion(regionKey) {
     intelState.systemDetails = {};
     _sseLastId = 0;
     await refreshIntel(false, { showLoading: true });
+    await persistPreferences();
     startSse();
 }
 
@@ -610,21 +633,24 @@ document.getElementById('intelLayoutSelect').addEventListener('change', event =>
     intelState.viewBox = parseViewBox();
     refreshAll();
     syncQueryParams();
+    persistPreferences();
 });
-document.getElementById('intelWindowSelect').addEventListener('change', async event => { intelState.window = event.target.value; intelState.systemDetails = {}; await refreshIntel(false, { showLoading: true }); });
-document.getElementById('intelKillTypeSelect').addEventListener('change', async event => { intelState.killType = event.target.value; await refreshIntel(false, { showLoading: true }); });
+document.getElementById('intelWindowSelect').addEventListener('change', async event => { intelState.window = event.target.value; intelState.systemDetails = {}; await refreshIntel(false, { showLoading: true }); await persistPreferences(); });
+document.getElementById('intelKillTypeSelect').addEventListener('change', async event => { intelState.killType = event.target.value; await refreshIntel(false, { showLoading: true }); await persistPreferences(); });
 document.getElementById('intelCharacterSelect').addEventListener('change', event => {
     const value = String(event.target.value || '');
     intelState.trackedCharacterId = value && /^\d+$/.test(value) ? Number(value) : null;
     intelState.trackedSystemId = null;
     syncQueryParams();
     updateCharacterButtonState();
+    persistPreferences();
 });
 document.getElementById('intelJumpCharacter').addEventListener('click', async () => { await jumpToTrackedCharacter(true); });
 document.getElementById('intelFollowCharacter').addEventListener('click', async () => {
     intelState.followCharacter = !intelState.followCharacter;
     updateCharacterButtonState();
     syncQueryParams();
+    await persistPreferences();
     if (intelState.followCharacter) await jumpToTrackedCharacter(true);
 });
 if (document.getElementById('intelForceRefresh')) {
