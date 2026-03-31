@@ -78,10 +78,11 @@ def _build_alt_layout(graph: dict) -> dict[int, tuple[float, float]]:
     return positions
 
 
-def _fetch_region_kills(region_id: int) -> list[dict]:
+def _fetch_region_kills(region_id: int, window: str) -> list[dict]:
+    past_seconds = int(WINDOW_SECONDS.get(window, 3600))
     try:
         response = requests.get(
-            f"https://zkillboard.com/api/kills/regionID/{region_id}/limit/80/",
+            f"https://zkillboard.com/api/kills/regionID/{region_id}/pastSeconds/{past_seconds}/limit/200/",
             headers=HEADERS,
             timeout=20,
         )
@@ -208,7 +209,7 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
         **graph,
         "systems": systems,
     }
-    raw_kills = _fetch_region_kills(region_id)
+    raw_kills = _fetch_region_kills(region_id, window)
     if not raw_kills:
         activity, feed = _fallback_feed(graph, window, kill_type)
         return graph, activity, feed
