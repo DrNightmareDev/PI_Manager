@@ -60,7 +60,7 @@ def get_pi_catalog_maps() -> tuple[list[dict], dict[int, dict], dict[str, dict]]
     return catalog, by_type_id, by_name
 
 
-def recalculate_inventory_summary(db: Session, account_id: int, type_id: int, fallback_item: dict | None = None) -> InventoryItemSummary:
+def recalculate_inventory_summary(db: Session, account_id: int, type_id: int, fallback_item: dict | None = None) -> InventoryItemSummary | None:
     active_lots = (
         db.query(InventoryLot)
         .filter(
@@ -91,6 +91,11 @@ def recalculate_inventory_summary(db: Session, account_id: int, type_id: int, fa
         )
         .first()
     )
+    if quantity_on_hand <= 0:
+        if summary is not None:
+            db.delete(summary)
+        return None
+
     if summary is None:
         source = fallback_item or {"name": f"Type {type_id}", "tier": "P1"}
         summary = InventoryItemSummary(
@@ -254,7 +259,10 @@ def adjust_inventory(
 
 
 def get_inventory_rows(db: Session, account_id: int, tier: str | None = None) -> list[dict]:
-    query = db.query(InventoryItemSummary).filter(InventoryItemSummary.account_id == int(account_id))
+    query = db.query(InventoryItemSummary).filter(
+        InventoryItemSummary.account_id == int(account_id),
+        InventoryItemSummary.quantity_on_hand > 0,
+    )
     if tier and tier in TIER_SORT:
         query = query.filter(InventoryItemSummary.tier == tier)
     rows = query.all()
