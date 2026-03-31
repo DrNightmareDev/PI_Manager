@@ -576,6 +576,62 @@ def get_system_neighbors(system_id: int) -> list[int]:
     return sorted(_jumps_by_system.get(int(system_id), set()))
 
 
+def get_region_catalog() -> list[dict]:
+    return [
+        {"id": region_id, "name": region_name}
+        for region_id, region_name in sorted(_regions.items(), key=lambda item: item[1].lower())
+    ]
+
+
+def get_region_system_graph(region_id: int) -> dict | None:
+    region_id = int(region_id)
+    region_name = _regions.get(region_id)
+    if not region_name:
+        return None
+
+    systems = []
+    system_ids = []
+    for system_id, data in _systems_by_id.items():
+        if int(data.get("region_id") or 0) != region_id:
+            continue
+        systems.append({
+            "id": system_id,
+            "name": data.get("name") or f"System {system_id}",
+            "security": round(float(data.get("security") or 0.0), 1),
+            "constellation_id": int(data.get("constellation_id") or 0),
+            "constellation_name": _constellations.get(int(data.get("constellation_id") or 0), {}).get("name"),
+        })
+        system_ids.append(system_id)
+
+    system_set = set(system_ids)
+    connections: list[list[int]] = []
+    neighbor_region_ids: set[int] = set()
+    for system_id in system_ids:
+        for neighbor_id in _jumps_by_system.get(system_id, set()):
+            if neighbor_id in system_set:
+                if system_id < neighbor_id:
+                    connections.append([system_id, neighbor_id])
+                continue
+            neighbor = _systems_by_id.get(neighbor_id)
+            if neighbor:
+                neighbor_region_id = int(neighbor.get("region_id") or 0)
+                if neighbor_region_id and neighbor_region_id != region_id:
+                    neighbor_region_ids.add(neighbor_region_id)
+
+    neighbors = [
+        {"id": rid, "name": _regions.get(rid, f"Region {rid}")}
+        for rid in sorted(neighbor_region_ids, key=lambda rid: _regions.get(rid, "").lower())
+    ]
+    systems.sort(key=lambda item: ((item.get("constellation_name") or "").lower(), item["name"].lower()))
+    return {
+        "id": region_id,
+        "name": region_name,
+        "systems": systems,
+        "connections": connections,
+        "neighbors": neighbors,
+    }
+
+
 def search_systems_local(query: str, limit: int = 10) -> list[dict]:
     """
     Lokale System-Suche in den Fuzzwork-Daten.

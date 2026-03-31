@@ -56,6 +56,20 @@
     </div>
 </div>
 
+<div class="eve-card card border-0 mb-4">
+    <div class="card-body p-2">
+        <div class="manager-subnav" id="managerSubnav">
+            <button type="button" class="btn btn-sm eve-btn-primary manager-subnav-btn" data-target="manager-section-accounts">Accounts</button>
+            {% if account.is_owner %}
+            <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="manager-section-pages">Page Access</button>
+            <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="manager-section-policy">Access Policy</button>
+            {% endif %}
+            <button type="button" class="btn btn-sm eve-btn-ghost manager-subnav-btn" data-target="translation-editor">Translations</button>
+        </div>
+    </div>
+</div>
+
+<div class="manager-section" id="manager-section-pages">
 {% if account.is_owner %}
 <div class="eve-card card border-0 mb-4" id="page-access">
     <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -122,8 +136,10 @@
     </div>
 </div>
 {% endif %}
+</div>
 
 <!-- Account-Liste -->
+<div class="manager-section" id="manager-section-accounts">
 <div class="eve-card card border-0">
     <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
@@ -372,6 +388,7 @@
         </div>
     </div>
 </div>
+</div>
 <!-- ── Reload All Modal ──────────────────────────────────────────────────── -->
 <div class="modal fade" id="adminReloadModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
@@ -405,6 +422,7 @@
 
 {% if account.is_owner %}
 <!-- ── Zugangspolitik (nur Besitzer) ─────────────────────────────────────── -->
+<div class="manager-section" id="manager-section-policy">
 <div class="eve-card card border-0 mt-4" id="access-policy">
     <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
@@ -564,9 +582,11 @@
         </div>
     </div>
 </div>
+</div>
 {% endif %}
 
-<div class="eve-card card border-0 mt-4" id="translation-editor">
+<div class="manager-section" id="translation-editor">
+<div class="eve-card card border-0 mt-4" id="translation-editor-card">
     <div class="card-header eve-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-translate eve-accent me-1"></i>
@@ -606,6 +626,7 @@
         </div>
     </div>
 </div>
+</div>
 
 {% endblock %}
 
@@ -633,6 +654,16 @@ const translationUiText = {
     saved: '{{ t("manager.i18n.saved") }}',
     saveError: '{{ t("manager.i18n.save_error") }}'
 };
+
+function switchManagerSection(targetId) {
+    document.querySelectorAll('.manager-section').forEach(section => {
+        section.classList.toggle('d-none', section.id !== targetId);
+    });
+    document.querySelectorAll('.manager-subnav-btn').forEach(btn => {
+        btn.classList.toggle('eve-btn-primary', btn.dataset.target === targetId);
+        btn.classList.toggle('eve-btn-ghost', btn.dataset.target !== targetId);
+    });
+}
 
 try {
     const savedPageSize = parseInt(localStorage.getItem(ACCOUNT_PAGINATION_KEY) || '', 10);
@@ -909,9 +940,13 @@ async function saveTranslationRow(idx) {
 document.getElementById('i18nSearch')?.addEventListener('input', renderTranslationRows);
 document.getElementById('i18nLangSelect')?.addEventListener('change', renderTranslationRows);
 document.getElementById('i18nScopeFilter')?.addEventListener('change', renderTranslationRows);
+document.querySelectorAll('.manager-subnav-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchManagerSection(btn.dataset.target));
+});
 renderTranslationRows();
 entries.forEach(el => { el.dataset.accMatch = '1'; });
 renderAccountPage();
+switchManagerSection('manager-section-accounts');
 
 // ── Admin Reload All ─────────────────────────────────────────────────────
 const ADMIN_RELOAD_ACCOUNTS = [
@@ -1019,5 +1054,12 @@ async function adminResetCharErrors(charId, charName, btn) {
     }
 }
 </script>
+<style>
+.manager-subnav {
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+</style>
 {% endblock %}
 

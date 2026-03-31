@@ -264,6 +264,23 @@ def universe_ids(names: list[str]) -> dict:
         return {}
 
 
+def universe_names(ids: list[int]) -> list[dict]:
+    if not ids:
+        return []
+    try:
+        response = requests.post(
+            f"{ESI_BASE}/universe/names/",
+            json=ids,
+            params={"datasource": "tranquility"},
+            headers=HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return []
+
+
 def search_systems(query: str) -> dict:
     """Deprecated: ESI /search/ removed. Use search_systems_auth instead."""
     return {}

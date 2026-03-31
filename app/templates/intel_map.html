@@ -7,14 +7,14 @@
         <div>
             <div class="intel-kicker">Admin only</div>
             <h1>Combat Intel Map</h1>
-            <p>Regional combat activity with live heat, rapid region switching and a rolling kill feed for fast escalation awareness.</p>
+            <p>Every region is selectable. Each region is shown as a full-region layout with live system heat and a compact kill stream linked straight to zKillboard.</p>
         </div>
         <div class="intel-controls">
             <div class="intel-control-group">
                 <label for="intelRegionSelect">Region</label>
                 <select id="intelRegionSelect" class="form-select form-select-sm eve-input">
                     {% for region in regions %}
-                    <option value="{{ region.key }}" {% if region.key == selected_region %}selected{% endif %}>{{ region.name }}</option>
+                    <option value="{{ region.id }}" {% if (region.id | string) == selected_region %}selected{% endif %}>{{ region.name }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -43,26 +43,24 @@
             <div class="intel-map-header">
                 <div>
                     <h2 id="intelRegionTitle">{{ region_data.name }}</h2>
-                    <div class="intel-subtle">Click systems for details and switch adjacent regions without leaving the page.</div>
+                    <div class="intel-subtle">Whole-region map with connected systems, regional exits and dynamic kill intensity.</div>
                 </div>
                 <div class="intel-neighbors" id="intelNeighbors"></div>
             </div>
 
             <div class="intel-map-stage">
-                <svg id="intelMapSvg" viewBox="0 0 680 460" class="intel-map-svg" aria-label="Combat region map"></svg>
+                <svg id="intelMapSvg" viewBox="{{ region_data.view_box }}" class="intel-map-svg" aria-label="Combat region map"></svg>
             </div>
         </div>
 
         <aside class="intel-sidebar">
             <div class="intel-panel">
                 <div class="intel-panel-title">System Details</div>
-                <div id="intelSystemDetails" class="intel-system-details">
-                    <div class="intel-empty">Select a system to inspect combat pressure and route relevance.</div>
-                </div>
+                <div id="intelSystemDetails" class="intel-system-details"></div>
             </div>
 
             <div class="intel-panel">
-                <div class="intel-panel-title">Newest Kills</div>
+                <div class="intel-panel-title">Latest Kills</div>
                 <div id="intelFeed" class="intel-feed"></div>
             </div>
         </aside>
@@ -90,14 +88,14 @@ const intelState = {
 };
 
 function formatIsk(value) {
-    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} B ISK`;
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} M ISK`;
-    return `${Math.round(value).toLocaleString()} ISK`;
+    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} B`;
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} M`;
+    return `${Math.round(value).toLocaleString()}`;
 }
 
 function minutesAgo(timestamp) {
     const diff = Math.max(0, Date.now() - new Date(timestamp).getTime());
-    return Math.max(0, Math.round(diff / 60000));
+    return `${Math.max(0, Math.round(diff / 60000))}m`;
 }
 
 function activityFor(systemId) {
@@ -111,18 +109,19 @@ function systemById(systemId) {
 function renderNeighbors() {
     const node = document.getElementById('intelNeighbors');
     node.innerHTML = '';
-    (intelState.region.neighbors || []).forEach(key => {
+    (intelState.region.neighbors || []).slice(0, 8).forEach(region => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'intel-neighbor-btn';
-        button.textContent = key.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-        button.addEventListener('click', () => changeRegion(key));
+        button.textContent = region.name;
+        button.addEventListener('click', () => changeRegion(String(region.id)));
         node.appendChild(button);
     });
 }
 
 function renderMap() {
     const svg = document.getElementById('intelMapSvg');
+    svg.setAttribute('viewBox', intelState.region.view_box || '0 0 1180 820');
     svg.innerHTML = '';
     const ns = 'http://www.w3.org/2000/svg';
 
@@ -147,29 +146,32 @@ function renderMap() {
         group.addEventListener('click', () => {
             intelState.selectedSystemId = system.id;
             renderMap();
+            renderFeed();
             renderSystemDetails();
         });
 
         const glow = document.createElementNS(ns, 'circle');
-        glow.setAttribute('r', 34 + (activity.heat * 20));
+        glow.setAttribute('r', 18 + (activity.heat * 16));
         glow.setAttribute('class', 'intel-node-glow');
-        glow.setAttribute('style', `opacity:${0.14 + activity.heat * 0.42}`);
+        glow.setAttribute('style', `opacity:${0.12 + activity.heat * 0.48}`);
         group.appendChild(glow);
 
         const core = document.createElementNS(ns, 'circle');
-        core.setAttribute('r', 22);
+        core.setAttribute('r', 10);
         core.setAttribute('class', 'intel-node-core');
         group.appendChild(core);
 
-        const kills = document.createElementNS(ns, 'text');
-        kills.setAttribute('y', 6);
-        kills.setAttribute('text-anchor', 'middle');
-        kills.setAttribute('class', 'intel-node-kills');
-        kills.textContent = activity.kill_count;
-        group.appendChild(kills);
+        if (activity.kill_count > 0) {
+            const kills = document.createElementNS(ns, 'text');
+            kills.setAttribute('y', 3.5);
+            kills.setAttribute('text-anchor', 'middle');
+            kills.setAttribute('class', 'intel-node-kills');
+            kills.textContent = activity.kill_count;
+            group.appendChild(kills);
+        }
 
         const label = document.createElementNS(ns, 'text');
-        label.setAttribute('y', 42);
+        label.setAttribute('y', 24);
         label.setAttribute('text-anchor', 'middle');
         label.setAttribute('class', 'intel-node-label');
         label.textContent = system.name;
@@ -181,26 +183,29 @@ function renderMap() {
 
 function renderSystemDetails() {
     const container = document.getElementById('intelSystemDetails');
-    const system = systemById(intelState.selectedSystemId || intelState.region.systems[0].id);
+    const fallbackSystem = intelState.region.systems[0];
+    const system = systemById(intelState.selectedSystemId || fallbackSystem?.id);
     if (!system) {
-        container.innerHTML = '<div class="intel-empty">No system selected.</div>';
+        container.innerHTML = '<div class="intel-empty">No systems available for this region.</div>';
         return;
     }
     intelState.selectedSystemId = system.id;
     const activity = activityFor(system.id);
-    const relatedKills = intelState.feed.filter(item => item.system_id === system.id).slice(0, 4);
+    const relatedKills = intelState.feed.filter(item => item.system_id === system.id).slice(0, 5);
     container.innerHTML = `
         <div class="intel-system-name">${system.name}</div>
-        <div class="intel-system-meta">Security ${system.security} · ${activity.kill_count} kills in the selected window</div>
-        <div class="intel-heatbar"><span style="width:${Math.max(8, activity.heat * 100)}%"></span></div>
+        <div class="intel-system-meta">Security ${system.security} · ${(system.constellation_name || 'Unknown constellation')} · ${activity.kill_count} kills</div>
+        <div class="intel-heatbar"><span style="width:${Math.max(6, activity.heat * 100)}%"></span></div>
         <div class="intel-mini-list">
             ${relatedKills.map(item => `
-                <div class="intel-mini-row">
-                    <strong>${item.ship_type}</strong>
-                    <span>${item.victim_name}</span>
-                    <span>${minutesAgo(item.timestamp)}m ago</span>
-                </div>
-            `).join('') || '<div class="intel-empty">No fresh kills in this system right now.</div>'}
+                <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-mini-row">
+                    <img src="${item.ship_image_url}" alt="${item.ship_type}">
+                    <div>
+                        <strong>${item.victim_name}</strong>
+                        <div class="text-muted">${item.ship_type} · ${minutesAgo(item.timestamp)}</div>
+                    </div>
+                </a>
+            `).join('') || '<div class="intel-empty">No recent kills in this system.</div>'}
         </div>
     `;
 }
@@ -208,17 +213,23 @@ function renderSystemDetails() {
 function renderFeed() {
     const feed = document.getElementById('intelFeed');
     feed.innerHTML = intelState.feed.map(item => `
-        <button type="button" class="intel-feed-item${intelState.selectedSystemId === item.system_id ? ' is-active' : ''}" data-system-id="${item.system_id}">
-            <div class="intel-feed-top">
-                <strong>${item.system_name}</strong>
-                <span>${minutesAgo(item.timestamp)}m ago</span>
+        <a href="${item.kill_url}" target="_blank" rel="noopener" class="intel-feed-item${intelState.selectedSystemId === item.system_id ? ' is-active' : ''}" data-system-id="${item.system_id}">
+            <img src="${item.ship_image_url}" alt="${item.ship_type}" class="intel-feed-ship">
+            <div class="intel-feed-copy">
+                <div class="intel-feed-line">
+                    <strong>${item.victim_name}</strong>
+                    <span>${minutesAgo(item.timestamp)}</span>
+                </div>
+                <div class="intel-feed-line intel-feed-line-secondary">
+                    <span>${item.ship_type}</span>
+                    <span>${item.system_name}</span>
+                    <span>${formatIsk(item.isk_value)} ISK</span>
+                </div>
             </div>
-            <div class="intel-feed-main">${item.victim_name} lost a ${item.ship_type}</div>
-            <div class="intel-feed-sub">${item.region_name} · ${item.alliance_name} · ${item.attackers} attackers · ${formatIsk(item.isk_value)}</div>
-        </button>
+        </a>
     `).join('');
     feed.querySelectorAll('[data-system-id]').forEach(node => {
-        node.addEventListener('click', () => {
+        node.addEventListener('click', event => {
             intelState.selectedSystemId = Number(node.getAttribute('data-system-id'));
             renderMap();
             renderFeed();
@@ -245,8 +256,8 @@ async function refreshIntel() {
     document.getElementById('intelRegionTitle').textContent = payload.region.name;
     renderNeighbors();
     renderMap();
-    renderSystemDetails();
     renderFeed();
+    renderSystemDetails();
 }
 
 async function changeRegion(regionKey) {
@@ -255,15 +266,11 @@ async function changeRegion(regionKey) {
     await refreshIntel();
 }
 
-document.getElementById('intelRegionSelect').addEventListener('change', event => {
-    changeRegion(event.target.value);
-});
-
+document.getElementById('intelRegionSelect').addEventListener('change', event => changeRegion(event.target.value));
 document.getElementById('intelWindowSelect').addEventListener('change', async event => {
     intelState.window = event.target.value;
     await refreshIntel();
 });
-
 document.getElementById('intelKillTypeSelect').addEventListener('change', async event => {
     intelState.killType = event.target.value;
     await refreshIntel();
@@ -271,15 +278,12 @@ document.getElementById('intelKillTypeSelect').addEventListener('change', async 
 
 renderNeighbors();
 renderMap();
-renderSystemDetails();
 renderFeed();
+renderSystemDetails();
 setInterval(refreshIntel, 20000);
 </script>
 <style>
-.intel-shell {
-    display: grid;
-    gap: 1.5rem;
-}
+.intel-shell { display:grid; gap:1.5rem; }
 .intel-hero,
 .intel-map-card,
 .intel-panel {
@@ -290,199 +294,50 @@ setInterval(refreshIntel, 20000);
     border-radius: 1.25rem;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
 }
-.intel-hero {
-    padding: 1.4rem 1.5rem;
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-.intel-hero h1 {
-    margin: 0 0 0.35rem;
-    font-size: clamp(1.8rem, 3vw, 2.6rem);
-}
-.intel-hero p {
-    margin: 0;
-    max-width: 55rem;
-    color: var(--eve-text-muted);
-}
-.intel-kicker {
-    color: #7ec8e3;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    font-size: 0.74rem;
-    margin-bottom: 0.5rem;
-}
-.intel-controls {
-    display: flex;
-    gap: 0.9rem;
-    flex-wrap: wrap;
-    align-items: end;
-}
-.intel-control-group {
-    min-width: 10rem;
-}
-.intel-control-group label {
-    display: block;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--eve-text-muted);
-    margin-bottom: 0.35rem;
-}
-.intel-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 2.1fr) minmax(320px, 0.95fr);
-    gap: 1.5rem;
-}
-.intel-map-card {
-    padding: 1.2rem;
-}
-.intel-map-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: start;
-    margin-bottom: 1rem;
-}
-.intel-map-header h2,
-.intel-panel-title {
-    margin: 0;
-}
-.intel-subtle {
-    color: var(--eve-text-muted);
-    font-size: 0.92rem;
-}
-.intel-neighbors {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-}
-.intel-neighbor-btn {
-    border: 1px solid rgba(126, 200, 227, 0.22);
-    background: rgba(126, 200, 227, 0.08);
-    color: #9dd9ec;
-    border-radius: 999px;
-    padding: 0.45rem 0.8rem;
-}
-.intel-map-stage {
-    overflow: auto;
-    border-radius: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    background:
-        linear-gradient(180deg, rgba(5, 12, 18, 0.95), rgba(9, 15, 20, 0.95)),
-        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.05), transparent 20%);
-}
-.intel-map-svg {
-    width: 100%;
-    min-height: 460px;
-}
-.intel-link {
-    stroke: rgba(126, 200, 227, 0.2);
-    stroke-width: 3;
-}
-.intel-node {
-    cursor: pointer;
-}
-.intel-node-glow {
-    fill: #00b4d8;
-}
-.intel-node-core {
-    fill: rgba(8, 17, 24, 0.95);
-    stroke: rgba(157, 217, 236, 0.45);
-    stroke-width: 2;
-}
-.intel-node.danger-warm .intel-node-glow { fill: #f4a300; }
-.intel-node.danger-hot .intel-node-glow { fill: #ff5e5b; }
-.intel-node.is-selected .intel-node-core {
-    stroke: #ffffff;
-    stroke-width: 3;
-}
-.intel-node-kills {
-    fill: #f4fbff;
-    font-weight: 700;
-    font-size: 0.92rem;
-}
-.intel-node-label {
-    fill: #9fb4c3;
-    font-size: 0.8rem;
-}
-.intel-sidebar {
-    display: grid;
-    gap: 1rem;
-}
-.intel-panel {
-    padding: 1rem;
-}
-.intel-panel-title {
-    font-size: 1rem;
-    margin-bottom: 0.8rem;
-}
-.intel-system-name {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-.intel-system-meta,
-.intel-empty {
-    color: var(--eve-text-muted);
-}
-.intel-heatbar {
-    height: 0.7rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 999px;
-    overflow: hidden;
-    margin: 0.85rem 0 1rem;
-}
-.intel-heatbar span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #00b4d8, #f4a300, #ff5e5b);
-}
-.intel-mini-list {
-    display: grid;
-    gap: 0.5rem;
-}
-.intel-mini-row,
-.intel-feed-item {
-    display: grid;
-    gap: 0.2rem;
-    padding: 0.8rem 0.9rem;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 0.95rem;
-    background: rgba(255, 255, 255, 0.02);
-}
-.intel-feed {
-    display: grid;
-    gap: 0.75rem;
-    max-height: 42rem;
-    overflow: auto;
-}
-.intel-feed-item {
-    text-align: left;
-    color: inherit;
-}
-.intel-feed-item.is-active {
-    border-color: rgba(0, 180, 216, 0.34);
-    background: rgba(0, 180, 216, 0.08);
-}
-.intel-feed-top,
-.intel-feed-sub {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    font-size: 0.82rem;
-}
-.intel-feed-main {
-    font-size: 0.95rem;
-}
-.intel-feed-sub {
-    color: var(--eve-text-muted);
-}
+.intel-hero { padding:1.4rem 1.5rem; display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.intel-hero h1 { margin:0 0 .35rem; font-size:clamp(1.8rem, 3vw, 2.6rem); }
+.intel-hero p { margin:0; max-width:55rem; color:var(--eve-text-muted); }
+.intel-kicker { color:#7ec8e3; text-transform:uppercase; letter-spacing:.18em; font-size:.74rem; margin-bottom:.5rem; }
+.intel-controls { display:flex; gap:.9rem; flex-wrap:wrap; align-items:end; }
+.intel-control-group { min-width:11rem; }
+.intel-control-group label { display:block; font-size:.75rem; text-transform:uppercase; letter-spacing:.12em; color:var(--eve-text-muted); margin-bottom:.35rem; }
+.intel-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(320px, .95fr); gap:1.5rem; }
+.intel-map-card { padding:1.2rem; }
+.intel-map-header { display:flex; justify-content:space-between; gap:1rem; align-items:start; margin-bottom:1rem; }
+.intel-map-header h2, .intel-panel-title { margin:0; }
+.intel-subtle { color:var(--eve-text-muted); font-size:.92rem; }
+.intel-neighbors { display:flex; gap:.45rem; flex-wrap:wrap; }
+.intel-neighbor-btn { border:1px solid rgba(126, 200, 227, 0.22); background:rgba(126, 200, 227, 0.08); color:#9dd9ec; border-radius:999px; padding:.38rem .72rem; font-size:.8rem; }
+.intel-map-stage { overflow:auto; border-radius:1rem; border:1px solid rgba(255,255,255,.04); background:linear-gradient(180deg, rgba(5, 12, 18, .95), rgba(9, 15, 20, .95)); }
+.intel-map-svg { width:100%; min-height:760px; }
+.intel-link { stroke:rgba(126, 200, 227, .15); stroke-width:1.6; }
+.intel-node { cursor:pointer; }
+.intel-node-glow { fill:#00b4d8; }
+.intel-node-core { fill:rgba(8, 17, 24, .95); stroke:rgba(157, 217, 236, .5); stroke-width:1.4; }
+.intel-node.danger-warm .intel-node-glow { fill:#f4a300; }
+.intel-node.danger-hot .intel-node-glow { fill:#ff5e5b; }
+.intel-node.is-selected .intel-node-core { stroke:#fff; stroke-width:2; }
+.intel-node-kills { fill:#f4fbff; font-weight:700; font-size:.42rem; }
+.intel-node-label { fill:#9fb4c3; font-size:.34rem; }
+.intel-sidebar { display:grid; gap:1rem; }
+.intel-panel { padding:1rem; }
+.intel-panel-title { font-size:1rem; margin-bottom:.8rem; }
+.intel-system-name { font-size:1.25rem; font-weight:700; }
+.intel-system-meta, .intel-empty { color:var(--eve-text-muted); }
+.intel-heatbar { height:.7rem; background:rgba(255,255,255,.05); border-radius:999px; overflow:hidden; margin:.85rem 0 1rem; }
+.intel-heatbar span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg, #00b4d8, #f4a300, #ff5e5b); }
+.intel-mini-list { display:grid; gap:.5rem; }
+.intel-mini-row { display:grid; grid-template-columns:38px 1fr; gap:.65rem; padding:.55rem .65rem; border:1px solid rgba(255,255,255,.05); border-radius:.85rem; background:rgba(255,255,255,.02); color:inherit; text-decoration:none; align-items:center; }
+.intel-mini-row img { width:38px; height:38px; object-fit:contain; }
+.intel-feed { display:grid; gap:.45rem; max-height:42rem; overflow:auto; }
+.intel-feed-item { display:grid; grid-template-columns:42px 1fr; gap:.6rem; align-items:center; padding:.45rem .55rem; border:1px solid rgba(255,255,255,.05); border-radius:.8rem; background:rgba(255,255,255,.02); text-decoration:none; color:inherit; }
+.intel-feed-item.is-active { border-color:rgba(0, 180, 216, .34); background:rgba(0, 180, 216, .08); }
+.intel-feed-ship { width:42px; height:42px; object-fit:contain; }
+.intel-feed-copy { min-width:0; }
+.intel-feed-line { display:flex; justify-content:space-between; gap:.6rem; font-size:.82rem; }
+.intel-feed-line-secondary { color:var(--eve-text-muted); font-size:.74rem; }
 @media (max-width: 1100px) {
-    .intel-layout {
-        grid-template-columns: 1fr;
-    }
+    .intel-layout { grid-template-columns:1fr; }
 }
 </style>
 {% endblock %}

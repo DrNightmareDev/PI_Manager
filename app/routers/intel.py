@@ -1,151 +1,266 @@
 from __future__ import annotations
 
+import hashlib
+import logging
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+import requests
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app import sde
 from app.dependencies import require_owner
+from app.esi import universe_names
 from app.templates_env import templates
 
 router = APIRouter(prefix="/intel", tags=["intel"])
 
+logger = logging.getLogger(__name__)
 
-REGIONS = {
-    "tribute": {
-        "name": "Tribute",
-        "neighbors": ["vale_of_the_silent"],
-        "systems": [
-            {"id": 30002768, "name": "M-OEE8", "x": 130, "y": 180, "security": "-0.6"},
-            {"id": 30002769, "name": "Q-EHMJ", "x": 290, "y": 120, "security": "-0.5"},
-            {"id": 30002770, "name": "EOY-BG", "x": 470, "y": 185, "security": "-0.3"},
-            {"id": 30002771, "name": "PVH8-0", "x": 335, "y": 315, "security": "-0.7"},
-            {"id": 30002772, "name": "9-4RP2", "x": 170, "y": 360, "security": "-0.4"},
-            {"id": 30002773, "name": "6RCQ-V", "x": 525, "y": 360, "security": "-0.8"},
-        ],
-        "connections": [
-            [30002768, 30002769],
-            [30002769, 30002770],
-            [30002769, 30002771],
-            [30002768, 30002772],
-            [30002771, 30002772],
-            [30002771, 30002773],
-            [30002770, 30002773],
-        ],
-    },
-    "vale_of_the_silent": {
-        "name": "Vale of the Silent",
-        "neighbors": ["tribute"],
-        "systems": [
-            {"id": 30002801, "name": "P3EN-E", "x": 150, "y": 145, "security": "-0.7"},
-            {"id": 30002802, "name": "KQK1-2", "x": 300, "y": 115, "security": "-0.4"},
-            {"id": 30002803, "name": "Y-2ANO", "x": 475, "y": 165, "security": "-0.6"},
-            {"id": 30002804, "name": "XVV-21", "x": 210, "y": 330, "security": "-0.2"},
-            {"id": 30002805, "name": "T-ZWA1", "x": 395, "y": 310, "security": "-0.8"},
-            {"id": 30002806, "name": "B-DBYQ", "x": 555, "y": 360, "security": "-0.5"},
-        ],
-        "connections": [
-            [30002801, 30002802],
-            [30002802, 30002803],
-            [30002801, 30002804],
-            [30002802, 30002804],
-            [30002804, 30002805],
-            [30002803, 30002805],
-            [30002805, 30002806],
-        ],
-    },
-}
-
-WINDOW_FACTORS = {
-    "5m": 0.45,
-    "15m": 0.75,
-    "60m": 1.0,
-    "24h": 1.9,
-}
-
-KILL_TYPES = ("all", "ship", "pod")
-SHIP_POOL = (
-    "Ishtar",
-    "Sabre",
-    "Drake Navy Issue",
-    "Kikimora",
-    "Nighthawk",
-    "Hecate",
-    "Vagabond",
-    "Cerberus",
-)
-CORP_POOL = (
-    "Shadow Assembly",
-    "Northwind Raiders",
-    "Aegis Frontier",
-    "Dread Signal",
-    "Tenebris Fleet",
-)
+HEADERS = {"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"}
+WINDOW_SECONDS = {"5m": 300, "15m": 900, "60m": 3600, "24h": 86400}
 
 
-def _get_region(region_key: str) -> dict:
-    return REGIONS.get(region_key, REGIONS["tribute"])
+def _ship_image(type_id: int) -> str:
+    return f"https://images.evetech.net/types/{type_id}/render?size=64"
 
 
-def _activity_snapshot(region_key: str, window: str, kill_type: str) -> tuple[list[dict], list[dict]]:
-    region = _get_region(region_key)
-    factor = WINDOW_FACTORS.get(window, 1.0)
-    type_factor = {"all": 1.0, "ship": 0.82, "pod": 0.36}.get(kill_type, 1.0)
-    now = datetime.now(timezone.utc)
-    tick = int(now.timestamp() // 30)
-    systems = []
-    feed = []
+def _resolve_region(region: str) -> dict:
+    catalog = sde.get_region_catalog()
+    if not catalog:
+        raise RuntimeError("No region catalog available")
+    try:
+        region_id = int(region)
+    except (TypeError, ValueError):
+        region_id = int(catalog[0]["id"])
+    graph = sde.get_region_system_graph(region_id)
+    if graph:
+        return graph
+    return sde.get_region_system_graph(int(catalog[0]["id"])) or {
+        "id": int(catalog[0]["id"]),
+        "name": catalog[0]["name"],
+        "systems": [],
+        "connections": [],
+        "neighbors": [],
+    }
 
-    for index, system in enumerate(region["systems"]):
-        base = ((tick + index * 5 + len(region_key)) % 9) + index % 3
-        weighted = max(0, round(base * factor * type_factor))
-        heat = min(1.0, weighted / 10.0)
-        systems.append({
-            "system_id": system["id"],
-            "kill_count": weighted,
-            "heat": heat,
-            "danger": "hot" if weighted >= 7 else "warm" if weighted >= 3 else "cold",
-        })
 
-        entries = max(1, min(4, weighted // 2 + 1))
-        for offset in range(entries):
-            minutes_ago = (index * 4 + offset * 3 + tick) % 55
-            kill_time = now - timedelta(minutes=minutes_ago, seconds=(offset + 1) * 11)
-            ship = SHIP_POOL[(index + offset + tick) % len(SHIP_POOL)]
-            corp = CORP_POOL[(index * 2 + offset + tick) % len(CORP_POOL)]
-            feed.append({
-                "killmail_id": int(f"{system['id']}{index}{offset}") % 2_147_483_647,
-                "timestamp": kill_time.isoformat(),
-                "system_id": system["id"],
-                "system_name": system["name"],
-                "region_name": region["name"],
-                "victim_name": f"Pilot-{(tick + index + offset) % 97:02d}",
-                "ship_type": ship,
-                "alliance_name": corp,
-                "attackers": 2 + ((index + offset + tick) % 7),
-                "isk_value": 24_000_000 + ((index + 1) * (offset + 2) * 8_500_000),
+def _layout_region(graph: dict) -> dict:
+    systems = list(graph["systems"])
+    constellation_groups: dict[int, list[dict]] = defaultdict(list)
+    for system in systems:
+        constellation_groups[int(system.get("constellation_id") or 0)].append(system)
+
+    ordered_groups = sorted(
+        constellation_groups.items(),
+        key=lambda item: ((item[1][0].get("constellation_name") or "").lower(), item[0]),
+    )
+    group_count = max(1, len(ordered_groups))
+    width = 1180
+    height = max(820, 220 + group_count * 110)
+    center_x = width / 2
+    center_y = height / 2
+
+    laid_out = []
+    for group_index, (_, group_systems) in enumerate(ordered_groups):
+        angle = (group_index / group_count) * 6.28318
+        orbit_x = center_x + 320 * __import__("math").cos(angle)
+        orbit_y = center_y + 250 * __import__("math").sin(angle)
+        group_systems = sorted(group_systems, key=lambda item: item["name"].lower())
+        inner_count = max(1, len(group_systems))
+        for system_index, system in enumerate(group_systems):
+            inner_angle = (system_index / inner_count) * 6.28318
+            radius = 58 + (system_index % 5) * 18
+            laid_out.append({
+                **system,
+                "x": round(orbit_x + radius * __import__("math").cos(inner_angle), 2),
+                "y": round(orbit_y + radius * __import__("math").sin(inner_angle), 2),
             })
 
+    return {
+        "id": graph["id"],
+        "name": graph["name"],
+        "systems": laid_out,
+        "connections": graph["connections"],
+        "neighbors": graph["neighbors"],
+        "view_box": f"0 0 {width} {height}",
+    }
+
+
+def _fetch_region_kills(region_id: int) -> list[dict]:
+    try:
+        response = requests.get(
+            f"https://zkillboard.com/api/kills/regionID/{region_id}/limit/80/",
+            headers=HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return payload if isinstance(payload, list) else []
+    except Exception:
+        logger.exception("intel: failed to fetch kills for region %s", region_id)
+        return []
+
+
+def _resolve_names(raw_kills: list[dict]) -> dict[int, str]:
+    ids: set[int] = set()
+    for kill in raw_kills:
+        victim = kill.get("victim") or {}
+        for key in ("character_id", "corporation_id", "alliance_id"):
+            value = int(victim.get(key) or 0)
+            if value:
+                ids.add(value)
+    names: dict[int, str] = {}
+    id_list = list(ids)
+    for start in range(0, len(id_list), 1000):
+        batch = id_list[start:start + 1000]
+        for item in universe_names(batch):
+            try:
+                names[int(item["id"])] = item["name"]
+            except Exception:
+                continue
+    return names
+
+
+def _normalize_feed_entry(kill: dict, graph: dict, name_map: dict[int, str]) -> dict | None:
+    killmail_id = int(kill.get("killmail_id") or 0)
+    solar_system_id = int(kill.get("solar_system_id") or 0)
+    system_info = next((system for system in graph["systems"] if system["id"] == solar_system_id), None)
+    if not killmail_id or not system_info:
+        return None
+
+    victim = kill.get("victim") or {}
+    ship_type_id = int(victim.get("ship_type_id") or 0)
+    character_id = int(victim.get("character_id") or 0)
+    corporation_id = int(victim.get("corporation_id") or 0)
+    alliance_id = int(victim.get("alliance_id") or 0)
+
+    victim_name = (
+        victim.get("character_name")
+        or name_map.get(character_id)
+        or victim.get("characterName")
+        or "Unknown Pilot"
+    )
+    corp_name = (
+        victim.get("alliance_name")
+        or name_map.get(alliance_id)
+        or victim.get("corporation_name")
+        or name_map.get(corporation_id)
+        or "Unknown"
+    )
+    ship_name = sde.get_type_name(ship_type_id) or f"Type {ship_type_id}"
+    attackers = kill.get("attackers") or []
+    zkb = kill.get("zkb") or {}
+    kill_time = kill.get("killmail_time") or datetime.now(timezone.utc).isoformat()
+
+    return {
+        "killmail_id": killmail_id,
+        "kill_url": f"https://zkillboard.com/kill/{killmail_id}/",
+        "timestamp": kill_time,
+        "system_id": solar_system_id,
+        "system_name": system_info["name"],
+        "region_name": graph["name"],
+        "victim_name": victim_name,
+        "ship_type": ship_name,
+        "ship_image_url": _ship_image(ship_type_id) if ship_type_id else "",
+        "alliance_name": corp_name,
+        "attackers": len(attackers),
+        "isk_value": float(zkb.get("totalValue") or 0.0),
+    }
+
+
+def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict], list[dict]]:
+    now = datetime.now(timezone.utc)
+    systems = []
+    feed = []
+    for index, system in enumerate(graph["systems"]):
+        seed = int(hashlib.sha1(f"{graph['id']}-{window}-{kill_type}-{system['id']}".encode("ascii")).hexdigest()[:8], 16)
+        count = (seed % 7) + (index % 3)
+        systems.append({
+            "system_id": system["id"],
+            "kill_count": count,
+            "heat": min(1.0, count / 10.0),
+            "danger": "hot" if count >= 7 else "warm" if count >= 3 else "cold",
+        })
+        feed.append({
+            "killmail_id": seed,
+            "kill_url": f"https://zkillboard.com/system/{system['id']}/",
+            "timestamp": (now - timedelta(minutes=index * 3)).isoformat(),
+            "system_id": system["id"],
+            "system_name": system["name"],
+            "region_name": graph["name"],
+            "victim_name": f"Pilot-{index + 1:02d}",
+            "ship_type": "Ishtar",
+            "ship_image_url": _ship_image(12005),
+            "alliance_name": "Fallback Intel",
+            "attackers": 2 + (index % 5),
+            "isk_value": 15_000_000 + index * 8_500_000,
+        })
     feed.sort(key=lambda item: item["timestamp"], reverse=True)
-    return systems, feed[:18]
+    return systems, feed[:24]
+
+
+def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict]]:
+    graph = _layout_region(_resolve_region(str(region_id)))
+    raw_kills = _fetch_region_kills(region_id)
+    if not raw_kills:
+        activity, feed = _fallback_feed(graph, window, kill_type)
+        return graph, activity, feed
+
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=WINDOW_SECONDS.get(window, 3600))
+    name_map = _resolve_names(raw_kills)
+    activity_counter: dict[int, int] = defaultdict(int)
+    feed: list[dict] = []
+
+    for kill in raw_kills:
+        if kill_type == "pod" and int((kill.get("victim") or {}).get("ship_type_id") or 0) != 670:
+            continue
+        if kill_type == "ship" and int((kill.get("victim") or {}).get("ship_type_id") or 0) == 670:
+            continue
+        try:
+            kill_time = datetime.fromisoformat(str(kill.get("killmail_time")).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if kill_time < cutoff:
+            continue
+        entry = _normalize_feed_entry(kill, graph, name_map)
+        if not entry:
+            continue
+        feed.append(entry)
+        activity_counter[int(entry["system_id"])] += 1
+
+    if not feed:
+        activity, feed = _fallback_feed(graph, window, kill_type)
+        return graph, activity, feed
+
+    feed.sort(key=lambda item: item["timestamp"], reverse=True)
+    activity = []
+    for system in graph["systems"]:
+        count = int(activity_counter.get(system["id"], 0))
+        activity.append({
+            "system_id": system["id"],
+            "kill_count": count,
+            "heat": min(1.0, count / 9.0),
+            "danger": "hot" if count >= 7 else "warm" if count >= 3 else "cold",
+        })
+    return graph, activity, feed[:24]
 
 
 @router.get("/map", response_class=HTMLResponse)
 def intel_map(
     request: Request,
-    region: str = Query("tribute"),
+    region: str = Query("10000010"),
     account=Depends(require_owner),
 ):
-    region_data = _get_region(region)
-    system_activity, kill_feed = _activity_snapshot(region, "60m", "all")
+    regions = sde.get_region_catalog()
+    graph, system_activity, kill_feed = _build_live_snapshot(int(region or regions[0]["id"]), "60m", "all")
     return templates.TemplateResponse("intel_map.html", {
         "request": request,
         "account": account,
-        "regions": [{"key": key, "name": value["name"]} for key, value in REGIONS.items()],
-        "selected_region": region,
-        "region_data": region_data,
+        "regions": regions,
+        "selected_region": str(graph["id"]),
+        "region_data": graph,
         "initial_activity": system_activity,
         "initial_feed": kill_feed,
     })
@@ -153,22 +268,14 @@ def intel_map(
 
 @router.get("/map/live")
 def intel_map_live(
-    region: str = Query("tribute"),
+    region: str = Query("10000010"),
     window: str = Query("60m"),
     kill_type: str = Query("all"),
     account=Depends(require_owner),
-    db: Session = Depends(get_db),
 ):
-    region_data = _get_region(region)
-    system_activity, kill_feed = _activity_snapshot(region, window, kill_type if kill_type in KILL_TYPES else "all")
+    graph, system_activity, kill_feed = _build_live_snapshot(int(region), window, kill_type)
     return JSONResponse({
-        "region": {
-            "key": region,
-            "name": region_data["name"],
-            "neighbors": region_data["neighbors"],
-            "systems": region_data["systems"],
-            "connections": region_data["connections"],
-        },
+        "region": graph,
         "window": window,
         "kill_type": kill_type,
         "activity": system_activity,
