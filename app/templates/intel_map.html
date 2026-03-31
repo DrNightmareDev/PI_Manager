@@ -59,6 +59,7 @@
                 <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomIn">+</button>
                 <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomOut">-</button>
                 <button type="button" class="btn btn-sm eve-btn-ghost" id="intelZoomReset">Reset</button>
+                <span class="intel-load-status" id="intelLoadStatus"></span>
                 <span class="intel-visible-note" id="intelVisibleNote"></span>
             </div>
 
@@ -89,6 +90,7 @@ const INTEL_BOOTSTRAP = {
     region: {{ region_data | tojson }},
     activity: {{ initial_activity | tojson }},
     feed: {{ initial_feed | tojson }},
+    sourceMeta: {{ initial_source_meta | tojson }},
 };
 
 const intelState = {
@@ -96,6 +98,7 @@ const intelState = {
     region: INTEL_BOOTSTRAP.region,
     activity: INTEL_BOOTSTRAP.activity,
     feed: INTEL_BOOTSTRAP.feed,
+    sourceMeta: INTEL_BOOTSTRAP.sourceMeta,
     selectedSystemId: null,
     selectedKillmailId: null,
     window: '60m',
@@ -159,6 +162,26 @@ function updateVisibleNote() {
     const feed = visibleFeed();
     const note = document.getElementById('intelVisibleNote');
     note.textContent = `${ids.size} systems · ${feed.length} visible kills`;
+}
+
+function renderLoadStatus(state = 'idle', message = '') {
+    const node = document.getElementById('intelLoadStatus');
+    const sourceMeta = intelState.sourceMeta || {};
+    const rawKills = Number(sourceMeta.raw_kills || 0);
+    const feedKills = Number(sourceMeta.feed_kills || 0);
+    const activeSystems = Number(sourceMeta.activity_systems || 0);
+    const detail = message || sourceMeta.message || '';
+    node.className = `intel-load-status is-${state}`;
+    if (state === 'loading') {
+        node.textContent = 'Loading kill data from zKill/ESI...';
+        return;
+    }
+    if (state === 'error') {
+        node.textContent = detail || 'Kill loading failed.';
+        return;
+    }
+    const prefix = state === 'empty' ? 'No kills loaded' : 'Kills loaded';
+    node.textContent = `${prefix} · raw ${rawKills} · feed ${feedKills} · systems ${activeSystems}${detail ? ` · ${detail}` : ''}`;
 }
 
 function renderNeighbors() {
@@ -342,19 +365,30 @@ function refreshAll() {
 }
 
 async function refreshIntel() {
+    renderLoadStatus('loading');
     const params = new URLSearchParams({
         region: intelState.selectedRegion,
         window: intelState.window,
         kill_type: intelState.killType,
     });
-    const response = await fetch(`/intel/map/live?${params.toString()}`);
-    if (!response.ok) return;
+    let response;
+    try {
+        response = await fetch(`/intel/map/live?${params.toString()}`);
+    } catch {
+        renderLoadStatus('error', 'Network error while loading kill data.');
+        return;
+    }
+    if (!response.ok) {
+        renderLoadStatus('error', `Kill loading failed with HTTP ${response.status}.`);
+        return;
+    }
     const payload = await response.json();
     const hadViewBox = !!intelState.viewBox;
     const previousViewBox = intelState.viewBox ? { ...intelState.viewBox } : null;
     intelState.region = payload.region;
     intelState.activity = payload.activity;
     intelState.feed = payload.feed;
+    intelState.sourceMeta = payload.source_meta || {};
     if (hadViewBox && previousViewBox) {
         intelState.viewBox = previousViewBox;
         clampViewBox();
@@ -366,6 +400,7 @@ async function refreshIntel() {
     }
     document.getElementById('intelRegionTitle').textContent = payload.region.name;
     refreshAll();
+    renderLoadStatus((intelState.sourceMeta.raw_kills || 0) > 0 ? 'ok' : 'empty');
 }
 
 async function changeRegion(regionKey) {
@@ -422,6 +457,7 @@ window.addEventListener('pointermove', event => {
 
 intelState.viewBox = parseViewBox();
 refreshAll();
+renderLoadStatus((intelState.sourceMeta?.raw_kills || 0) > 0 ? 'ok' : 'empty');
 setInterval(refreshIntel, 20000);
 </script>
 <style>
@@ -450,6 +486,11 @@ setInterval(refreshIntel, 20000);
 .intel-neighbors { display:flex; gap:.45rem; flex-wrap:wrap; }
 .intel-neighbor-btn { border:1px solid rgba(126, 200, 227, 0.22); background:rgba(126, 200, 227, 0.08); color:#9dd9ec; border-radius:999px; padding:.38rem .72rem; font-size:.8rem; }
 .intel-map-tools { display:flex; gap:.45rem; align-items:center; margin-bottom:.85rem; }
+.intel-load-status { font-size:.8rem; padding:.28rem .65rem; border-radius:999px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03); color:var(--eve-text-muted); }
+.intel-load-status.is-loading { color:#8fdfff; border-color:rgba(0,180,216,.34); background:rgba(0,180,216,.08); }
+.intel-load-status.is-ok { color:#9fe7b0; border-color:rgba(80,200,120,.25); background:rgba(80,200,120,.08); }
+.intel-load-status.is-empty { color:#f0c36d; border-color:rgba(244,163,0,.25); background:rgba(244,163,0,.08); }
+.intel-load-status.is-error { color:#ff9f9f; border-color:rgba(220,70,70,.32); background:rgba(220,70,70,.1); }
 .intel-visible-note { margin-left:auto; color:var(--eve-text-muted); font-size:.8rem; }
 .intel-map-stage { overflow:hidden; border-radius:1rem; border:1px solid rgba(255,255,255,.04); background:linear-gradient(180deg, rgba(5, 12, 18, .95), rgba(9, 15, 20, .95)); touch-action:none; }
 .intel-map-svg { width:100%; min-height:760px; display:block; }

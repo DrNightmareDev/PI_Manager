@@ -113,7 +113,7 @@ def _fallback_feed(graph: dict, window: str, kill_type: str) -> tuple[list[dict]
     return systems, []
 
 
-def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict]]:
+def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[dict, list[dict], list[dict], dict]:
     graph = _resolve_region(str(region_id))
     alt_positions = _build_alt_layout(graph)
     systems = []
@@ -133,7 +133,13 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
     raw_kills = get_region_kills(region_id, window=window, limit=200)
     if not raw_kills:
         activity, feed = _fallback_feed(graph, window, kill_type)
-        return graph, activity, feed
+        return graph, activity, feed, {
+            "source_state": "empty",
+            "raw_kills": 0,
+            "feed_kills": 0,
+            "activity_systems": 0,
+            "message": "No kill data returned from zKill/ESI for this region and time window.",
+        }
 
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=WINDOW_SECONDS.get(window, 3600))
     name_map = resolve_kill_names(raw_kills)
@@ -159,19 +165,34 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
 
     if not feed:
         activity, feed = _fallback_feed(graph, window, kill_type)
-        return graph, activity, feed
+        return graph, activity, feed, {
+            "source_state": "filtered_empty",
+            "raw_kills": len(raw_kills),
+            "feed_kills": 0,
+            "activity_systems": 0,
+            "message": "Kill data loaded, but nothing matched the selected filters.",
+        }
 
     feed.sort(key=lambda item: item["timestamp"], reverse=True)
     activity = []
+    active_systems = 0
     for system in graph["systems"]:
         count = int(activity_counter.get(system["id"], 0))
+        if count > 0:
+            active_systems += 1
         activity.append({
             "system_id": system["id"],
             "kill_count": count,
             "heat": min(1.0, count / 9.0),
             "danger": "hot" if count >= 7 else "warm" if count >= 3 else "cold",
         })
-    return graph, activity, feed[:200]
+    return graph, activity, feed[:200], {
+        "source_state": "ok",
+        "raw_kills": len(raw_kills),
+        "feed_kills": len(feed),
+        "activity_systems": active_systems,
+        "message": "Kill data loaded successfully.",
+    }
 
 
 @router.get("/map", response_class=HTMLResponse)
@@ -181,7 +202,7 @@ def intel_map(
     account=Depends(require_owner),
 ):
     regions = sde.get_region_catalog()
-    graph, system_activity, kill_feed = _build_live_snapshot(int(region or regions[0]["id"]), "60m", "all")
+    graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region or regions[0]["id"]), "60m", "all")
     return templates.TemplateResponse("intel_map.html", {
         "request": request,
         "account": account,
@@ -190,6 +211,7 @@ def intel_map(
         "region_data": graph,
         "initial_activity": system_activity,
         "initial_feed": kill_feed,
+        "initial_source_meta": source_meta,
     })
 
 
@@ -200,12 +222,13 @@ def intel_map_live(
     kill_type: str = Query("all"),
     account=Depends(require_owner),
 ):
-    graph, system_activity, kill_feed = _build_live_snapshot(int(region), window, kill_type)
+    graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region), window, kill_type)
     return JSONResponse({
         "region": graph,
         "window": window,
         "kill_type": kill_type,
         "activity": system_activity,
         "feed": kill_feed,
+        "source_meta": source_meta,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
