@@ -858,11 +858,55 @@ const BALANCE_LABELS = {
     unitsPerHour: {{ 'u/h' | tojson }},
     minutes: {{ 'minutes' | tojson }},
 };
+const PI_CHECK_LABELS = {
+    title: {{ t('dashboard.pi_check.title') | tojson }},
+    rawMaterialsExtractors: {{ t('dashboard.pi_check.raw_materials_extractors') | tojson }},
+    p4ProductsDemand: {{ t('dashboard.pi_check.p4_products_demand') | tojson }},
+    p0Balance: {{ t('dashboard.pi_check.p0_balance') | tojson }},
+    noActiveExtractors: {{ t('dashboard.pi_check.no_active_extractors') | tojson }},
+    noP4Production: {{ t('dashboard.pi_check.no_p4_production') | tojson }},
+    noProductionOrExtractors: {{ t('dashboard.pi_check.no_production_or_extractors') | tojson }},
+    noData: {{ t('dashboard.pi_check.no_data') | tojson }},
+    material: {{ t('dashboard.pi_check.material') | tojson }},
+    extractorsShort: {{ t('dashboard.pi_check.extractors_short') | tojson }},
+    perDay: {{ t('dashboard.pi_check.per_day') | tojson }},
+    rawMaterial: {{ t('dashboard.pi_check.raw_material') | tojson }},
+    demandPerDay: {{ t('dashboard.pi_check.demand_per_day') | tojson }},
+    extractionPerDay: {{ t('dashboard.pi_check.extraction_per_day') | tojson }},
+    p0Material: {{ t('dashboard.pi_check.p0_material') | tojson }},
+    status: {{ t('dashboard.pi_check.status') | tojson }},
+    sufficient: {{ t('dashboard.pi_check.sufficient') | tojson }},
+    deficit: {{ t('dashboard.pi_check.deficit') | tojson }},
+    chainUnavailable: {{ t('dashboard.pi_check.chain_unavailable') | tojson }},
+    loadError: {{ t('dashboard.pi_check.load_error') | tojson }},
+};
 const BALANCE_THRESHOLD_KEY = 'eve_pi_balance_threshold_pct';
+
+function localizePiCheckModal() {
+    const modal = document.getElementById('piCheckModal');
+    if (!modal) return;
+    const title = modal.querySelector('.modal-title');
+    if (title) {
+        title.innerHTML = `<i class="bi bi-clipboard-data me-2 eve-accent"></i>${PI_CHECK_LABELS.title}`;
+    }
+    const sections = modal.querySelectorAll('.fw-semibold.mb-2');
+    if (sections[0]) sections[0].innerHTML = `<i class="bi bi-minecart-loaded me-1"></i>${PI_CHECK_LABELS.rawMaterialsExtractors}`;
+    if (sections[1]) sections[1].innerHTML = `<i class="bi bi-box-seam me-1"></i>${PI_CHECK_LABELS.p4ProductsDemand}`;
+    if (sections[2]) sections[2].innerHTML = `<i class="bi bi-bar-chart-line me-1"></i>${PI_CHECK_LABELS.p0Balance}`;
+    const loading = document.getElementById('piCheckLoading');
+    if (loading) {
+        loading.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>{{ t('common.loading') }}`;
+    }
+    const empty = document.getElementById('piCheckEmpty');
+    if (empty) {
+        empty.textContent = PI_CHECK_LABELS.noProductionOrExtractors;
+    }
+}
 
 // -- Colony Detail Modal -------------------------------------------------------
 const colonyModal = new bootstrap.Modal(document.getElementById('colonyDetailModal'));
 const TIER_COLORS = {P1:'#586e75', P2:'#00b4d8', P3:'#f4a300', P4:'#e63946'};
+localizePiCheckModal();
 
 function formatIsk(val) {
     if (!val || val === 0) return '—';
@@ -1820,14 +1864,14 @@ function openPiCheck() {
             _renderPiCheckBalance(p0, data.p0_total_needed || {});
         })
         .catch(() => {
-            document.getElementById('piCheckLoading').innerHTML = '<span class="text-danger">Fehler beim Laden.</span>';
+            document.getElementById('piCheckLoading').innerHTML = `<span class="text-danger">${PI_CHECK_LABELS.loadError}</span>`;
         });
 }
 
 function _renderPiCheckP0(p0) {
     const el = document.getElementById('piCheckP0Table');
     if (!Object.keys(p0).length) {
-        el.innerHTML = '<div class="text-muted small">Keine aktiven Extraktoren.</div>';
+        el.innerHTML = `<div class="text-muted small">${PI_CHECK_LABELS.noActiveExtractors}</div>`;
         return;
     }
     let rows = '';
@@ -1839,7 +1883,7 @@ function _renderPiCheckP0(p0) {
         </tr>`;
     }
     el.innerHTML = `<table class="picheck-p0-table">
-        <thead><tr><th>Material</th><th style="text-align:center">Ext.</th><th style="text-align:right">/Tag</th></tr></thead>
+        <thead><tr><th>${PI_CHECK_LABELS.material}</th><th style="text-align:center">${PI_CHECK_LABELS.extractorsShort}</th><th style="text-align:right">${PI_CHECK_LABELS.perDay}</th></tr></thead>
         <tbody>${rows}</tbody>
     </table>`;
 }
@@ -1847,7 +1891,7 @@ function _renderPiCheckP0(p0) {
 function _renderPiCheckP4(p4, p0) {
     const el = document.getElementById('piCheckP4List');
     if (!p4.length) {
-        el.innerHTML = '<div class="text-muted small">Keine P4-Produktion.</div>';
+        el.innerHTML = `<div class="text-muted small">${PI_CHECK_LABELS.noP4Production}</div>`;
         return;
     }
     let html = '';
@@ -1865,23 +1909,23 @@ function _renderPiCheckP4(p4, p0) {
                 <span class="picheck-p0-matname">${matName}</span>
                 <span class="picheck-num" style="color:#c9d1d9">${_fmtNum(needed)}</span>
                 <span class="picheck-num" style="color:#6e8090">/ ${_fmtNum(gathered)}</span>
-                <span class="${cls}" title="${ok ? 'Ausreichend' : 'Defizit'}">${icon}</span>
+                <span class="${cls}" title="${ok ? PI_CHECK_LABELS.sufficient : PI_CHECK_LABELS.deficit}">${icon}</span>
             </div>`;
         }
         if (!hasData) {
-            breakdown = '<div class="text-muted" style="font-size:.78rem;">P0-Kette nicht auflösbar (SDE fehlt?).</div>';
+            breakdown = `<div class="text-muted" style="font-size:.78rem;">${PI_CHECK_LABELS.chainUnavailable}</div>`;
         }
         html += `<div class="picheck-p4-card" id="picheck-card-${i}">
             <div class="picheck-p4-header" onclick="togglePiCheckCard(${i})">
                 <span class="picheck-p4-name">${prod.name}</span>
                 <span class="d-flex align-items-center gap-2">
-                    <span class="picheck-p4-qty">${_fmtNum(prod.qty_day)}/Tag</span>
+                    <span class="picheck-p4-qty">${_fmtNum(prod.qty_day)}${PI_CHECK_LABELS.perDay}</span>
                     <i class="bi bi-chevron-right picheck-chevron"></i>
                 </span>
             </div>
             <div class="picheck-p0-breakdown" style="display:none" id="picheck-breakdown-${i}">
                 <div style="font-size:.72rem;color:var(--eve-text-muted);margin-bottom:6px;display:grid;grid-template-columns:1fr auto auto auto;gap:4px 12px;">
-                    <span>Rohstoff</span><span style="text-align:right">Bedarf/T</span><span style="text-align:right">Abbau/T</span><span></span>
+                    <span>${PI_CHECK_LABELS.rawMaterial}</span><span style="text-align:right">${PI_CHECK_LABELS.demandPerDay}</span><span style="text-align:right">${PI_CHECK_LABELS.extractionPerDay}</span><span></span>
                 </div>
                 ${breakdown}
             </div>
@@ -1905,7 +1949,7 @@ function _renderPiCheckBalance(p0, needed) {
     // Merge keys from both gathered and needed
     const allMats = new Set([...Object.keys(p0), ...Object.keys(needed)]);
     if (!allMats.size) {
-        el.innerHTML = '<div class="text-muted small">Keine Daten.</div>';
+        el.innerHTML = `<div class="text-muted small">${PI_CHECK_LABELS.noData}</div>`;
         return;
     }
     // Sort: deficits first, then by needed desc
@@ -1922,10 +1966,10 @@ function _renderPiCheckBalance(p0, needed) {
 
     let html = `<table class="picheck-p0-table">
         <thead><tr>
-            <th>P0 Material</th>
-            <th style="text-align:right">Abbau/T</th>
-            <th style="text-align:right">Bedarf/T</th>
-            <th style="text-align:center">Status</th>
+            <th>${PI_CHECK_LABELS.p0Material}</th>
+            <th style="text-align:right">${PI_CHECK_LABELS.extractionPerDay}</th>
+            <th style="text-align:right">${PI_CHECK_LABELS.demandPerDay}</th>
+            <th style="text-align:center">${PI_CHECK_LABELS.status}</th>
         </tr></thead><tbody>`;
     for (const r of rows) {
         const ok = r.gathered >= r.needed;
