@@ -241,12 +241,20 @@ def _intel_debug_info(db: Session) -> dict:
     if latest_event and latest_event.created_at:
         created_at = latest_event.created_at if latest_event.created_at.tzinfo else latest_event.created_at.replace(tzinfo=timezone.utc)
         latest_event_age = int((now - created_at).total_seconds())
+
+    def _utc_iso(value):
+        if value is None:
+            return None
+        if getattr(value, "tzinfo", None) is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat()
+
     return {
         "stream_key": getattr(stream, "stream_key", "r2z2"),
         "last_sequence_id": getattr(stream, "last_sequence_id", None),
-        "last_success_at": getattr(stream, "last_success_at", None),
+        "last_success_at": _utc_iso(getattr(stream, "last_success_at", None)),
         "last_error": getattr(stream, "last_error", ""),
-        "updated_at": getattr(stream, "updated_at", None),
+        "updated_at": _utc_iso(getattr(stream, "updated_at", None)),
         "recent_events_5m": int(recent_5m),
         "recent_events_15m": int(recent_15m),
         "total_events": int(total_events),
