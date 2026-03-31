@@ -9,7 +9,6 @@ User=evepi
 Group=evepi
 WorkingDirectory=/opt/eve-pi-manager
 EnvironmentFile=/opt/eve-pi-manager/.env
-Environment=CELERY_WS_AUTOSTART=1
 ExecStart=/opt/eve-pi-manager/venv/bin/celery -A app.celery_app worker --loglevel=info --concurrency=1 -Q ws --hostname=ws@%H
 Restart=always
 RestartSec=10

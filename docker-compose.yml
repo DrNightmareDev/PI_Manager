@@ -134,7 +134,6 @@ services:
     environment:
       DATABASE_URL: postgresql://evepi:${DB_PASSWORD:-evepi_secret}@db/evepi
       CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-evepi}:${RABBITMQ_PASS:-evepi_rabbit}@rabbitmq:5672//
-      CELERY_WS_AUTOSTART: "1"
     volumes:
       - sde_data:/app/data
 

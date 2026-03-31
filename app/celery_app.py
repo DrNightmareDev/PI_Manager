@@ -23,6 +23,14 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     beat_schedule={
+        "poll-r2z2-intel-live": {
+            "task": "app.tasks.zkill_websocket_subscriber",
+            "schedule": 3.0,
+            "options": {
+                "queue": "ws",
+                "expires": 2,
+            },
+        },
         "auto-refresh-stale-accounts": {
             "task": "app.tasks.auto_refresh_stale_accounts",
             "schedule": 300.0,

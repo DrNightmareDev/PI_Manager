@@ -357,7 +357,6 @@ User=${APP_USER}
 Group=${APP_USER}
 WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
-Environment=CELERY_WS_AUTOSTART=1
 ExecStart=${APP_DIR}/venv/bin/celery -A app.celery_app worker \
     --loglevel=info --concurrency=1 -Q ws --hostname=ws@%H
 Restart=always

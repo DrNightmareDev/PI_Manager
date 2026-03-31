@@ -3,12 +3,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
-
-from celery.signals import worker_ready
 
 from app.celery_app import celery_app
 
@@ -19,9 +16,6 @@ STALE_AFTER_MINUTES = 30        # refresh accounts whose cache is older than thi
 MAX_ACCOUNTS_PER_RUN = 60       # max accounts dispatched per auto_refresh run
 ESI_ERROR_BACKOFF_LIMIT = 3     # pause character after this many consecutive errors
 PLANET_FETCH_WORKERS = 10       # parallel ESI planet-detail threads per account
-
-_ws_task_started = False
-
 
 # ── ESI rate limit guard ───────────────────────────────────────────────────────
 # Shared across tasks in the same worker process. Celery worker_prefetch_multiplier=1
@@ -553,20 +547,6 @@ def cleanup_sso_states_task() -> dict:
     return {"deleted": deleted}
 
 
-@worker_ready.connect
-def _autostart_zkill_ws(sender=None, **kwargs):
-    global _ws_task_started
-    if _ws_task_started or os.getenv("CELERY_WS_AUTOSTART") != "1" or sender is None:
-        return
-    _ws_task_started = True
-    try:
-        sender.app.send_task("app.tasks.zkill_websocket_subscriber", queue="ws")
-        logger.info("intel_live: queued R2Z2 poller task on worker startup")
-    except Exception:
-        logger.exception("intel_live: failed to auto-start R2Z2 poller")
-        _ws_task_started = False
-
-
 @celery_app.task(name="app.tasks.zkill_websocket_subscriber", bind=True)
 def zkill_websocket_subscriber(self):
     from sqlalchemy import select
@@ -581,12 +561,10 @@ def zkill_websocket_subscriber(self):
     base_url = "https://r2z2.zkillboard.com/ephemeral"
     sequence_url = f"{base_url}/sequence.json"
     stream_key = "r2z2"
-    empty_sleep = 6.0
-    iterate_sleep = 0.1
-    error_sleep = 15.0
+    max_sequences_per_run = 25
     ring_buffer_max = 500
 
-    logger.info("intel_live: R2Z2 poller starting")
+    logger.debug("intel_live: R2Z2 poll tick starting")
 
     def _prune_ring_buffer(db):
         total = db.query(IntelKillEvent).count()
@@ -731,44 +709,52 @@ def zkill_websocket_subscriber(self):
     if sequence_id is None:
         sequence_id = _fetch_start_sequence()
 
-    while True:
-        try:
-            if sequence_id is None:
-                time.sleep(empty_sleep)
-                sequence_id = _fetch_start_sequence()
-                continue
+    try:
+        latest_sequence = _fetch_start_sequence()
+        if latest_sequence is None:
+            return {"ok": False, "reason": "sequence_unavailable"}
 
+        if sequence_id is None:
+            sequence_id = int(latest_sequence)
+
+        processed = 0
+        current_sequence = int(sequence_id)
+        max_target_sequence = min(int(latest_sequence), current_sequence + max_sequences_per_run - 1)
+
+        while current_sequence <= max_target_sequence:
             response = requests.get(
-                f"{base_url}/{int(sequence_id)}.json",
+                f"{base_url}/{int(current_sequence)}.json",
                 headers={"User-Agent": "EVE-PI-Manager/1.0 github.com/DrNightmareDev/PI_Manager"},
                 timeout=20,
             )
             if response.status_code == 404:
-                latest_sequence = _fetch_start_sequence()
-                if latest_sequence is not None and int(latest_sequence) > int(sequence_id):
-                    sequence_id = int(latest_sequence)
-                    continue
-                time.sleep(empty_sleep)
-                continue
+                break
             if response.status_code == 429:
-                logger.warning("intel_live: R2Z2 rate limited at sequence %s", sequence_id)
-                _store_stream_state(last_error=f"rate limited at {sequence_id}")
-                time.sleep(error_sleep)
-                continue
+                logger.warning("intel_live: R2Z2 rate limited at sequence %s", current_sequence)
+                _store_stream_state(last_error=f"rate limited at {current_sequence}")
+                return {"ok": False, "reason": "rate_limited", "sequence_id": current_sequence}
             if response.status_code == 403:
-                logger.warning("intel_live: R2Z2 returned 403 at sequence %s", sequence_id)
-                _store_stream_state(last_error=f"forbidden at {sequence_id}")
-                time.sleep(error_sleep)
-                continue
+                logger.warning("intel_live: R2Z2 returned 403 at sequence %s", current_sequence)
+                _store_stream_state(last_error=f"forbidden at {current_sequence}")
+                return {"ok": False, "reason": "forbidden", "sequence_id": current_sequence}
             response.raise_for_status()
             payload = response.json()
             if isinstance(payload, dict):
                 _store_kill(payload)
-            processed_sequence = int(payload.get("sequence_id") or sequence_id)
+                processed_sequence = int(payload.get("sequence_id") or current_sequence)
+            else:
+                processed_sequence = int(current_sequence)
             _store_stream_state(last_sequence_id=processed_sequence, last_error="")
-            sequence_id = processed_sequence + 1
-            time.sleep(iterate_sleep)
-        except Exception:
-            logger.exception("intel_live: R2Z2 poller failed at sequence %s", sequence_id)
-            _store_stream_state(last_error=f"poller failure at {sequence_id}")
-            time.sleep(error_sleep)
+            processed += 1
+            current_sequence = processed_sequence + 1
+
+        return {
+            "ok": True,
+            "processed": processed,
+            "last_sequence_id": int(current_sequence - 1) if processed else int(sequence_id),
+            "latest_sequence_id": int(latest_sequence),
+        }
+    except Exception:
+        logger.exception("intel_live: R2Z2 poller failed at sequence %s", sequence_id)
+        _store_stream_state(last_error=f"poller failure at {sequence_id}")
+        return {"ok": False, "reason": "exception", "sequence_id": sequence_id}
