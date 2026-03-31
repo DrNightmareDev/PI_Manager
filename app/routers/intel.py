@@ -199,15 +199,28 @@ def _build_live_snapshot(region_id: int, window: str, kill_type: str) -> tuple[d
 def intel_map(
     request: Request,
     region: str = Query("10000010"),
+    window: str = Query("60m"),
+    kill_type: str = Query("all"),
+    layout: str = Query("geo"),
     account=Depends(require_owner),
 ):
     regions = sde.get_region_catalog()
-    graph, system_activity, kill_feed, source_meta = _build_live_snapshot(int(region or regions[0]["id"]), "60m", "all")
+    selected_window = window if window in WINDOW_SECONDS else "60m"
+    selected_kill_type = kill_type if kill_type in {"all", "ship", "pod"} else "all"
+    selected_layout = layout if layout in {"geo", "alt"} else "geo"
+    graph, system_activity, kill_feed, source_meta = _build_live_snapshot(
+        int(region or regions[0]["id"]),
+        selected_window,
+        selected_kill_type,
+    )
     return templates.TemplateResponse("intel_map.html", {
         "request": request,
         "account": account,
         "regions": regions,
         "selected_region": str(graph["id"]),
+        "selected_window": selected_window,
+        "selected_kill_type": selected_kill_type,
+        "selected_layout": selected_layout,
         "region_data": graph,
         "initial_activity": system_activity,
         "initial_feed": kill_feed,

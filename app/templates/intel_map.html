@@ -21,25 +21,25 @@
             <div class="intel-control-group">
                 <label for="intelLayoutSelect">Layout</label>
                 <select id="intelLayoutSelect" class="form-select form-select-sm eve-input">
-                    <option value="geo" selected>Region overview</option>
-                    <option value="alt">Compact overview</option>
+                    <option value="geo" {% if selected_layout == 'geo' %}selected{% endif %}>Region overview</option>
+                    <option value="alt" {% if selected_layout == 'alt' %}selected{% endif %}>Compact overview</option>
                 </select>
             </div>
             <div class="intel-control-group">
                 <label for="intelWindowSelect">Window</label>
                 <select id="intelWindowSelect" class="form-select form-select-sm eve-input">
-                    <option value="5m">5 minutes</option>
-                    <option value="15m">15 minutes</option>
-                    <option value="60m" selected>60 minutes</option>
-                    <option value="24h">24 hours</option>
+                    <option value="5m" {% if selected_window == '5m' %}selected{% endif %}>5 minutes</option>
+                    <option value="15m" {% if selected_window == '15m' %}selected{% endif %}>15 minutes</option>
+                    <option value="60m" {% if selected_window == '60m' %}selected{% endif %}>60 minutes</option>
+                    <option value="24h" {% if selected_window == '24h' %}selected{% endif %}>24 hours</option>
                 </select>
             </div>
             <div class="intel-control-group">
                 <label for="intelKillTypeSelect">Kills</label>
                 <select id="intelKillTypeSelect" class="form-select form-select-sm eve-input">
-                    <option value="all">All</option>
-                    <option value="ship">Ship</option>
-                    <option value="pod">Pod</option>
+                    <option value="all" {% if selected_kill_type == 'all' %}selected{% endif %}>All</option>
+                    <option value="ship" {% if selected_kill_type == 'ship' %}selected{% endif %}>Ship</option>
+                    <option value="pod" {% if selected_kill_type == 'pod' %}selected{% endif %}>Pod</option>
                 </select>
             </div>
         </div>
@@ -87,6 +87,9 @@
 <script>
 const INTEL_BOOTSTRAP = {
     selectedRegion: {{ selected_region | tojson }},
+    selectedWindow: {{ selected_window | tojson }},
+    selectedKillType: {{ selected_kill_type | tojson }},
+    selectedLayout: {{ selected_layout | tojson }},
     region: {{ region_data | tojson }},
     activity: {{ initial_activity | tojson }},
     feed: {{ initial_feed | tojson }},
@@ -101,9 +104,9 @@ const intelState = {
     sourceMeta: INTEL_BOOTSTRAP.sourceMeta,
     selectedSystemId: null,
     selectedKillmailId: null,
-    window: '60m',
-    killType: 'all',
-    layout: 'geo',
+    window: INTEL_BOOTSTRAP.selectedWindow,
+    killType: INTEL_BOOTSTRAP.selectedKillType,
+    layout: INTEL_BOOTSTRAP.selectedLayout,
     viewBox: null,
     dragging: false,
     dragOrigin: null,
@@ -182,6 +185,17 @@ function renderLoadStatus(state = 'idle', message = '') {
     }
     const prefix = state === 'empty' ? 'No kills loaded' : 'Kills loaded';
     node.textContent = `${prefix} · raw ${rawKills} · feed ${feedKills} · systems ${activeSystems}${detail ? ` · ${detail}` : ''}`;
+}
+
+function syncQueryParams() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('region', String(intelState.selectedRegion));
+    params.set('layout', intelState.layout);
+    params.set('window', intelState.window);
+    params.set('kill_type', intelState.killType);
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
+    window.history.replaceState({}, '', nextUrl);
 }
 
 function renderNeighbors() {
@@ -365,6 +379,7 @@ function refreshAll() {
 }
 
 async function refreshIntel() {
+    syncQueryParams();
     renderLoadStatus('loading');
     const params = new URLSearchParams({
         region: intelState.selectedRegion,
@@ -401,6 +416,7 @@ async function refreshIntel() {
     document.getElementById('intelRegionTitle').textContent = payload.region.name;
     refreshAll();
     renderLoadStatus((intelState.sourceMeta.raw_kills || 0) > 0 ? 'ok' : 'empty');
+    syncQueryParams();
 }
 
 async function changeRegion(regionKey) {
@@ -414,6 +430,7 @@ document.getElementById('intelRegionSelect').addEventListener('change', event =>
 document.getElementById('intelLayoutSelect').addEventListener('change', event => {
     intelState.layout = event.target.value;
     refreshAll();
+    syncQueryParams();
 });
 document.getElementById('intelWindowSelect').addEventListener('change', async event => {
     intelState.window = event.target.value;
@@ -456,8 +473,13 @@ window.addEventListener('pointermove', event => {
 });
 
 intelState.viewBox = parseViewBox();
+document.getElementById('intelRegionSelect').value = String(intelState.selectedRegion);
+document.getElementById('intelLayoutSelect').value = intelState.layout;
+document.getElementById('intelWindowSelect').value = intelState.window;
+document.getElementById('intelKillTypeSelect').value = intelState.killType;
 refreshAll();
 renderLoadStatus((intelState.sourceMeta?.raw_kills || 0) > 0 ? 'ok' : 'empty');
+syncQueryParams();
 setInterval(refreshIntel, 20000);
 </script>
 <style>
