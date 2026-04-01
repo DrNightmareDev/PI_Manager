@@ -830,13 +830,13 @@ const COLONY_EXTRACTOR_RATE_SUMMARY = [
 window.COLONY_EXTRACTOR_RATE_SUMMARY = COLONY_EXTRACTOR_RATE_SUMMARY;
 const COLONY_MISSING_INPUTS = [
 {% for colony in colonies %}
-  {{ colony.missing_inputs | tojson }}{% if not loop.last %},{% endif %}
+  {{ (colony.missing_inputs | default([], true)) | tojson }}{% if not loop.last %},{% endif %}
 
 {% endfor %}
 ];
 const COLONY_LOCATION = [
 {% for colony in colonies %}
-  {"system": {{ colony.solar_system_name | tojson }}, "region": {{ colony.region_name | tojson }}}{% if not loop.last %},{% endif %}
+  {"system": {{ (colony.solar_system_name | default('-', true)) | tojson }}, "region": {{ (colony.region_name | default('-', true)) | tojson }}}{% if not loop.last %},{% endif %}
 
 {% endfor %}
 ];
@@ -1227,8 +1227,8 @@ showColoniesOverlay();
 // -- Push-Benachrichtigungen (Service Worker) ----------------------------------
 const COLONY_EXPIRIES = [
 {% for colony in notification_colonies %}
-  {name: {{ colony.planet_name | tojson }}, char: {{ colony.character_name | tojson }},
-   system: {{ colony.solar_system_name | tojson }}, expiry_ts: Date.now() + {{ (colony.expiry_hours * 3600000) | int }}},
+  {name: {{ (colony.planet_name | default('Unknown planet', true)) | tojson }}, char: {{ (colony.character_name | default('Unknown character', true)) | tojson }},
+   system: {{ (colony.solar_system_name | default('-', true)) | tojson }}, expiry_ts: Date.now() + {{ (colony.expiry_hours * 3600000) | int }}},
 {% endfor %}
 ];
 

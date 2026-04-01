@@ -539,6 +539,8 @@ def _normalize_dashboard_colony(colony: dict) -> dict:
     item["planet_name"] = planet_name
     item["character_name"] = item.get("character_name") or "Unknown character"
     item["color"] = item.get("color") or PLANET_TYPE_COLORS.get(planet_type, "#586e75")
+    item["solar_system_name"] = item.get("solar_system_name") or "-"
+    item["region_name"] = item.get("region_name") or "-"
     item["factories"] = item.get("factories") or []
     item["storage"] = item.get("storage") or []
     item["extractor_status"] = item.get("extractor_status") or {}
