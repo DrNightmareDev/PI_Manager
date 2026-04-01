@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.dependencies import require_admin, require_account
+from app.dependencies import require_admin, require_account, require_manager_or_admin
 from app.i18n import get_translation_rows, save_translation, SUPPORTED_LANGUAGES
 from app.models import Account, Character, AccessPolicy, AccessPolicyEntry, PageAccessSetting
 from app.page_access import get_access_settings_map, get_page_definitions
@@ -29,7 +29,7 @@ def _colony_count_per_account(db: Session) -> dict[int, int]:
 @router.get("/", response_class=HTMLResponse)
 def admin_panel(
     request: Request,
-    account=Depends(require_admin),
+    account=Depends(require_manager_or_admin),
     db: Session = Depends(get_db)
 ):
     accounts = db.query(Account).all()
