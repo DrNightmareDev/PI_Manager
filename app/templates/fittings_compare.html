@@ -405,7 +405,8 @@
 <script>
 const FITTINGS_REQUIRED_SCOPE = {{ required_scope | tojson }};
 const FITTING_GROUP_ORDER = ['high', 'mid', 'low', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
-const IMPORT_GROUP_FALLBACKS = ['high', 'mid', 'low', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
+// EFT paste order: low → mid → high → rig → subsystem → service → drone → cargo
+const IMPORT_GROUP_FALLBACKS = ['low', 'mid', 'high', 'rig', 'subsystem', 'service', 'drone', 'cargo', 'fighter', 'implant', 'booster', 'other'];
 const IMPORT_SECTION_MAP = {
     'high power': 'high',
     'high slots': 'high',
@@ -414,6 +415,8 @@ const IMPORT_SECTION_MAP = {
     'medium slots': 'mid',
     'low power': 'low',
     'low slots': 'low',
+    'rig': 'rig',
+    'rigs': 'rig',
     'rig slot': 'rig',
     'rig slots': 'rig',
     'medium rig slots': 'rig',
@@ -421,6 +424,7 @@ const IMPORT_SECTION_MAP = {
     'drones': 'drone',
     'drone bay': 'drone',
     'cargo': 'cargo',
+    'cargo bay': 'cargo',
     'charges': 'cargo',
     'modules': 'other',
     'fighters': 'fighter',
@@ -605,7 +609,7 @@ function inferImportedSlotGroup(itemName, fallbackGroup) {
         return 'rig';
     }
 
-    const isLow = /(damage control|armor repairer|reactive armor|energized|multispectrum energized|membrane|plate|plating|co-processor|coprocessor|power diagnostic|capacitor power relay|drone damage amplifier|magnetic field stabilizer|gyrostabilizer|heat sink|ballistic control|tracking enhancer|tracking diagnostic|overdrive|nanofiber|inertial stabilizer|warp core stabilizer|signal amplifier|expanded cargohold|hull repairer|shield power relay)/.test(name);
+    const isLow = /(damage control|armor repairer|armor hardener|reactive armor|energized|multispectrum energized|multispectrum coating|membrane|plate|plating|co-processor|coprocessor|power diagnostic|capacitor power relay|drone damage amplifier|magnetic field stabilizer|gyrostabilizer|heat sink|ballistic control|tracking enhancer|tracking diagnostic|overdrive|nanofiber|inertial stabilizer|warp core stabilizer|signal amplifier|expanded cargohold|hull repairer|shield power relay|assault damage control|internal force field)/.test(name);
     if (isLow) {
         return 'low';
     }
@@ -659,13 +663,20 @@ function parseImportedFit(text) {
         if (/^\[empty/i.test(line)) {
             return;
         }
-        const sectionGroup = IMPORT_SECTION_MAP[line.toLowerCase()];
+        // Support EFT-style // comment section headers (e.g. "// low slots", "//rigs")
+        const commentMatch = line.match(/^\/\/\s*(.*)/);
+        const sectionLabel = commentMatch ? commentMatch[1].trim() : line;
+        const sectionGroup = IMPORT_SECTION_MAP[sectionLabel.toLowerCase()];
         if (sectionGroup) {
             if (currentSection.length) {
                 sections.push({ group: currentGroup, lines: currentSection });
                 currentSection = [];
             }
             currentGroup = sectionGroup;
+            return;
+        }
+        // Skip pure comment lines that don't match a known section
+        if (commentMatch) {
             return;
         }
         currentSection.push(line);
@@ -678,9 +689,19 @@ function parseImportedFit(text) {
     sections.forEach((section, sectionIndex) => {
         const slotGroup = section.group || IMPORT_GROUP_FALLBACKS[sectionIndex] || 'other';
         (section.lines || []).forEach((line, lineIndex) => {
-            const qtyMatch = line.match(/^(.*?)(?:\s+x(\d+))$/i);
-            const itemName = (qtyMatch ? qtyMatch[1] : line).trim();
+            // Strip inline charge: "Heavy Beam Laser II, Aurora M" → module + charge as cargo
+            const moduleAndCharge = line.split(',');
+            const moduleLine = moduleAndCharge[0].trim();
+            const inlineCharge = moduleAndCharge.length > 1 ? moduleAndCharge.slice(1).join(',').trim() : null;
+
+            // Strip /offline suffix
+            const cleanLine = moduleLine.replace(/\s*\/offline\s*$/i, '').trim();
+
+            const qtyMatch = cleanLine.match(/^(.*?)(?:\s+x(\d+))$/i);
+            const itemName = (qtyMatch ? qtyMatch[1] : cleanLine).trim();
             const quantity = qtyMatch ? parseInt(qtyMatch[2], 10) : 1;
+            if (!itemName) return;
+
             const inferredSlotGroup = inferImportedSlotGroup(itemName, slotGroup);
             items.push({
                 type_id: null,
@@ -692,6 +713,25 @@ function parseImportedFit(text) {
                 sort_index: lineIndex,
                 icon_url: null,
             });
+
+            // Add inline charge as a separate cargo item
+            if (inlineCharge) {
+                const chargeQtyMatch = inlineCharge.match(/^(.*?)(?:\s+x(\d+))$/i);
+                const chargeName = (chargeQtyMatch ? chargeQtyMatch[1] : inlineCharge).trim();
+                const chargeQty = chargeQtyMatch ? parseInt(chargeQtyMatch[2], 10) : 1;
+                if (chargeName) {
+                    items.push({
+                        type_id: null,
+                        name: chargeName,
+                        flag: 'import-cargo-charge-' + lineIndex,
+                        quantity: chargeQty,
+                        slot_group: 'cargo',
+                        slot_label: state.dataset?.slot_labels?.['cargo'] || 'cargo',
+                        sort_index: lineIndex,
+                        icon_url: null,
+                    });
+                }
+            }
         });
     });
 
