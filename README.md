@@ -1,88 +1,77 @@
 # EVE PI Manager
 
-[Deutsch](README.de.md) | [English](README.en.md) | [简体中文](README.zh-Hans.md)
+> **⚠️ ARCHIVED — This project has been superseded by [PlanetFlow](https://github.com/DrNightmareDev/PlanetFlow.APP).**
+> EVE PI Manager is no longer actively developed. All features have been ported and extended in PlanetFlow, which is the current actively maintained version. Please use PlanetFlow for all new installations.
 
-Self-hosted Planetary Industry manager for EVE Online.
+[Deutsch](README.de.md) | [English](README.en.md) | [ZH-CN](README.zh-Hans.md)
 
-If this project helps you, Ingame-ISK donations to `DrNightmare` are welcome.
+Self-hosted Planetary Industry dashboard for EVE Online with ESI login, cached background refresh, planning tools, and corporation-aware PI workflows.
+
+If the project is useful to you, in-game ISK donations to `DrNightmare` are welcome.
 
 ## Highlights
 
-- Dashboard, Skyhooks, Characters, Corporation, Jita Market, System Analyzer, Compare, System Mix, PI Chain Planner, and Fittings
-- **Celery + RabbitMQ** background refresh — dashboard always loads instantly, ESI fetched in background every 5 min
-- **ETag caching** — ~60–70% fewer ESI calls after first run via HTTP 304
-- **Live expiry countdown** — colony expiry timers update every minute in the browser without page reload
-- **Pagination** — 50 rows/page default, configurable; handles thousands of colonies without blocking the browser
-- **Discord / Webhook alerts** — server-side expiry notifications per account, configurable threshold + cooldown; Discord rate-limiting handled automatically
-- **Token status overview** — banner + per-character ESI error tracking; auto-retry after 24 h; no false positives
-- **Manager panel** — ESI error reset, colony cache reload, access policy (allow/blocklist), and GUI translation editing
-- **CSV export** — download colony list directly from dashboard
-- **Mobile-responsive** — compact table on small screens
-- PI Templates with to-scale canvas rendering and community imports (GitHub)
-- DB-backed caches for market prices, dashboard values, skyhook values, ETag responses, GUI translations, and static planet details
-- Optional nginx, PgBouncer, Flower task monitor, and Sentry error tracking
-- GUI languages: German, English, and Simplified Chinese
-- Linux, Docker Compose, and native Windows setup/update/upgrade scripts
+- Multi-account PI dashboard with live expiry countdown, CSV export, filters, and pagination
+- Characters, corporation view, inventory, hauling, intel, killboard, skyhooks, and PI templates
+- PI Chain Planner, Colony Assignment Planner, System Analyzer, System Mix, Compare, and Fittings
+- Celery + RabbitMQ background refresh with APScheduler fallback when no broker is configured
+- ETag-based ESI caching, DB-backed market cache, webhook alerts, and manager tools
+- German, English, and Simplified Chinese UI translations
 
-## Full documentation
-
-- [Deutsch](README.de.md)
-- [English](README.en.md)
-- [简体中文](README.zh-Hans.md)
-
-## Quick start
+## Quick Start
 
 ```bash
-git clone https://github.com/DrNightmareDev/PI_Manager.git
-cd PI_Manager
 cp .env.example .env
-# Fill in .env, then:
 docker compose up -d
 ```
 
-## Upgrade from older version (native Linux)
+Required `.env` values:
 
-```bash
-sudo bash scripts/upgrade_to_latest.sh
-```
+- `DB_PASSWORD`
+- `EVE_CLIENT_ID`
+- `EVE_CLIENT_SECRET`
+- `EVE_CALLBACK_URL`
+- `SECRET_KEY`
 
-Handles RabbitMQ install, new `.env` keys, uvicorn → gunicorn migration, Celery systemd units, pip deps, and DB migrations automatically.
+The Docker stack starts:
 
-## Update Docker Compose installation
+- `db`
+- `rabbitmq`
+- `app`
+- `celery_worker`
+- `celery_beat`
+- `celery_ws`
 
-```bash
-bash scripts/update_compose.sh
-```
+Optional profiles:
 
-Useful options:
+- `nginx`
+- `pgbouncer`
+- `monitoring`
 
-```bash
-bash scripts/update_compose.sh --branch main
-bash scripts/update_compose.sh --no-pull
-```
-
-The script updates the git checkout, pulls/builds images, restarts the stack, and runs Alembic migrations inside the `app` container.
-
-## Scripts
+## Key Scripts
 
 | Script | Purpose |
 |---|---|
 | `scripts/setup_linux.sh` | Fresh native Linux install |
-| `scripts/upgrade_to_latest.sh` | Upgrade any version to latest (native Linux) |
-| `scripts/update_linux.sh` | Regular update (native or `--compose`) |
-| `scripts/update_compose.sh` | Regular update for Docker Compose installs |
-| `scripts/update_windows.ps1` | Update on Windows (native or `-Compose`) |
+| `scripts/upgrade_to_latest.sh` | Upgrade older Linux installs |
+| `scripts/update_linux.sh` | Update native Linux installs |
+| `scripts/update_compose.sh` | Update Docker Compose installs |
+| `scripts/setup_windows.ps1` | Native Windows setup |
+| `scripts/update_windows.ps1` | Native Windows update |
 
-## Health check
+## Health Check
 
-```
+```text
 GET /health
-→ {"status": "ok", "database": "ok", "rabbitmq": "ok"}
 ```
 
-## CCP Notice
+Returns database and RabbitMQ state. If no broker is configured, RabbitMQ is reported as `not_configured`.
 
-EVE Online and all related logos and designs are trademarks or registered trademarks of CCP ehf. This project is not affiliated with, endorsed by, or connected to CCP ehf.
+## Full Documentation
+
+- [Deutsch](README.de.md)
+- [English](README.en.md)
+- [ZH-CN](README.zh-Hans.md)
 
 ## License
 
