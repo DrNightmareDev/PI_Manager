@@ -1,6 +1,6 @@
 # EVE PI Manager
 
-> **⚠️ 已归档 — 本项目已被 [PlanetFlow](https://github.com/DrNightmareDev/PlanetFlow.APP) 取代。**
+> **⚠️ 已归档 — 本项目已被 [PlanetFlow](https://planetflow.app) 取代。**
 > EVE PI Manager 已停止主动开发。所有功能已移植并在 PlanetFlow 中进行了扩展，PlanetFlow 是当前维护的版本。所有新安装请使用 PlanetFlow。
 
 [Deutsch](README.de.md) | [English](README.en.md) | [ZH-CN](README.zh-Hans.md)

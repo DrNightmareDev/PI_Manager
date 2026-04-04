@@ -1,6 +1,6 @@
 # EVE PI Manager
 
-> **⚠️ ARCHIVED — This project has been superseded by [PlanetFlow](https://github.com/DrNightmareDev/PlanetFlow.APP).**
+> **⚠️ ARCHIVED — This project has been superseded by [PlanetFlow](https://planetflow.app).**
 > EVE PI Manager is no longer actively developed. All features have been ported and extended in PlanetFlow, which is the current actively maintained version. Please use PlanetFlow for all new installations.
 
 [Deutsch](README.de.md) | [English](README.en.md) | [ZH-CN](README.zh-Hans.md)
